@@ -6,6 +6,7 @@ const cardsDatabase = [
         id: 1,
         name: "Maxxor",
         type: "Creature",
+        tribe: "OverWorld",
         energy: 65,
         courage: 80,
         power: 60,
@@ -16,11 +17,56 @@ const cardsDatabase = [
         id: 2,
         name: "Chaor",
         type: "Creature",
+        tribe: "UnderWorld",
         energy: 70,
         courage: 90,
         power: 85,
         wisdom: 30,
         speed: 40
+    },
+    {
+        id: 3,
+        name: "Intress",
+        type: "Creature",
+        tribe: "OverWorld",
+        energy: 60,
+        courage: 75,
+        power: 50,
+        wisdom: 60,
+        speed: 70
+    },
+    {
+        id: 4,
+        name: "Takinom",
+        type: "Creature",
+        tribe: "UnderWorld",
+        energy: 55,
+        courage: 65,
+        power: 75,
+        wisdom: 35,
+        speed: 85
+    },
+    {
+        id: 5,
+        name: "Najarin",
+        type: "Creature",
+        tribe: "OverWorld",
+        energy: 45,
+        courage: 50,
+        power: 30,
+        wisdom: 100,
+        speed: 50
+    },
+    {
+        id: 6,
+        name: "Tangath Toborn",
+        type: "Creature",
+        tribe: "OverWorld",
+        energy: 65,
+        courage: 85,
+        power: 70,
+        wisdom: 40,
+        speed: 45
     }
 ];
 

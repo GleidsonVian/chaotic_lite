@@ -37,6 +37,7 @@ class GameEngine {
             cardsHtml += `
                 <div style="border: 2px solid #34495e; padding: 15px; border-radius: 8px; width: 150px; background-color: #ecf0f1; color: #2c3e50;">
                     <strong style="font-size: 1.2em;">${card.name}</strong>
+                    <p style="font-size: 0.85em; color: #7f8c8d; margin-top: 5px;">${card.tribe}</p>
                     <hr style="margin: 10px 0;">
                     <p>❤️ Energia: ${card.energy}</p>
                     <p>⚔️ Coragem: ${card.courage}</p>
