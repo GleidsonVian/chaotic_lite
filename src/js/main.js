@@ -68,12 +68,21 @@ class GameEngine {
                 board[r].forEach(card => {
                     if (card) {
                         html += `
-                            <div class="card ${isP2 ? 'enemy' : 'player'}" style="border: 2px solid ${isP2 ? '#c0392b' : '#2980b9'}; padding: 10px; border-radius: 8px; width: 120px; height: 160px; background-color: ${isP2 ? '#f9ebea' : '#ebf5fb'}; color: #2c3e50; text-align: center; display: flex; flex-direction: column; justify-content: space-between;">
-                                <div>
-                                    <strong style="font-size: 1.1em;">${card.name}</strong>
-                                    <p style="font-size: 0.75em; color: #7f8c8d; margin-top: 5px;">${card.tribe}</p>
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="card-name">${card.name}</div>
+                                    <div class="card-tribe">${card.tribe}</div>
                                 </div>
-                                <div style="font-size: 0.9em; background: #fff; border-radius: 4px; padding: 5px;">
+                                <div class="card-image-container">
+                                    ${card.image ? `<img src="${card.image}" class="card-image" alt="${card.name}">` : `<div class="card-image-placeholder">Sem Imagem</div>`}
+                                </div>
+                                <div class="card-stats">
+                                    <div class="stat-box"><span>⚔️</span><span class="stat-value">${card.courage}</span></div>
+                                    <div class="stat-box"><span>💪</span><span class="stat-value">${card.power}</span></div>
+                                    <div class="stat-box"><span>🧠</span><span class="stat-value">${card.wisdom}</span></div>
+                                    <div class="stat-box"><span>⚡</span><span class="stat-value">${card.speed}</span></div>
+                                </div>
+                                <div class="card-energy">
                                     ❤️ ${card.energy}
                                 </div>
                             </div>
