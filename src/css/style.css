@@ -37,7 +37,8 @@ header h1 {
     border-radius: 5px;
     min-height: 300px;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    justify-content: flex-start;
     align-items: center;
 }
 
