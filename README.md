@@ -23,4 +23,4 @@ Uma versão simplificada do jogo Chaotic, desenvolvida para aprendizado e divers
 
 **Para o Instrutor (Lógica do Jogo):**
 - Desenvolver o motor de combate no `main.js`.
-- Gerenciar os turnos e estados do jogo.
+- Gerenciar os turnos e estados do jogo...
