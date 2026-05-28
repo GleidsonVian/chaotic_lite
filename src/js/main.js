@@ -84,7 +84,7 @@ class GameEngine {
             }
 
             html += `
-                <div class="card" onclick="game.addDraftCard(${index})" style="${borderStyle} ${opacityStyle} transition: all 0.2s;">
+                <div class="card" onclick="game.addDraftCard(${index})" style="${borderStyle} ${opacityStyle}">
                     <div class="card-header">
                         <div class="card-name">${card.name} ${count > 0 ? `(x${count})` : ''}</div>
                         <div class="card-tribe">${card.tribe}</div>
@@ -201,7 +201,7 @@ class GameEngine {
             const isSelected = this.selectedMugic === index;
             const borderStyle = isSelected ? 'border: 3px solid #9b59b6; box-shadow: 0 0 15px #9b59b6; transform: scale(1.05);' : 'border: 1px solid #7f8c8d;';
             html += `
-                <div style="width: 100px; height: 120px; background-color: #8e44ad; color: white; border-radius: 5px; padding: 5px; text-align: center; cursor: pointer; ${borderStyle} transition: all 0.2s;" onclick="game.handleMugicClick(${index})">
+                <div style="width: 100px; height: 120px; background-color: #8e44ad; color: white; border-radius: 5px; padding: 5px; text-align: center; cursor: pointer; ${borderStyle}" onclick="game.handleMugicClick(${index})">
                     <div style="font-size: 11px; font-weight: bold; margin-bottom: 5px;">${mugic.name}</div>
                     <div style="font-size: 10px; color: #bdc3c7; line-height: 1.2;">${mugic.description}</div>
                 </div>
@@ -838,9 +838,9 @@ class GameEngine {
         let msgEstado = this.turn === 1 ? 'Sua vez de jogar. Clique em uma carta.' : 'Aguarde o movimento do Oponente...';
         if (this.gameState === 'SELECT_TARGET') msgEstado = 'ESCOLHA O ALVO INIMIGO!';
         
-        this.boardElement.innerHTML = `<div style="width: 100%; text-align: center; margin-bottom: 10px;">
-            <h3>Turno Atual: Jogador ${this.turn}</h3>
-            <p style="color: ${this.gameState === 'SELECT_TARGET' ? '#e74c3c' : '#2c3e50'}; font-weight: bold;">${msgEstado}</p>
+        this.boardElement.innerHTML = `<div style="width: 100%; text-align: center; margin-bottom: 20px;">
+            <h3 style="color: var(--accent); margin-bottom: 5px;">Turno Atual: Jogador ${this.turn}</h3>
+            <p style="color: ${this.gameState === 'SELECT_TARGET' ? 'var(--danger)' : 'var(--text-muted)'}; font-weight: bold; font-size: 1.1em;">${msgEstado}</p>
         </div>`;
         
         const renderPlayerBoard = (board, player) => {
