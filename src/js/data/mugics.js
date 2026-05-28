@@ -3,6 +3,7 @@ const mugicsDatabase = [
         id: "m1",
         name: "Canon of Casualty",
         type: "UnderWorld Mugic",
+        tribe: "UnderWorld",
         cost: 1,
         effectType: "damage",
         effectValue: 20,
@@ -12,6 +13,7 @@ const mugicsDatabase = [
         id: "m2",
         name: "Ember Flourish",
         type: "Generic Mugic",
+        tribe: "Generic",
         cost: 1,
         effectType: "heal",
         effectValue: 15,
@@ -21,6 +23,7 @@ const mugicsDatabase = [
         id: "m3",
         name: "Fortissimo",
         type: "Generic Mugic",
+        tribe: "Generic",
         cost: 1,
         effectType: "buff",
         effectValue: 10,
@@ -28,4 +31,6 @@ const mugicsDatabase = [
     }
 ];
 
-window.mugicsDatabase = mugicsDatabase;
+if (typeof window !== 'undefined') {
+    window.mugicsDatabase = mugicsDatabase;
+}

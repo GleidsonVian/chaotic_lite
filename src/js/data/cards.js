@@ -1,5 +1,4 @@
-// Estrutura de dados das cartas (Seu amigo pode expandir isso)
-// Exemplo de como exportar e usar uma variável global simples
+// Estrutura de dados das cartas atualizada com Elementos e Mugic Counters
 
 const cardsDatabase = [
     {
@@ -12,7 +11,10 @@ const cardsDatabase = [
         courage: 80,
         power: 60,
         wisdom: 45,
-        speed: 55
+        speed: 55,
+        elements: ["Earth", "Fire"],
+        subtypes: ["Warrior"],
+        mugicCounters: 2
     },
     {
         id: 2,
@@ -24,7 +26,10 @@ const cardsDatabase = [
         courage: 90,
         power: 85,
         wisdom: 30,
-        speed: 40
+        speed: 40,
+        elements: ["Fire", "Earth"],
+        subtypes: ["Warrior"],
+        mugicCounters: 1
     },
     {
         id: 3,
@@ -36,7 +41,10 @@ const cardsDatabase = [
         courage: 75,
         power: 50,
         wisdom: 60,
-        speed: 70
+        speed: 70,
+        elements: ["Earth", "Water"],
+        subtypes: ["Warrior"],
+        mugicCounters: 1
     },
     {
         id: 4,
@@ -48,7 +56,10 @@ const cardsDatabase = [
         courage: 65,
         power: 75,
         wisdom: 35,
-        speed: 85
+        speed: 85,
+        elements: ["Fire", "Air"],
+        subtypes: ["Warrior"],
+        mugicCounters: 1
     },
     {
         id: 5,
@@ -60,7 +71,10 @@ const cardsDatabase = [
         courage: 50,
         power: 30,
         wisdom: 100,
-        speed: 50
+        speed: 50,
+        elements: ["Water", "Air"],
+        subtypes: ["Warrior"],
+        mugicCounters: 3
     },
     {
         id: 6,
@@ -72,7 +86,10 @@ const cardsDatabase = [
         courage: 85,
         power: 70,
         wisdom: 40,
-        speed: 45
+        speed: 45,
+        elements: ["Earth", "Fire"],
+        subtypes: ["Warrior"],
+        mugicCounters: 1
     },
     {
         id: 7,
@@ -84,7 +101,10 @@ const cardsDatabase = [
         courage: 85,
         power: 90,
         wisdom: 60,
-        speed: 30
+        speed: 30,
+        elements: ["Air"],
+        subtypes: ["Warrior"],
+        mugicCounters: 2
     },
     {
         id: 8,
@@ -96,7 +116,10 @@ const cardsDatabase = [
         courage: 45,
         power: 35,
         wisdom: 40,
-        speed: 55
+        speed: 55,
+        elements: ["Earth"],
+        subtypes: ["Warrior"],
+        mugicCounters: 0
     },
     {
         id: 9,
@@ -108,7 +131,10 @@ const cardsDatabase = [
         courage: 70,
         power: 75,
         wisdom: 55,
-        speed: 65
+        speed: 65,
+        elements: ["Air"],
+        subtypes: ["Warrior"],
+        mugicCounters: 1
     },
     {
         id: 10,
@@ -120,7 +146,10 @@ const cardsDatabase = [
         courage: 60,
         power: 50,
         wisdom: 70,
-        speed: 75
+        speed: 75,
+        elements: ["Air", "Earth"],
+        subtypes: ["Warrior"],
+        mugicCounters: 1
     },
     {
         id: 11,
@@ -132,7 +161,10 @@ const cardsDatabase = [
         courage: 80,
         power: 65,
         wisdom: 90,
-        speed: 50
+        speed: 50,
+        elements: ["Water", "Earth"],
+        subtypes: ["Warrior"],
+        mugicCounters: 2
     },
     {
         id: 12,
@@ -144,7 +176,10 @@ const cardsDatabase = [
         courage: 55,
         power: 45,
         wisdom: 35,
-        speed: 40
+        speed: 40,
+        elements: ["Water"],
+        subtypes: ["Warrior"],
+        mugicCounters: 1
     }
 ];
 
