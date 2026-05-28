@@ -125,9 +125,9 @@ class GameEngine {
         
         const btnStart = document.getElementById("btn-start-battle");
         if (this.draftedCards.length === 6) {
-            btnStart.style.display = 'block';
+            btnStart.classList.remove('hidden');
         } else {
-            btnStart.style.display = 'none';
+            btnStart.classList.add('hidden');
         }
     }
 
@@ -150,8 +150,8 @@ class GameEngine {
 
     startBattle() {
         this.appState = 'BATTLE';
-        document.getElementById("draft-screen").style.display = 'none';
-        document.getElementById("battle-screen").style.display = 'block';
+        document.getElementById("draft-screen").classList.add('hidden');
+        document.getElementById("battle-screen").classList.remove('hidden');
         
         // Puxar 3 Mugics aleatórios para a mão do jogador
         this.playerMugics = [];
@@ -692,12 +692,16 @@ class GameEngine {
             ${renderCard(defender, effDef, 'Defensor')}
         `;
 
-        modal.style.display = "flex";
+        modal.classList.remove('hidden');
+        modal.classList.add('flex-modal');
     }
 
     confirmAttack(cardIndex) {
         const modal = document.getElementById("attack-modal");
-        if (modal) modal.style.display = "none";
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex-modal');
+        }
         
         if (!this.pendingCombat) return;
         const { attacker, defender, atkR, atkC, defR, defC, attackingPlayer } = this.pendingCombat;
@@ -706,7 +710,10 @@ class GameEngine {
 
     cancelAttackModal() {
         const modal = document.getElementById("attack-modal");
-        if (modal) modal.style.display = "none";
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex-modal');
+        }
         this.selectedAttacker = null;
         this.gameState = 'IDLE';
         this.renderBoard();
