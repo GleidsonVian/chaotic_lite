@@ -6,21 +6,23 @@ class GameEngine {
         this.logElement = document.getElementById("combat-log");
         this.nextTurnBtn = document.getElementById("btn-next-turn");
         
-        // Tabuleiro 3v3: 2 linhas, 3 colunas por jogador
+        // Tabuleiro 6v6: 3 linhas (3, 2, e 1 espaços) por jogador
         this.boardP1 = [
             [null, null, null], // Linha 0 (Frente)
-            [null, null, null]  // Linha 1 (Trás)
+            [null, null],       // Linha 1 (Meio)
+            [null]              // Linha 2 (Trás)
         ];
         this.boardP2 = [
             [null, null, null], // Linha 0 (Frente)
-            [null, null, null]  // Linha 1 (Trás)
+            [null, null],       // Linha 1 (Meio)
+            [null]              // Linha 2 (Trás)
         ];
     }
 
     init() {
         this.log("Chaotic Lite Engine Iniciada!");
-        if (this.cards.length < 6) {
-            this.boardElement.innerHTML = "<p>Nenhuma carta ou poucas cartas. Precisa de pelo menos 6 cartas no cards.js para o 3v3!</p>";
+        if (this.cards.length < 12) {
+            this.boardElement.innerHTML = "<p>Nenhuma carta ou poucas cartas. Precisa de pelo menos 12 cartas no cards.js para o 6v6!</p>";
             return;
         }
         
@@ -34,17 +36,23 @@ class GameEngine {
     }
     
     setupBoard() {
-        // Distribui as 6 cartas no formato 3v3 (Pirâmide invertida: 2 na frente, 1 atrás)
+        // Distribui as 12 cartas no formato 6v6 (Pirâmide invertida: 3 na frente, 2 no meio, 1 atrás)
         
-        // P1: Usa as 3 primeiras cartas do banco
-        this.boardP1[0][0] = this.cards[0]; // Frente Esquerda
-        this.boardP1[0][2] = this.cards[1]; // Frente Direita
-        this.boardP1[1][1] = this.cards[2]; // Trás Centro
+        // P1: Usa as 6 primeiras cartas do banco
+        this.boardP1[0][0] = this.cards[0];
+        this.boardP1[0][1] = this.cards[1];
+        this.boardP1[0][2] = this.cards[2];
+        this.boardP1[1][0] = this.cards[3];
+        this.boardP1[1][1] = this.cards[4];
+        this.boardP1[2][0] = this.cards[5];
         
-        // P2: Usa as próximas 3 cartas do banco
-        this.boardP2[0][0] = this.cards[3]; // Frente Esquerda
-        this.boardP2[0][2] = this.cards[4]; // Frente Direita
-        this.boardP2[1][1] = this.cards[5]; // Trás Centro
+        // P2: Usa as próximas 6 cartas do banco
+        this.boardP2[0][0] = this.cards[6];
+        this.boardP2[0][1] = this.cards[7];
+        this.boardP2[0][2] = this.cards[8];
+        this.boardP2[1][0] = this.cards[9];
+        this.boardP2[1][1] = this.cards[10];
+        this.boardP2[2][0] = this.cards[11];
     }
 
     log(message) {
@@ -59,9 +67,9 @@ class GameEngine {
         
         const renderPlayerBoard = (board, isP2) => {
             let html = `<div style="display: flex; flex-direction: column; gap: 10px; margin: 10px 0; align-items: center; width: 100%;">`;
-            // Para P2, a linha de trás (1) fica em cima, a da frente (0) em baixo.
-            // Para P1, a linha da frente (0) fica em cima, a de trás (1) em baixo.
-            const rows = isP2 ? [1, 0] : [0, 1];
+            // Para P2, a linha de trás (2) fica em cima, a da frente (0) em baixo.
+            // Para P1, a linha da frente (0) fica em cima, a de trás (2) em baixo.
+            const rows = isP2 ? [2, 1, 0] : [0, 1, 2];
             
             rows.forEach(r => {
                 html += `<div style="display: flex; gap: 20px; justify-content: center; width: 100%;">`;

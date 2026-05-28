@@ -73,6 +73,78 @@ const cardsDatabase = [
         power: 70,
         wisdom: 40,
         speed: 45
+    },
+    {
+        id: 7,
+        name: "Lord Van Bloot",
+        type: "Creature",
+        tribe: "UnderWorld",
+        image: "src/assets/lord_van_bloot.jpg",
+        energy: 70,
+        courage: 85,
+        power: 90,
+        wisdom: 60,
+        speed: 30
+    },
+    {
+        id: 8,
+        name: "H'earring",
+        type: "Creature",
+        tribe: "UnderWorld",
+        image: "src/assets/hearring.jpg",
+        energy: 40,
+        courage: 45,
+        power: 35,
+        wisdom: 40,
+        speed: 55
+    },
+    {
+        id: 9,
+        name: "Mudeenu",
+        type: "Creature",
+        tribe: "Mipedian",
+        image: "src/assets/mudeenu.jpg",
+        energy: 60,
+        courage: 70,
+        power: 75,
+        wisdom: 55,
+        speed: 65
+    },
+    {
+        id: 10,
+        name: "Zhade",
+        type: "Creature",
+        tribe: "Mipedian",
+        image: "src/assets/zhade.jpg",
+        energy: 55,
+        courage: 60,
+        power: 50,
+        wisdom: 70,
+        speed: 75
+    },
+    {
+        id: 11,
+        name: "Illexia",
+        type: "Creature",
+        tribe: "Danian",
+        image: "src/assets/illexia.jpg",
+        energy: 70,
+        courage: 80,
+        power: 65,
+        wisdom: 90,
+        speed: 50
+    },
+    {
+        id: 12,
+        name: "Wamma",
+        type: "Creature",
+        tribe: "Danian",
+        image: "src/assets/wamma.jpg",
+        energy: 45,
+        courage: 55,
+        power: 45,
+        wisdom: 35,
+        speed: 40
     }
 ];
 
