@@ -86,12 +86,14 @@ class GameEngine {
             html += `
                 <div class="card" onclick="game.addDraftCard(${index})" style="${borderStyle} ${opacityStyle}">
                     <div class="card-header">
-                        <div class="card-name">${card.name} ${count > 0 ? `(x${count})` : ''}</div>
+                        <div class="card-rarity-icon rarity-${(card.rarity || 'Common').toLowerCase().replace(/\s+/g, '-')}" title="${card.rarity || 'Common'}">${card.rarity === 'Ultra Rare' ? '💎' : card.rarity === 'Super Rare' ? '🔷' : card.rarity === 'Rare' ? '🔶' : card.rarity === 'Legendary' ? '🌟' : '⚪'}</div>
                         <div class="card-tribe">${card.tribe}</div>
+                        <div class="card-name">${card.name} ${count > 0 ? `(x${count})` : ''}</div>
                     </div>
                     <div class="card-image-container">
                         ${card.image ? `<img src="${card.image}" class="card-image" alt="${card.name}">` : `<div class="card-image-placeholder">Sem Imagem</div>`}
                     </div>
+                    
                     ${elementsHtml}
                     <div class="card-stats">
                         <div class="stat-box"><span>⚔️</span><span class="stat-value">${card.courage}</span></div>
@@ -627,11 +629,14 @@ class GameEngine {
             return `
             <div style="background: #2c3e50; padding: 15px; border-radius: 10px; border: 3px solid ${label === 'Atacante' ? '#f1c40f' : '#e74c3c'}; width: 250px; text-align: center;">
                 <h3 style="color: ${label === 'Atacante' ? '#f1c40f' : '#e74c3c'}; margin-bottom: 10px;">${label}</h3>
+                <div class="card-rarity-icon rarity-${(card.rarity || 'Common').toLowerCase().replace(/\s+/g, '-')}" title="${card.rarity || 'Common'}">${card.rarity === 'Ultra Rare' ? '💎' : card.rarity === 'Super Rare' ? '🔷' : card.rarity === 'Rare' ? '🔶' : card.rarity === 'Legendary' ? '🌟' : '⚪'}</div>
+                <div class="card-tribe">${card.tribe}</div>
                 <div class="card-name" style="font-size: 1.2em;">${card.name}</div>
                 <div class="card-image-container" style="margin: 10px auto;">
                     ${card.image ? `<img src="${card.image}" style="width: 100%; height: 100%; object-fit: cover;" alt="${card.name}">` : `<div class="card-image-placeholder">Sem Imagem</div>`}
                 </div>
                 ${elementsHtml}
+                
                 <div class="card-stats" style="grid-template-columns: 1fr 1fr;">
                     <div class="stat-box"><span>⚔️</span><span class="stat-value">${effStats.courage}</span></div>
                     <div class="stat-box"><span>💪</span><span class="stat-value">${effStats.power}</span></div>
@@ -892,8 +897,9 @@ class GameEngine {
                         html += `
                             <div class="card" onclick="game.handleCardClick(${player}, ${r}, ${c})" style="border: ${borderStyle}; ${shadowStyle} ${cursorStyle} ${opacityStyle} transition: all 0.2s;">
                                 <div class="card-header">
-                                    <div class="card-name">${card.name}</div>
+                                    <div class="card-rarity-icon rarity-${(card.rarity || 'Common').toLowerCase().replace(/\s+/g, '-')}" title="${card.rarity || 'Common'}">${card.rarity === 'Ultra Rare' ? '💎' : card.rarity === 'Super Rare' ? '🔷' : card.rarity === 'Rare' ? '🔶' : card.rarity === 'Legendary' ? '🌟' : '⚪'}</div>
                                     <div class="card-tribe">${card.tribe}</div>
+                                    <div class="card-name">${card.name}</div>
                                 </div>
                                 <div class="card-image-container">
                                     ${card.image ? `<img src="${card.image}" class="card-image" alt="${card.name}">` : `<div class="card-image-placeholder">Sem Imagem</div>`}
@@ -910,6 +916,7 @@ class GameEngine {
                                     }
                                     return eHtml;
                                 })()}
+                                
                                 ${syn ? `<div style="text-align: center; font-size: 10px; background: rgba(52, 152, 219, 0.2); color: #3498db; padding: 2px; border-bottom: 1px solid #3498db; font-weight: bold;">${syn.description}</div>` : ''}
                                 <div class="card-stats">
                                     <div class="stat-box"><span>⚔️</span><span class="stat-value" style="${syn && syn.courage ? 'color:#3498db;font-weight:bold;' : ''}">${displayCourage}</span></div>
@@ -965,29 +972,10 @@ class GameEngine {
         this.gameState = 'IDLE';
         this.turn = this.turn === 1 ? 2 : 1;
 
-        const restoreBoard = (board) => {
-            for(let r=0; r<board.length; r++) {
-                for(let c=0; c<board[r].length; c++) {
-                    const card = board[r][c];
-                    if (card) {
-                        card.energy = card.maxEnergy; // restaura energia no fim do turno
-                        if (card.baseCourage) card.courage = card.baseCourage;
-                        if (card.basePower) card.power = card.basePower;
-                        if (card.baseWisdom) card.wisdom = card.baseWisdom;
-                        if (card.baseSpeed) card.speed = card.baseSpeed;
-                    }
-                }
-            }
-        };
-        restoreBoard(this.boardP1);
-        restoreBoard(this.boardP2);
-        
         this.log(`---------- Turno do Jogador ${this.turn} ----------`);
-        this.log("Vida e Status das criaturas foram restaurados.");
-        
         this.renderBoard();
         this.renderMugics();
-        
+
         if (this.turn === 2) {
             setTimeout(() => this.aiTurn(), 1000);
         }

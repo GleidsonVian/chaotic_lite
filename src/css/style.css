@@ -457,25 +457,113 @@ header h1 {
 .card-header {
     background: rgba(0,0,0,0.3);
     color: var(--text-main);
-    padding: 12px 8px;
+    padding: 10px 8px 8px;
     text-align: center;
     border-bottom: 1px solid rgba(0,0,0,0.5);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
 }
 
 .card-name {
-    font-weight: 800;
-    font-size: 1.15em;
-    margin-bottom: 4px;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    font-weight: 900;
+    font-size: 1.05em; /* ligeiramente menor */
+    margin: 0;
+    order: 0; /* garantir no topo */
+    text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+    letter-spacing: 0.4px;
 }
 
 .card-tribe {
-    font-size: 0.7em;
+    font-size: 0.64em; /* menor que o nome, mais discreto */
     color: var(--text-muted);
     text-transform: uppercase;
-    letter-spacing: 2px;
-    font-weight: 600;
+    letter-spacing: 1.6px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 999px;
+    display: inline-block;
+    background: rgba(255,255,255,0.08);
+    margin: 0 0 4px;
+    position: relative;
+    order: 1; /* aparece abaixo do nome */
+    z-index: 4;
 }
+
+.card-rarity-icon {
+    display: none !important;
+}
+
+.card-type-label {
+    display: none; /* removido conforme solicitado */
+}
+
+.card-rarity-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 0.95em;
+    background: rgba(255,255,255,0.06);
+    color: var(--text-main);
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 6;
+}
+
+.card-rarity-icon.rarity-common { background: rgba(148, 163, 184, 0.16); color: #cbd5e1; }
+.card-rarity-icon.rarity-rare { background: rgba(37, 99, 235, 0.18); color: #dbeafe; }
+.card-rarity-icon.rarity-super-rare { background: rgba(168, 85, 247, 0.18); color: #ede9fe; }
+.card-rarity-icon.rarity-ultra-rare {
+    background: linear-gradient(135deg, #f59e0b, #f97316);
+    color: #fff7ed;
+    box-shadow: 0 0 18px rgba(245,158,11,0.95), inset 0 4px 8px rgba(0,0,0,0.45);
+    border: 1px solid rgba(255,215,120,0.45);
+    width: 24px; /* mais discreto */
+    height: 24px;
+    font-size: 0.95em;
+}
+.card-rarity-icon.rarity-legendary { background: rgba(234, 88, 12, 0.22); color: #ffedd5; }
+
+.card-type-label {
+    display: block;
+    margin-top: 8px;
+    font-size: 0.75em;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.card-badges {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.card-badge {
+    font-size: 0.65em;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    background: rgba(255,255,255,0.08);
+    color: var(--text-main);
+}
+
+.card-badge.rarity-common { background: rgba(148, 163, 184, 0.16); color: #cbd5e1; }
+.card-badge.rarity-rare { background: rgba(37, 99, 235, 0.18); color: #dbeafe; }
+.card-badge.rarity-super-rare { background: rgba(168, 85, 247, 0.18); color: #ede9fe; }
+.card-badge.rarity-ultra-rare { background: rgba(249, 115, 22, 0.18); color: #fff7ed; }
+.card-badge.rarity-legendary { background: rgba(234, 88, 12, 0.22); color: #ffedd5; }
 
 .card-image-container {
     height: 130px;
