@@ -31,7 +31,7 @@ const cardsDatabase = [
         speed: 40,
         elements: ["Fire", "Earth"],
         subtypes: ["Warrior", "Conqueror"],
-        mugicCounters: 1,
+        mugicCounters: 3,
         rarity: "Ultra Rare",
         ability: "Intimidate Energy 10.\nChaor deals an extra 5 damage with Fire attacks."
     },

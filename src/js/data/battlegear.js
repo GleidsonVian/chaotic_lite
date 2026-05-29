@@ -1,89 +1,70 @@
-// Estrutura de dados das cartas de Equipamento de Batalha (Battlegear)
+// Banco de Dados de Equipamentos (Battlegear)
 
 const battlegearDatabase = [
     {
         id: "bg1",
-        name: "Sword of Khy'at",
-        bonusCourage: 15,
-        bonusPower: 20,
-        bonusWisdom: 0,
-        bonusSpeed: 0,
-        bonusEnergy: 0,
-        bonusElements: [],
-        description: "Garante +20 de Poder e +15 de Coragem ao revelar."
+        name: "Vlaric Shard",
+        image: "",
+        description: "Equipamento sagrado. Concede +10 Sabedoria e +10 Coragem.",
+        modifiers: { courage: 10, power: 0, wisdom: 10, speed: 0, energy: 0 },
+        elementGranted: null
     },
     {
         id: "bg2",
-        name: "Aqua Shield",
-        bonusCourage: 0,
-        bonusPower: 0,
-        bonusWisdom: 10,
-        bonusSpeed: 0,
-        bonusEnergy: 20,
-        bonusElements: ["Water"],
-        sacrificeEffect: { type: "heal", value: 15 },
-        description: "Garante +20 Vida, +10 Sab, Elemento Água. [Sacrifício: Cura 15 Vida]"
+        name: "Torq of Resolve",
+        image: "",
+        description: "Amuleto defensivo. Concede +10 Energia Máxima.",
+        modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 10 },
+        elementGranted: null
     },
     {
         id: "bg3",
-        name: "Windstrider Boots",
-        bonusCourage: 0,
-        bonusPower: 0,
-        bonusWisdom: 0,
-        bonusSpeed: 25,
-        bonusEnergy: 0,
-        bonusElements: ["Air"],
-        description: "Garante +25 Velocidade e Elemento Ar."
+        name: "Liquid Treads",
+        image: "",
+        description: "Botas fluídas. Concede +15 Velocidade e o Elemento Água.",
+        modifiers: { courage: 0, power: 0, wisdom: 0, speed: 15, energy: 0 },
+        elementGranted: "Water"
     },
     {
         id: "bg4",
-        name: "Vlaric Shard",
-        bonusCourage: 0,
-        bonusPower: 0,
-        bonusWisdom: 25,
-        bonusSpeed: 0,
-        bonusEnergy: 10,
-        bonusElements: ["Earth"],
-        description: "Garante +25 de Sabedoria, +10 Vida e Elemento Terra."
+        name: "Orb of Foreknowledge",
+        image: "",
+        description: "Esfera ancestral. Concede +20 Sabedoria.",
+        modifiers: { courage: 0, power: 0, wisdom: 20, speed: 0, energy: 0 },
+        elementGranted: null
     },
     {
         id: "bg5",
         name: "Pyroblaster",
-        bonusCourage: 10,
-        bonusPower: 15,
-        bonusWisdom: 0,
-        bonusSpeed: 0,
-        bonusEnergy: 0,
-        bonusElements: ["Fire"],
-        sacrificeEffect: { type: "damage", value: 15 },
-        description: "Garante +15 Poder, Elemento Fogo. [Sacrifício: Causa 15 de dano ao inimigo atual]"
+        image: "",
+        description: "Arma vulcânica. Concede +10 Poder e o Elemento Fogo.",
+        modifiers: { courage: 0, power: 10, wisdom: 0, speed: 0, energy: 0 },
+        elementGranted: "Fire"
     },
     {
         id: "bg6",
-        name: "Elixir of Tenacity",
-        bonusCourage: 5,
-        bonusPower: 5,
-        bonusWisdom: 5,
-        bonusSpeed: 5,
-        bonusEnergy: 25,
-        bonusElements: [],
-        sacrificeEffect: { type: "buff", value: 10 },
-        description: "Garante +25 Vida, +5 geral. [Sacrifício: +10 permanente em disciplinas]"
+        name: "Stone Mail",
+        image: "",
+        description: "Armadura robusta. Concede +15 Coragem e o Elemento Terra.",
+        modifiers: { courage: 15, power: 0, wisdom: 0, speed: 0, energy: 0 },
+        elementGranted: "Earth"
     },
     {
         id: "bg7",
-        name: "Mugician's Lyre",
-        bonusCourage: 0,
-        bonusPower: 0,
-        bonusWisdom: 15,
-        bonusSpeed: 0,
-        bonusEnergy: 5,
-        bonusElements: [],
-        bonusMugicCounters: 1,
-        description: "Garante +1 Mugic Counter e +15 de Sabedoria."
+        name: "Windstrider",
+        image: "",
+        description: "Artefato veloz. Concede +10 Velocidade e o Elemento Ar.",
+        modifiers: { courage: 0, power: 0, wisdom: 0, speed: 10, energy: 0 },
+        elementGranted: "Air"
+    },
+    {
+        id: "bg8",
+        name: "Skeletal Steed",
+        image: "",
+        description: "Montaria sombria. Concede +15 Poder e +15 Velocidade.",
+        modifiers: { courage: 0, power: 15, wisdom: 0, speed: 15, energy: 0 },
+        elementGranted: null
     }
 ];
 
-if (typeof window !== 'undefined') {
-    window.battlegearDatabase = battlegearDatabase;
-}
+window.battlegearDatabase = battlegearDatabase;

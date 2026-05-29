@@ -21,6 +21,7 @@ const attacksDatabase = [
         statRequirement: null,
         statDamage: 0
     },
+    
     {
         id: "a3",
         name: "Ember Swarm",

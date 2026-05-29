@@ -21,18 +21,102 @@
                 <h2 id="draft-title" class="text-accent mb-medium">Fase de Escolha (Draft)</h2>
                 <p id="draft-instructions" class="text-muted mb-large">Selecione exatamente 6 criaturas para formar o seu exército!</p>
                 
+                <div style="margin-bottom: 15px;">
+                    <button onclick="game.filterTribe('All')" style="padding: 5px 10px; cursor: pointer; background: #34495e; color: white; border: 1px solid #7f8c8d; border-radius: 4px;">Todas</button>
+                    <button onclick="game.filterTribe('OverWorld')" style="padding: 5px 10px; cursor: pointer; background: #2980b9; color: white; border: 1px solid #7f8c8d; border-radius: 4px;">OverWorld</button>
+                    <button onclick="game.filterTribe('UnderWorld')" style="padding: 5px 10px; cursor: pointer; background: #c0392b; color: white; border: 1px solid #7f8c8d; border-radius: 4px;">UnderWorld</button>
+                    <button onclick="game.filterTribe('Mipedian')" style="padding: 5px 10px; cursor: pointer; background: #f39c12; color: white; border: 1px solid #7f8c8d; border-radius: 4px;">Mipedian</button>
+                    <button onclick="game.filterTribe('Danian')" style="padding: 5px 10px; cursor: pointer; background: #8e44ad; color: white; border: 1px solid #7f8c8d; border-radius: 4px;">Danian</button>
+                </div>
+                
                 <h3 id="draft-counter" class="text-success mb-small">0 / 6 Escolhidas</h3>
                 <p class="text-muted text-small mb-small">(Clique nas cartas abaixo para adicionar. Max 2 cópias por criatura. Clique nas cartas escolhidas para remover.)</p>
                 <div id="drafted-deck" class="deck-container"></div>
                 
-                <button id="btn-start-battle" class="btn btn-primary btn-large hidden">
-                    Iniciar Batalha
+                <div id="synergy-preview" style="margin: 15px auto; padding: 10px; background: rgba(52, 152, 219, 0.1); border: 1px solid #3498db; border-radius: 5px; max-width: 600px; text-align: center; color: #3498db; font-size: 14px; font-weight: bold; min-height: 20px;">
+                    Nenhuma sinergia ativa ainda.
+                </div>
+                
+                <button id="btn-start-battle" class="btn btn-primary btn-large hidden" onclick="game.advanceDraft()">
+                    Equipar Battlegears
                 </button>
             </div>
             
             <div id="draft-cards-container" class="cards-grid">
                 <!-- Cartas/Equipamentos serão renderizados aqui pelo JavaScript -->
             </div>
+            
+            <div id="battlegear-draft-screen" style="display: none; text-align: center;">
+                <h2 style="color: #f1c40f; margin-bottom: 10px;">Equipe Suas Criaturas (6 Battlegears)</h2>
+                <h3 id="bg-draft-counter" style="color: #2ecc71; margin-bottom: 10px;">0 / 6 Equipadas</h3>
+                <p style="color: #bdc3c7; font-size: 14px; margin-bottom: 20px;">Selecione um equipamento e depois clique na criatura que o usará.</p>
+                
+                <div id="bg-selection-container" style="display: flex; gap: 20px; justify-content: center; margin-bottom: 30px;">
+                    <div style="flex: 1; max-width: 500px;">
+                        <h4 style="margin-bottom: 10px; color: #3498db;">Equipamentos Disponíveis</h4>
+                        <div id="battlegear-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; max-height: 400px; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.4); border-radius: 10px;">
+                            <!-- Battlegears renderizados aqui -->
+                        </div>
+                    </div>
+                    <div style="flex: 1; max-width: 600px;">
+                        <h4 style="margin-bottom: 10px; color: #e74c3c;">Seu Exército</h4>
+                        <div id="army-list" style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; padding: 10px; background: rgba(0,0,0,0.4); border-radius: 10px; min-height: 150px;">
+                            <!-- Exército draftado renderizado aqui -->
+                        </div>
+                    </div>
+                </div>
+                
+                <button id="btn-finish-draft" class="btn btn-primary btn-large hidden" onclick="game.startBattle()">Ir para Batalha!</button>
+            </div>
+                
+            <!-- Estágio 3 do Draft: Mugics -->
+            <div id="mugic-draft-screen" style="display: none; text-align: center;">
+                <h2 style="color: #9b59b6; margin-bottom: 10px;">Componha seu Arsenal Mugic (6 Cartas)</h2>
+                <h3 id="mg-draft-counter" style="color: #2ecc71; margin-bottom: 10px;">0 / 6 Escolhidas</h3>
+                <p style="color: #bdc3c7; font-size: 14px; margin-bottom: 20px;">Você só pode escolher Mugics das Tribos do seu exército, ou Genéricas.</p>
+                
+                <div id="mg-selection-container" style="display: flex; gap: 20px; justify-content: center; margin-bottom: 30px;">
+                    <div style="flex: 1; max-width: 500px;">
+                        <h4 style="color: #8e44ad; margin-bottom: 10px;">Mugics Disponíveis</h4>
+                        
+                        <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 15px;">
+                            <select id="mg-tribe-filter" class="btn" style="background: rgba(0,0,0,0.5); border: 1px solid #8e44ad; color: white;" onchange="game.filterMugicDraft()">
+                                <option value="All">Todas as Tribos</option>
+                                <option value="OverWorld">OverWorld</option>
+                                <option value="UnderWorld">UnderWorld</option>
+                                <option value="Mipedian">Mipedian</option>
+                                <option value="Danian">Danian</option>
+                                <option value="M'arrillian">M'arrillian</option>
+                                <option value="Generic">Genéricas</option>
+                            </select>
+                            
+                            <select id="mg-type-filter" class="btn" style="background: rgba(0,0,0,0.5); border: 1px solid #8e44ad; color: white;" onchange="game.filterMugicDraft()">
+                                <option value="All">Todos os Efeitos</option>
+                                <option value="heal">Cura</option>
+                                <option value="damage">Dano</option>
+                                <option value="buff">Buff (Atributos)</option>
+                                <option value="utility">Efeitos Especiais</option>
+                            </select>
+                        </div>
+                        
+                        <div id="mugic-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; max-height: 400px; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.4); border-radius: 10px;">
+                            <!-- Mugics disponíveis renderizadas aqui -->
+                        </div>
+                    </div>
+                    
+                    <div style="flex: 1; max-width: 300px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
+                        <h4 style="color: #e74c3c; margin-bottom: 10px;">Sua Mão de Mugics</h4>
+                        <div id="drafted-mugics-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; background: rgba(0,0,0,0.4); padding: 10px; border-radius: 10px; width: 100%; min-height: 300px;">
+                            <!-- Slots vazios -->
+                        </div>
+                    </div>
+                </div>
+
+                <button id="btn-finish-mg-draft" class="btn btn-primary btn-large hidden" onclick="game.startBattle()">
+                    Iniciar Partida
+                </button>
+            </div>
+            
         </div>
 
         <div id="battle-screen" class="hidden">
@@ -72,6 +156,32 @@
                 </div>
                 <div id="combat-log" class="combat-log-box">
                     Batalha pronta para iniciar!
+                </div>
+            </div>
+        </div>
+
+        <!-- Burst Modal -->
+        <div id="burst-modal" class="modal-overlay hidden" style="z-index: 1000;">
+            <div class="burst-modal-content" style="background: #1a1a2e; border: 4px solid #f1c40f; border-radius: 15px; padding: 20px; width: 600px; max-width: 90%; color: white; text-align: center;">
+                <h2 style="color: #f1c40f; margin-bottom: 15px;">🔔 BURST ABERTO</h2>
+                
+                <div id="burst-stack-container" style="background: rgba(0,0,0,0.6); border-radius: 10px; padding: 10px; min-height: 100px; margin-bottom: 20px;">
+                    <!-- Ações na pilha aparecem aqui -->
+                </div>
+                
+                <h3 id="burst-prompt" style="color: #3498db; margin-bottom: 15px;">Jogador X, deseja responder?</h3>
+                
+                <div style="display: flex; gap: 20px; justify-content: center; margin-bottom: 20px;">
+                    <button id="btn-burst-pass" class="btn btn-danger" onclick="game.passBurst()">Passar (Não Responder)</button>
+                    <button id="btn-burst-play" class="btn btn-success" onclick="game.showBurstMugicSelection()">Jogar Mugic</button>
+                </div>
+                
+                <div id="burst-mugic-selection" class="hidden">
+                    <h4 style="color: #9b59b6; margin-bottom: 10px;">Sua Mão:</h4>
+                    <div id="burst-hand-container" style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 15px;">
+                        <!-- Cartas da mão -->
+                    </div>
+                    <button class="btn btn-danger" style="padding: 5px 15px; font-size: 12px;" onclick="document.getElementById('burst-mugic-selection').classList.add('hidden')">Cancelar Escolha</button>
                 </div>
             </div>
         </div>
@@ -139,6 +249,7 @@
     <script src="src/js/data/cards.js"></script>
     <script src="src/js/data/mugics.js"></script>
     <script src="src/js/data/attacks.js"></script>
+    <script src="src/js/data/battlegear.js"></script>
     <script src="src/js/data/locations.js"></script>
     <script src="src/js/main.js"></script>
 </body>

@@ -1,9 +1,10 @@
 class GameEngine {
-    constructor(cards, mugics, attacks, locations) {
+    constructor(cards, mugics, attacks, locations, battlegears) {
         this.cards = JSON.parse(JSON.stringify(cards)); // Cópia profunda
         this.mugics = JSON.parse(JSON.stringify(mugics));
         this.attacksData = attacks ? JSON.parse(JSON.stringify(attacks)) : [];
         this.locationsData = locations ? JSON.parse(JSON.stringify(locations)) : [];
+        this.battlegearsData = battlegears ? JSON.parse(JSON.stringify(battlegears)) : [];
         
         this.p1AttackDeck = [];
         this.p2AttackDeck = [];
@@ -12,8 +13,15 @@ class GameEngine {
         this.locationDeck = [];
         this.activeLocation = null;
         
-        this.appState = 'DRAFT'; // 'DRAFT' ou 'BATTLE'
+        this.appState = 'DRAFT'; // 'DRAFT', 'BATTLE', 'LORE'
+        this.draftState = 'CREATURES'; // 'CREATURES', 'BATTLEGEARS', 'MUGICS'
+        this.currentTribeFilter = 'All';
+        this.currentMugicTribeFilter = 'All';
+        this.currentMugicTypeFilter = 'All';
         this.draftedCards = []; // Cartas escolhidas pelo jogador
+        this.draftedMugics = []; // Cartas escolhidas pelo jogador
+        this.draftedBattlegears = []; // Array mapeando battlegear pra cada index da criatura
+        this.selectedBgToEquip = null;
         this.turn = 1; // 1 para Jogador, 2 para Oponente
         this.gameState = 'IDLE'; // Estados: IDLE, SELECT_TARGET, SELECT_MUGIC_TARGET, ENGAGED_COMBAT
         this.selectedAttacker = null; // Guardará o monstro atacante { player, r, c }
@@ -50,11 +58,14 @@ class GameEngine {
             this.nextTurnBtn.addEventListener("click", () => this.nextTurn());
         }
 
-        const btnStart = document.getElementById("btn-start-battle");
-        if (btnStart) {
-            btnStart.addEventListener("click", () => this.startBattle());
+        if (this.nextTurnBtn) {
+            this.nextTurnBtn.addEventListener("click", () => this.nextTurn());
         }
 
+        this.renderDraft();
+    }
+    filterTribe(tribe) {
+        this.currentTribeFilter = tribe;
         this.renderDraft();
     }
     
@@ -64,6 +75,8 @@ class GameEngine {
         let html = '';
         
         this.cards.forEach((card, index) => {
+            if (this.currentTribeFilter !== 'All' && card.tribe !== this.currentTribeFilter) return;
+
             const count = this.draftedCards.filter(c => c.name === card.name).length;
             const isFull = this.draftedCards.length >= 6;
             const isMaxedOut = count >= 2;
@@ -103,6 +116,14 @@ class GameEngine {
                     </div>
                     <div class="card-energy-container" style="padding: 6px; background: #c0392b; border-top: 2px solid #7f8c8d; text-align: center; color: white; font-weight: bold;">
                         ❤️ ${card.energy}
+                        ${(() => {
+                            const mgCnt = card.mugicCounters || 0;
+                            if (mgCnt === 0) return '';
+                            let mHtml = '<div style="display: flex; justify-content: center; gap: 2px; margin-top: 3px;">';
+                            for(let i=0; i<mgCnt; i++) mHtml += '<span style="color: #9b59b6; font-size: 14px; text-shadow: 1px 1px 2px black;">♪</span>';
+                            mHtml += '</div>';
+                            return mHtml;
+                        })()}
                     </div>
                 </div>
             `;
@@ -127,9 +148,43 @@ class GameEngine {
         
         const btnStart = document.getElementById("btn-start-battle");
         if (this.draftedCards.length === 6) {
-            btnStart.classList.remove('hidden');
+            btnStart.classList.remove("hidden");
+            btnStart.style.display = "block";
         } else {
-            btnStart.classList.add('hidden');
+            btnStart.classList.add("hidden");
+            btnStart.style.display = "none";
+        }
+        
+        this.updateSynergyPreview();
+    }
+
+    updateSynergyPreview() {
+        const previewEl = document.getElementById("synergy-preview");
+        if (!previewEl) return;
+        
+        const tribes = {};
+        this.draftedCards.forEach(c => {
+            if (!tribes[c.tribe]) tribes[c.tribe] = 0;
+            tribes[c.tribe]++;
+        });
+        
+        let msg = [];
+        Object.keys(tribes).forEach(t => {
+            const count = tribes[t];
+            if (count > 0) {
+                switch(t) {
+                    case "OverWorld": msg.push(`OverWorld (${count}): +${count*5} Coragem/Sabedoria`); break;
+                    case "UnderWorld": msg.push(`UnderWorld (${count}): +${count*10} Poder`); break;
+                    case "Danian": msg.push(`Danian (${count}): +${count*5} Todos os Status`); break;
+                    case "Mipedian": msg.push(`Mipedian (${count}): +${count*10} Velocidade`); break;
+                }
+            }
+        });
+        
+        if (msg.length > 0) {
+            previewEl.innerHTML = msg.join(" | ");
+        } else {
+            previewEl.innerHTML = "Nenhuma sinergia ativa ainda.";
         }
     }
 
@@ -150,19 +205,255 @@ class GameEngine {
         this.renderDraft();
     }
 
-    startBattle() {
-        this.appState = 'BATTLE';
-        document.getElementById("draft-screen").classList.add('hidden');
-        document.getElementById("battle-screen").classList.remove('hidden');
+    advanceDraft() {
+        this.draftState = 'BATTLEGEARS';
         
-        // Puxar 3 Mugics aleatórios para a mão do jogador
-        this.playerMugics = [];
-        if (this.mugics && this.mugics.length > 0) {
-            for (let i = 0; i < 3; i++) {
-                const randIndex = Math.floor(Math.random() * this.mugics.length);
-                this.playerMugics.push(JSON.parse(JSON.stringify(this.mugics[randIndex])));
+        // Esconde primeira parte do draft e mostra a segunda
+        const draftTitle = document.querySelector('.draft-header');
+        const draftContainer = document.getElementById("draft-cards-container");
+        if (draftTitle) draftTitle.style.display = 'none';
+        if (draftContainer) draftContainer.style.display = 'none';
+        
+        const bgScreen = document.getElementById("battlegear-draft-screen");
+        if (bgScreen) bgScreen.style.display = 'block';
+        
+        this.renderBattlegearDraft();
+    }
+
+    renderBattlegearDraft() {
+        const bgListContainer = document.getElementById("battlegear-list");
+        const armyListContainer = document.getElementById("army-list");
+        const counter = document.getElementById("bg-draft-counter");
+        
+        if (!bgListContainer || !armyListContainer) return;
+        
+        // Renderiza os equipamentos disponíveis
+        let bgHtml = '';
+        this.battlegearsData.forEach((bg, index) => {
+            const isSelected = this.selectedBgToEquip === index;
+            const borderStyle = isSelected ? 'border: 3px solid #f1c40f; box-shadow: 0 0 15px #f1c40f;' : 'border: 1px solid #7f8c8d;';
+            
+            bgHtml += `
+                <div onclick="game.selectBattlegearToEquip(${index})" style="background: #2c3e50; padding: 10px; border-radius: 5px; cursor: pointer; text-align: center; ${borderStyle} transition: all 0.2s;">
+                    <div style="color: #f1c40f; font-weight: bold; font-size: 12px; margin-bottom: 5px;">${bg.name}</div>
+                    <div style="font-size: 10px; color: #bdc3c7;">${bg.description}</div>
+                </div>
+            `;
+        });
+        bgListContainer.innerHTML = bgHtml;
+        
+        // Renderiza o exército draftado
+        let armyHtml = '';
+        let equippedCount = 0;
+        
+        this.draftedCards.forEach((c, i) => {
+            const equippedBg = this.draftedBattlegears[i];
+            if (equippedBg) equippedCount++;
+            
+            let bgDisplay = equippedBg 
+                ? `<div style="margin-top: 5px; font-size: 10px; color: #f1c40f; font-weight: bold; background: rgba(0,0,0,0.8); padding: 2px; border-radius: 3px;">Equipado</div>` 
+                : `<div style="margin-top: 5px; font-size: 10px; color: #e74c3c; font-weight: bold;">Sem Item</div>`;
+                
+            armyHtml += `
+                <div onclick="game.equipBattlegear(${i})" style="width: 90px; cursor: pointer; border: 2px solid ${equippedBg ? '#2ecc71' : '#e74c3c'}; border-radius: 5px; padding: 5px; text-align: center; background: #34495e;">
+                    <div style="font-size: 11px; font-weight: bold; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 5px;">${c.name}</div>
+                    <div style="width: 100%; height: 60px; background: #2c3e50; border-radius: 3px; overflow: hidden;">
+                        ${c.image ? `<img src="${c.image}" style="width: 100%; height: 100%; object-fit: cover;">` : ``}
+                    </div>
+                    ${bgDisplay}
+                </div>
+            `;
+        });
+        armyListContainer.innerHTML = armyHtml;
+        
+             // Update button
+        const finishBtn = document.getElementById('btn-finish-draft');
+        if (finishBtn) {
+            if (equippedCount === 6) {
+                finishBtn.classList.remove('hidden');
+                finishBtn.style.display = 'block';
+                // Mudar destino do botão para a Fase 3
+                finishBtn.onclick = () => this.advanceToMugicDraft();
+                finishBtn.innerText = "Escolher Mugics";
+            } else {
+                finishBtn.classList.add('hidden');
+                finishBtn.style.display = 'none';
             }
         }
+        
+        counter.innerText = `${equippedCount} / 6 Equipadas`;
+    }
+
+    selectBattlegearToEquip(index) {
+        this.selectedBgToEquip = index;
+        this.renderBattlegearDraft();
+    }
+
+    equipBattlegear(draftIndex) {
+        if (this.selectedBgToEquip === null) {
+            alert("Selecione um equipamento primeiro na lista ao lado!");
+            return;
+        }
+        
+        this.draftedBattlegears[draftIndex] = this.battlegearsData[this.selectedBgToEquip];
+        this.selectedBgToEquip = null;
+        this.renderBattlegearDraft();
+    }
+
+    advanceToMugicDraft() {
+        this.draftState = 'MUGICS';
+        document.getElementById("battlegear-draft-screen").style.display = "none";
+        document.getElementById("mugic-draft-screen").style.display = "block";
+        document.getElementById("btn-finish-draft").style.display = "none";
+        this.currentMugicTribeFilter = 'All';
+        this.currentMugicTypeFilter = 'All';
+        
+        const tribeSelect = document.getElementById("mg-tribe-filter");
+        const typeSelect = document.getElementById("mg-type-filter");
+        if(tribeSelect) tribeSelect.value = 'All';
+        if(typeSelect) typeSelect.value = 'All';
+        
+        this.renderMugicDraft();
+    }
+
+    filterMugicDraft() {
+        const tribeSelect = document.getElementById("mg-tribe-filter");
+        const typeSelect = document.getElementById("mg-type-filter");
+        if(tribeSelect) this.currentMugicTribeFilter = tribeSelect.value;
+        if(typeSelect) this.currentMugicTypeFilter = typeSelect.value;
+        this.renderMugicDraft();
+    }
+
+    renderMugicDraft() {
+        const mgListContainer = document.getElementById("mugic-list");
+        const draftedContainer = document.getElementById("drafted-mugics-grid");
+        const counter = document.getElementById("mg-draft-counter");
+        const finishBtn = document.getElementById("btn-finish-mg-draft");
+        
+        if (!mgListContainer || !draftedContainer) return;
+        
+        // Coletar tribos presentes no exército
+        const armyTribes = new Set();
+        this.draftedCards.forEach(c => armyTribes.add(c.tribe));
+
+        let mgHtml = '';
+        this.mugics.forEach((mg, index) => {
+            if (this.currentMugicTribeFilter !== 'All' && mg.tribe !== this.currentMugicTribeFilter) return;
+            
+            if (this.currentMugicTypeFilter !== 'All') {
+                if (this.currentMugicTypeFilter === 'heal' && !mg.effectType.includes('heal')) return;
+                if (this.currentMugicTypeFilter === 'damage' && !mg.effectType.includes('damage')) return;
+                if (this.currentMugicTypeFilter === 'buff' && !mg.effectType.includes('buff')) return;
+                if (this.currentMugicTypeFilter === 'utility' && mg.effectType.includes('heal') && mg.effectType.includes('damage') && mg.effectType.includes('buff')) return; // Simple utility filter
+                
+                // Melhorando o utility filter:
+                const isHeal = mg.effectType.includes('heal');
+                const isDmg = mg.effectType.includes('damage');
+                const isBuff = mg.effectType.includes('buff');
+                if (this.currentMugicTypeFilter === 'utility' && (isHeal || isDmg || isBuff)) return;
+            }
+
+            // Só exibe se for da tribo ou genérica, ou se o jogador quiser gastar 1 a mais.
+            // A regra do Chaotic permite qualquer tribo usar qualquer mugic (pagando +1 se fora), 
+            // então vamos mostrar TODAS as mugics, mas colorir ou avisar.
+            const isAffiliated = mg.tribe === "Generic" || armyTribes.has(mg.tribe);
+            const warningHtml = !isAffiliated ? `<div style="color:#e74c3c; font-size:9px; margin-top:3px;">Penalidade: Custo +1</div>` : '';
+            
+            mgHtml += `
+                <div style="background: rgba(0,0,0,0.6); border: 2px solid ${isAffiliated ? '#2ecc71' : '#e74c3c'}; border-radius: 8px; padding: 10px; cursor: pointer; text-align: center; transition: all 0.2s; position: relative;"
+                     onclick="game.draftMugic(${index})"
+                     onmouseover="this.style.transform='scale(1.05)'"
+                     onmouseout="this.style.transform='scale(1)'"
+                     title="${mg.description}">
+                    <div style="font-weight: bold; color: #f1c40f; font-size: 14px; margin-bottom: 5px;">${mg.name}</div>
+                    <div style="font-size: 10px; color: #bdc3c7;">${mg.tribe} Mugic</div>
+                    <div style="font-size: 12px; margin-top: 5px;">Custo: <b>${mg.cost} ♪</b></div>
+                    ${warningHtml}
+                </div>
+            `;
+        });
+        mgListContainer.innerHTML = mgHtml;
+        
+        let draftedHtml = '';
+        for (let i = 0; i < 6; i++) {
+            if (i < this.draftedMugics.length) {
+                const mg = this.draftedMugics[i];
+                draftedHtml += `
+                    <div style="background: rgba(46, 204, 113, 0.2); border: 1px solid #2ecc71; border-radius: 5px; padding: 10px; cursor: pointer; text-align: center; font-size: 12px; height: 100px; display: flex; flex-direction: column; justify-content: center;" onclick="game.removeDraftedMugic(${i})">
+                        <span style="color: #f1c40f; font-weight: bold;">${mg.name}</span>
+                        <span style="color: #bdc3c7; font-size: 10px; margin-top: 5px;">Custo: ${mg.cost} ♪</span>
+                    </div>
+                `;
+            } else {
+                draftedHtml += `<div style="border: 2px dashed #7f8c8d; border-radius: 5px; height: 100px; opacity: 0.5;"></div>`;
+            }
+        }
+        draftedContainer.innerHTML = draftedHtml;
+        
+        counter.innerText = `${this.draftedMugics.length} / 6 Escolhidas`;
+        
+        if (this.draftedMugics.length === 6) {
+            finishBtn.classList.remove('hidden');
+            finishBtn.style.display = 'block';
+        } else {
+            finishBtn.classList.add('hidden');
+            finishBtn.style.display = 'none';
+        }
+    }
+
+    draftMugic(index) {
+        if (this.draftedMugics.length >= 6) {
+            alert("Você já escolheu 6 Mugics!");
+            return;
+        }
+        this.draftedMugics.push(this.mugics[index]);
+        this.renderMugicDraft();
+    }
+
+    removeDraftedMugic(draftIndex) {
+        this.draftedMugics.splice(draftIndex, 1);
+        this.renderMugicDraft();
+    }
+
+    startBattle() {
+        this.appState = 'BATTLE';
+        const draftScreen = document.getElementById("draft-screen");
+        if (draftScreen) draftScreen.classList.add('hidden');
+        document.getElementById("battle-screen").classList.remove('hidden');
+        
+        // Jogador P1 recebe as 6 Mugics draftadas na mão
+        this.playerMugics = [];
+        if (this.draftedMugics && this.draftedMugics.length === 6) {
+            this.playerMugics = JSON.parse(JSON.stringify(this.draftedMugics));
+        } else {
+            // Fallback caso as mugics não existam (ex: pulou o draft no dev mode)
+            if (this.mugics && this.mugics.length > 0) {
+                for (let i = 0; i < 6; i++) {
+                    const randIndex = Math.floor(Math.random() * this.mugics.length);
+                    this.playerMugics.push(JSON.parse(JSON.stringify(this.mugics[randIndex])));
+                }
+            }
+        }
+        
+        // IA P2 seleciona 6 cartas aleatórias, battlegears e mugics
+        let aiCards = [];
+        let aiBg = [];
+        let aiMugics = [];
+        for (let i = 0; i < 6; i++) {
+            const randCard = this.cards[Math.floor(Math.random() * this.cards.length)];
+            aiCards.push(JSON.parse(JSON.stringify(randCard)));
+            if (this.battlegearsData && this.battlegearsData.length > 0) {
+                const randBg = this.battlegearsData[Math.floor(Math.random() * this.battlegearsData.length)];
+                aiBg.push(JSON.parse(JSON.stringify(randBg)));
+            } else {
+                aiBg.push(null);
+            }
+            if (this.mugics && this.mugics.length > 0) {
+                const randMg = this.mugics[Math.floor(Math.random() * this.mugics.length)];
+                aiMugics.push(JSON.parse(JSON.stringify(randMg)));
+            }
+        }
+        this.p2Mugics = aiMugics;
         
         // Inicializa Decks de Ataque (20 cartas cada)
         if (this.attacksData && this.attacksData.length > 0) {
@@ -188,7 +479,7 @@ class GameEngine {
             }
         }
         
-        this.setupBoard();
+        this.setupBoard(aiCards, aiBg);
         this.renderBoard();
         this.renderMugics();
         this.log("O combate começou! É a sua vez.");
@@ -357,31 +648,50 @@ class GameEngine {
         return cloned;
     }
 
-    setupBoard() {
-        // P1: Usa as escolhas do Draft
-        let p1Deck = this.draftedCards.map(c => this.cloneCard(c));
-        
-        // P2: Escolhe 6 únicas do banco (sem repetição)
-        let p2Deck = [];
-        let availableCards = [...this.cards];
-        for(let i = 0; i < 6; i++) {
-            if (availableCards.length === 0) break;
-            const randIndex = Math.floor(Math.random() * availableCards.length);
-            p2Deck.push(this.cloneCard(availableCards[randIndex]));
-            availableCards.splice(randIndex, 1); // Remove para evitar duplicata
-        }
-        
-        const fillBoard = (board, deck) => {
-            let cardIndex = 0;
-            for(let r = 0; r < board.length; r++) {
-                for(let c = 0; c < board[r].length; c++) {
-                    board[r][c] = deck[cardIndex++];
-                }
-            }
-        };
+    setupBoard(aiCards, aiBg) {
+        // Posicionamento: [[2,0], [1,0], [1,1], [0,0], [0,1], [0,2]] (Retaguarda, Meio, Frente)
+        const p1Formation = [
+            {r: 2, c: 0}, 
+            {r: 1, c: 0}, {r: 1, c: 1}, 
+            {r: 0, c: 0}, {r: 0, c: 1}, {r: 0, c: 2}
+        ];
+        const p2Formation = [
+            {r: 2, c: 0}, 
+            {r: 1, c: 0}, {r: 1, c: 1}, 
+            {r: 0, c: 0}, {r: 0, c: 1}, {r: 0, c: 2}
+        ];
 
-        fillBoard(this.boardP1, p1Deck);
-        fillBoard(this.boardP2, p2Deck);
+        let p1Index = 0;
+        p1Formation.forEach(pos => {
+            if (p1Index < this.draftedCards.length) {
+                const card = JSON.parse(JSON.stringify(this.draftedCards[p1Index]));
+                card.player = 1;
+                card.maxEnergy = card.energy;
+                if (card.mugicCounters === undefined) card.mugicCounters = 0;
+                if (this.draftedBattlegears && this.draftedBattlegears[p1Index]) {
+                    card.battlegear = JSON.parse(JSON.stringify(this.draftedBattlegears[p1Index]));
+                    card.bgRevealed = false;
+                }
+                this.boardP1[pos.r][pos.c] = card;
+                p1Index++;
+            }
+        });
+
+        let p2Index = 0;
+        p2Formation.forEach(pos => {
+            if (p2Index < aiCards.length) {
+                const card = JSON.parse(JSON.stringify(aiCards[p2Index]));
+                card.player = 2;
+                card.maxEnergy = card.energy;
+                if (card.mugicCounters === undefined) card.mugicCounters = 0;
+                if (aiBg && aiBg[p2Index]) {
+                    card.battlegear = JSON.parse(JSON.stringify(aiBg[p2Index]));
+                    card.bgRevealed = false; // Começa Face Down
+                }
+                this.boardP2[pos.r][pos.c] = card;
+                p2Index++;
+            }
+        });
     }
 
     log(message) {
@@ -436,6 +746,17 @@ class GameEngine {
     handleCardClick(player, r, c) {
         // Interações só são aceitas no Turno do Jogador 1
         if (this.turn !== 1) return;
+        
+        if (this.turn !== 1) return;
+        
+        if (this.gameState === 'SELECT_MUGIC_CASTER') {
+            if (player === 1 && this.boardP1[r][c]) {
+                this.resolveMugicCaster(r, c);
+            } else {
+                this.log("⚠️ Selecione uma de SUAS criaturas para pagar o custo do Mugic.");
+            }
+            return;
+        }
         
         if (this.gameState === 'SELECT_MUGIC_TARGET') {
             this.resolveMugic(player, r, c);
@@ -507,6 +828,26 @@ class GameEngine {
             this.activeLocation = this.locationDeck.pop();
             this.log(`📍 Novo Local Revelado: ${this.activeLocation.name}! (${this.activeLocation.description})`);
             this.renderLocation();
+        }
+        
+        // Revelar Equipamentos se ainda não foram revelados
+        if (attacker.battlegear && !attacker.bgRevealed) {
+            attacker.bgRevealed = true;
+            this.log(`🔮 ${attacker.name} revelou seu Battlegear: [${attacker.battlegear.name}]! ${attacker.battlegear.description}`);
+            if (attacker.battlegear.elementGranted && (!attacker.elements || !attacker.elements.includes(attacker.battlegear.elementGranted))) {
+                if (!attacker.elements) attacker.elements = [];
+                attacker.elements.push(attacker.battlegear.elementGranted);
+                this.log(`✨ ${attacker.name} ganhou o elemento ${attacker.battlegear.elementGranted}!`);
+            }
+        }
+        if (defender.battlegear && !defender.bgRevealed) {
+            defender.bgRevealed = true;
+            this.log(`🔮 ${defender.name} revelou seu Battlegear: [${defender.battlegear.name}]! ${defender.battlegear.description}`);
+            if (defender.battlegear.elementGranted && (!defender.elements || !defender.elements.includes(defender.battlegear.elementGranted))) {
+                if (!defender.elements) defender.elements = [];
+                defender.elements.push(defender.battlegear.elementGranted);
+                this.log(`✨ ${defender.name} ganhou o elemento ${defender.battlegear.elementGranted}!`);
+            }
         }
         
         // Iniciativa baseada no Local Ativo (ou Speed padrão se não houver local)
@@ -587,7 +928,11 @@ class GameEngine {
             };
             // IA attack delay
             setTimeout(() => {
-                this.resolveAttack(p2Card, p1Card, p2R, p2C, p1R, p1C, 2);
+                const hand = this.p2AttackHand;
+                let cardIndex = hand.reduce((bestIdx, currentCard, idx, arr) => {
+                    return currentCard.baseDamage > arr[bestIdx].baseDamage ? idx : bestIdx;
+                }, 0);
+                this.confirmAttack(cardIndex);
             }, 1500);
         }
     }
@@ -618,6 +963,16 @@ class GameEngine {
         };
 
         const renderCard = (card, effStats, label) => {
+            const effEnergy = card.energy;
+            const maxEnergy = card.maxEnergy;
+            const mugicCounters = card.mugicCounters || 0;
+            
+            // Gerar ícones de contador mugic (♪)
+            let mugicHtml = '';
+            for(let i=0; i<mugicCounters; i++) {
+                mugicHtml += '<span style="color:#9b59b6; margin:0 1px;">♪</span>';
+            }
+
             let elementsHtml = '';
             if (card.elements && card.elements.length > 0) {
                 const iconMap = { "Fire": "🔥", "Water": "💧", "Earth": "🪨", "Air": "🌪️" };
@@ -637,6 +992,7 @@ class GameEngine {
                 <div class="card-image-container" style="margin: 10px auto;">
                     ${card.image ? `<img src="${card.image}" style="width: 100%; height: 100%; object-fit: cover;" alt="${card.name}">` : `<div class="card-image-placeholder">Sem Imagem</div>`}
                 </div>
+                ${card.battlegear && card.bgRevealed ? `<div style="text-align: center; font-size: 11px; color: #f1c40f; background: rgba(0,0,0,0.8); margin: 5px auto; padding: 4px; border-radius: 4px; border: 1px solid #f1c40f; width: 90%;" title="${card.battlegear.description || 'Equipamento'}">🗡️ ${card.battlegear.name}</div>` : ''}
                 ${elementsHtml}
                 
                 <div class="card-stats" style="grid-template-columns: 1fr 1fr;">
@@ -645,7 +1001,8 @@ class GameEngine {
                     <div class="stat-box"><span>🧠</span><span class="stat-value">${effStats.wisdom}</span></div>
                     <div class="stat-box"><span>⚡</span><span class="stat-value">${effStats.speed}</span></div>
                 </div>
-                <div style="color: #bdc3c7; font-size: 12px; margin-top: 5px;">❤️ ${card.energy} / ${card.maxEnergy}</div>
+                <div style="color: #bdc3c7; font-size: 12px; margin-top: 5px;">❤️ ${effEnergy} / ${maxEnergy}</div>
+                <div style="font-size: 12px; font-weight: bold; margin-top: 5px;">${mugicHtml}</div>
             </div>
             `;
         };
@@ -729,7 +1086,376 @@ class GameEngine {
         
         if (!this.pendingCombat) return;
         const { attacker, defender, atkR, atkC, defR, defC, attackingPlayer } = this.pendingCombat;
-        this.resolveAttack(attacker, defender, atkR, atkC, defR, defC, attackingPlayer, cardIndex);
+        const hand = attackingPlayer === 1 ? this.p1AttackHand : this.p2AttackHand;
+        const atkCard = hand[cardIndex];
+
+        // Mover a carta usada e comprar nova
+        hand.splice(cardIndex, 1);
+        const deck = attackingPlayer === 1 ? this.p1AttackDeck : this.p2AttackDeck;
+        if (deck.length > 0) {
+            hand.push(deck.shift());
+        }
+
+        // Inicializar a Pilha (Burst)
+        this.burstStack = [];
+        this.burstPasses = 0;
+        this.burstPriority = attackingPlayer; // Atacante tem a 1ª resposta
+
+        this.burstStack.push({
+            type: 'attack',
+            source: attackingPlayer === 1 ? 'Jogador 1' : 'IA (Oponente)',
+            attacker, defender, atkR, atkC, defR, defC, attackingPlayer, atkCard,
+            description: `Ataque Declarado: ${atkCard.name}`
+        });
+
+        this.log(`🔔 BURST ABERTO: ${attackingPlayer === 1 ? 'Jogador 1' : 'IA'} atacou com ${atkCard.name}`);
+        this.openBurstModal();
+    }
+
+    openBurstModal() {
+        const modal = document.getElementById('burst-modal');
+        if (!modal) {
+            this.resolveBurst();
+            return;
+        }
+
+        // Render Stack
+        const container = document.getElementById('burst-stack-container');
+        let html = '';
+        // Inverter para mostrar LIFO visualmente (último no topo)
+        [...this.burstStack].reverse().forEach((item, i) => {
+            html += `<div style="padding: 8px; border-bottom: 1px solid #7f8c8d; color: #ecf0f1; text-align: left;">
+                <span style="color: #f1c40f;">${this.burstStack.length - i}.</span> [${item.source}] ${item.description}
+            </div>`;
+        });
+        container.innerHTML = html;
+
+        // Controle de Prioridade
+        let promptText = `Turno de Resposta: ${this.burstPriority === 1 ? 'Jogador 1' : 'IA (Oponente)'}`;
+        if (this.burstPriority === 1 && this.burstPasses === 1) {
+            promptText = `A IA passou. Deseja adicionar outra mágica ou Passar para resolver?`;
+        } else if (this.burstPriority === 2 && this.burstPasses === 1) {
+            promptText = `Jogador 1 passou. A IA está pensando...`;
+        }
+
+        document.getElementById('burst-prompt').innerText = promptText;
+        
+        const passBtn = document.getElementById('btn-burst-pass');
+        const playBtn = document.getElementById('btn-burst-play');
+        const mugicSel = document.getElementById('burst-mugic-selection');
+        mugicSel.classList.add('hidden');
+
+        if (this.burstPriority === 1) {
+            passBtn.disabled = false;
+            playBtn.disabled = false;
+        } else {
+            passBtn.disabled = true;
+            playBtn.disabled = true;
+            // IA Priority
+            setTimeout(() => this.aiBurstDecision(), 1500);
+        }
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex-modal');
+    }
+
+    showBurstMugicSelection() {
+        const mugicSel = document.getElementById('burst-mugic-selection');
+        const handContainer = document.getElementById('burst-hand-container');
+        if (!mugicSel || !handContainer) return;
+
+        // Limpar
+        handContainer.innerHTML = '';
+        
+        // Puxar a mão do jogador atual
+        const playerMugics = this.burstPriority === 1 ? this.playerMugics : this.p2Mugics;
+        
+        if (!playerMugics || playerMugics.length === 0) {
+            handContainer.innerHTML = '<span style="color:#e74c3c;">Nenhuma Mugic na mão!</span>';
+        } else {
+            playerMugics.forEach((mg, i) => {
+                handContainer.innerHTML += `
+                    <div style="background: #2c3e50; border: 2px solid #8e44ad; padding: 10px; border-radius: 5px; cursor: pointer; width: 120px;" 
+                         onclick="game.selectMugicToPlay(${i})"
+                         title="${mg.description}">
+                        <div style="font-weight: bold; color: #f1c40f; font-size: 12px; margin-bottom: 5px;">${mg.name}</div>
+                        <div style="font-size: 10px; color: white;">Custo: ${mg.cost} ♪</div>
+                    </div>
+                `;
+            });
+        }
+        
+        mugicSel.classList.remove('hidden');
+    }
+
+    selectMugicToPlay(index) {
+        const playerMugics = this.burstPriority === 1 ? this.playerMugics : this.p2Mugics;
+        const mg = playerMugics[index];
+        
+        if (this.burstPriority === 1) {
+            this.pendingMugicIndex = index;
+            this.gameState = 'SELECT_MUGIC_CASTER';
+            this.closeBurstModal();
+            this.log(`🪄 Você escolheu [${mg.name}]. Clique na sua criatura que vai pagar os ${mg.cost} ♪!`);
+            this.renderBoard();
+        } else {
+            // IA logic for future
+            this.burstStack.push({
+                type: 'mugic',
+                source: 'IA (Oponente)',
+                mugic: mg,
+                description: `Mugic Cast: ${mg.name}`
+            });
+            playerMugics.splice(index, 1);
+            this.burstPasses = 0;
+            this.burstPriority = 1;
+            this.openBurstModal();
+        }
+    }
+
+    resolveMugicCaster(r, c) {
+        const mg = this.playerMugics[this.pendingMugicIndex];
+        const card = this.boardP1[r][c];
+        
+        // Verificar penalidade tribal
+        let cost = mg.cost;
+        if (mg.tribe !== "Generic" && mg.tribe !== card.tribe) {
+            cost += 1; // Penalidade por conjurar Mugic de fora da tribo
+        }
+        
+        if (card.mugicCounters < cost) {
+            this.log(`⚠️ ${card.name} não tem contadores suficientes! Precisa de ${cost} ♪.`);
+            return;
+        }
+
+        // Paga o custo
+        card.mugicCounters -= cost;
+        this.log(`🎶 ${card.name} pagou ${cost} ♪ e conjurou [${mg.name}]!`);
+        
+        // Adiciona à pilha
+        this.burstStack.push({
+            type: 'mugic',
+            source: 'Jogador 1',
+            mugic: mg,
+            caster: card,
+            description: `Mugic Cast: ${mg.name} (por ${card.name})`
+        });
+
+        // Remove da mão
+        this.playerMugics.splice(this.pendingMugicIndex, 1);
+        
+        // Volta para o Burst
+        this.gameState = 'ENGAGED_COMBAT';
+        this.burstPasses = 0;
+        this.burstPriority = 2; // Passa a bola pra IA
+        this.renderBoard();
+        this.openBurstModal();
+    }
+
+    passBurst() {
+        this.log(`${this.burstPriority === 1 ? 'Jogador 1' : 'IA'} passou a prioridade.`);
+        this.burstPasses++;
+        if (this.burstPasses >= 2) {
+            this.closeBurstModal();
+            this.resolveBurst();
+        } else {
+            this.burstPriority = this.burstPriority === 1 ? 2 : 1;
+            this.openBurstModal();
+        }
+    }
+
+    closeBurstModal() {
+        const modal = document.getElementById('burst-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex-modal');
+        }
+    }
+
+    resolveBurst() {
+        this.log(`🔔 BURST FECHADO: Resolvendo pilha em ordem reversa!`);
+        
+        // Loop pela pilha de trás pra frente (LIFO)
+        while (this.burstStack.length > 0) {
+            const item = this.burstStack.pop();
+            this.log(`Executando: ${item.description}`);
+            if (item.type === 'attack') {
+                this.executeAttack(item);
+            } else if (item.type === 'mugic') {
+                this.executeMugic(item);
+            }
+        }
+
+        setTimeout(() => {
+            this.endCombatTurn();
+        }, 1500);
+    }
+
+    aiBurstDecision() {
+        if (this.p2Mugics && this.p2Mugics.length > 0 && Math.random() < 0.1) {
+            this.log("IA (Oponente) usou um Mugic! (Implementação futura)");
+            this.burstPasses = 0;
+            this.burstPriority = 1;
+            this.openBurstModal();
+        } else {
+            this.passBurst();
+        }
+    }
+
+    executeAttack(item) {
+        const { attacker, defender, atkR, atkC, defR, defC, attackingPlayer, atkCard } = item;
+        
+        const atkSyn = this.getSynergyBonus(attackingPlayer, atkR, atkC);
+        const defSyn = this.getSynergyBonus(attackingPlayer === 1 ? 2 : 1, defR, defC);
+
+        const effAtk = {
+            courage: attacker.courage + (atkSyn ? atkSyn.courage : 0),
+            power: attacker.power + (atkSyn ? atkSyn.power : 0),
+            wisdom: attacker.wisdom + (atkSyn ? atkSyn.wisdom : 0),
+            speed: attacker.speed + (atkSyn ? atkSyn.speed : 0)
+        };
+        const effDef = {
+            courage: defender.courage + (defSyn ? defSyn.courage : 0),
+            power: defender.power + (defSyn ? defSyn.power : 0),
+            wisdom: defender.wisdom + (defSyn ? defSyn.wisdom : 0),
+            speed: defender.speed + (defSyn ? defSyn.speed : 0)
+        };
+
+        let totalDamage = atkCard.baseDamage;
+        if (atkCard.statRequirement) {
+            const statKey = atkCard.statRequirement.toLowerCase();
+            if ((effAtk[statKey] || 0) > (effDef[statKey] || 0)) {
+                totalDamage += atkCard.statDamage;
+            }
+        }
+        if (atkCard.elementRequirement && attacker.elements && attacker.elements.includes(atkCard.elementRequirement)) {
+            totalDamage += atkCard.elementDamage;
+        }
+
+        defender.energy -= totalDamage;
+        this.log(`💥 ${attacker.name} usou ${atkCard.name} e causou ${totalDamage} de dano a ${defender.name}!`);
+
+        this.renderBoard();
+        
+        if (defender.energy <= 0) {
+            this.log(`💀 ${defender.name} foi derrotado!`);
+        }
+    }
+
+    executeMugic(item) {
+        const mg = item.mugic;
+        const caster = item.caster;
+        const sourceName = caster ? caster.name : item.source;
+        
+        if (!this.activeCombat) {
+            this.log(`⚠️ ${mg.name} falhou: Combate já terminou.`);
+            return;
+        }
+
+        const p1Card = this.activeCombat.p1Card;
+        const p2Card = this.activeCombat.p2Card;
+        
+        // Determina quem é aliado e quem é inimigo baseado em quem jogou o Mugic
+        const isPlayer1 = item.source === 'Jogador 1';
+        const allyCard = isPlayer1 ? p1Card : p2Card;
+        const enemyCard = isPlayer1 ? p2Card : p1Card;
+
+        this.log(`✨ Efeito Mágico: ${mg.name} ativado!`);
+
+        switch (mg.effectType) {
+            case "heal":
+                allyCard.energy += mg.effectValue;
+                if (allyCard.energy > allyCard.maxEnergy) allyCard.energy = allyCard.maxEnergy;
+                this.log(`💚 ${allyCard.name} curou ${mg.effectValue} de Energia! (Agora: ${allyCard.energy})`);
+                break;
+            case "heal_multiple":
+                // Simplificação temporária: cura apenas o aliado engajado no combate
+                allyCard.energy += mg.effectValue;
+                if (allyCard.energy > allyCard.maxEnergy) allyCard.energy = allyCard.maxEnergy;
+                this.log(`💚 ${allyCard.name} curou ${mg.effectValue} de Energia! (Agora: ${allyCard.energy})`);
+                break;
+            case "damage":
+            case "damage_all_engaged":
+                enemyCard.energy -= mg.effectValue;
+                this.log(`💥 ${mg.name} causou ${mg.effectValue} de dano mágico a ${enemyCard.name}!`);
+                if (enemyCard.energy <= 0) {
+                    this.log(`💀 ${enemyCard.name} não resistiu ao ataque mágico!`);
+                }
+                break;
+            case "buff_courage":
+                allyCard.courage += mg.effectValue;
+                this.log(`🛡️ ${allyCard.name} ganhou +${mg.effectValue} de Coragem!`);
+                break;
+            case "buff_power_strength":
+                allyCard.power += mg.effectValue;
+                this.log(`💪 ${allyCard.name} ganhou +${mg.effectValue} de Poder/Força!`);
+                break;
+            case "buff_wisdom":
+                allyCard.wisdom += mg.effectValue;
+                this.log(`🧠 ${allyCard.name} ganhou +${mg.effectValue} de Sabedoria!`);
+                break;
+            case "buff_speed":
+                allyCard.speed += mg.effectValue;
+                this.log(`⚡ ${allyCard.name} ganhou +${mg.effectValue} de Velocidade!`);
+                break;
+            case "recklessness":
+                allyCard.power += mg.effectValue; // Dá dano
+                // Efeito real de Recklessness seria reduzir vida no próprio ataque
+                this.log(`🔥 ${allyCard.name} ficou Imprudente (+${mg.effectValue} Poder)!`);
+                break;
+            case "cancel_battlegear":
+                if (enemyCard.battlegear) {
+                    enemyCard.bgRevealed = false; // "Desativa"
+                    this.log(`🚫 Battlegear de ${enemyCard.name} foi desativado temporariamente!`);
+                }
+                break;
+            case "dispel_buffs":
+                // Simplificado: Resetaria status
+                this.log(`🌀 Buffs de ${enemyCard.name} foram dissipados!`);
+                break;
+            case "scramble_initiative":
+                this.activeCombat.currentStriker = this.activeCombat.currentStriker === 1 ? 2 : 1;
+                this.log(`🔄 Iniciativa foi invertida!`);
+                break;
+            default:
+                this.log(`❓ Efeito ${mg.effectType} de ${mg.name} ainda não tem lógica implementada.`);
+                break;
+        }
+        
+        this.renderBoard();
+    }
+
+    endCombatTurn() {
+        if (!this.activeCombat) return;
+        const { p1Card, p2Card, p1R, p1C, p2R, p2C } = this.activeCombat;
+
+        // Cleanup
+        if (p1Card.energy <= 0) {
+            this.boardP1[p1R][p1C] = null;
+            p2Card.energy = p2Card.maxEnergy; // Reseta a vida do sobrevivente
+            this.activeCombat = null;
+            this.selectedAttacker = null;
+            this.renderBoard();
+            this.log("Fim do Combate! A carta do Jogador 1 foi destruída. A energia do Jogador 2 foi restaurada.");
+            return;
+        }
+        if (p2Card.energy <= 0) {
+            this.boardP2[p2R][p2C] = null;
+            p1Card.energy = p1Card.maxEnergy; // Reseta a vida do sobrevivente
+            this.activeCombat = null;
+            this.selectedAttacker = null;
+            this.renderBoard();
+            this.log("Fim do Combate! A carta do Jogador 2 foi destruída. A energia do Jogador 1 foi restaurada.");
+            return;
+        }
+
+        this.activeCombat.isFirstAttack = false;
+        this.activeCombat.currentStriker = this.activeCombat.currentStriker === 1 ? 2 : 1;
+        this.log(`Próximo turno (Strike): Jogador ${this.activeCombat.currentStriker} ataca!`);
+        
+        setTimeout(() => {
+            this.processCombatTurn();
+        }, 1000);
     }
 
     cancelAttackModal() {
@@ -759,18 +1485,20 @@ class GameEngine {
         const atkSyn = this.getSynergyBonus(attackingPlayer, atkR, atkC);
         const defSyn = this.getSynergyBonus(attackingPlayer === 1 ? 2 : 1, defR, defC);
         const locMod = this.activeLocation && this.activeLocation.modifiers ? this.activeLocation.modifiers : { courage: 0, power: 0, wisdom: 0, speed: 0 };
+        const atkBgMod = attacker.bgRevealed && attacker.battlegear && attacker.battlegear.modifiers ? attacker.battlegear.modifiers : { courage: 0, power: 0, wisdom: 0, speed: 0 };
+        const defBgMod = defender.bgRevealed && defender.battlegear && defender.battlegear.modifiers ? defender.battlegear.modifiers : { courage: 0, power: 0, wisdom: 0, speed: 0 };
 
         const effAtk = {
-            courage: attacker.courage + (atkSyn ? atkSyn.courage : 0) + (locMod.courage || 0),
-            power: attacker.power + (atkSyn ? atkSyn.power : 0) + (locMod.power || 0),
-            wisdom: attacker.wisdom + (atkSyn ? atkSyn.wisdom : 0) + (locMod.wisdom || 0),
-            speed: attacker.speed + (atkSyn ? atkSyn.speed : 0) + (locMod.speed || 0)
+            courage: attacker.courage + (atkSyn ? atkSyn.courage : 0) + (locMod.courage || 0) + (atkBgMod.courage || 0),
+            power: attacker.power + (atkSyn ? atkSyn.power : 0) + (locMod.power || 0) + (atkBgMod.power || 0),
+            wisdom: attacker.wisdom + (atkSyn ? atkSyn.wisdom : 0) + (locMod.wisdom || 0) + (atkBgMod.wisdom || 0),
+            speed: attacker.speed + (atkSyn ? atkSyn.speed : 0) + (locMod.speed || 0) + (atkBgMod.speed || 0)
         };
         const effDef = {
-            courage: defender.courage + (defSyn ? defSyn.courage : 0) + (locMod.courage || 0),
-            power: defender.power + (defSyn ? defSyn.power : 0) + (locMod.power || 0),
-            wisdom: defender.wisdom + (defSyn ? defSyn.wisdom : 0) + (locMod.wisdom || 0),
-            speed: defender.speed + (defSyn ? defSyn.speed : 0) + (locMod.speed || 0)
+            courage: defender.courage + (defSyn ? defSyn.courage : 0) + (locMod.courage || 0) + (defBgMod.courage || 0),
+            power: defender.power + (defSyn ? defSyn.power : 0) + (locMod.power || 0) + (defBgMod.power || 0),
+            wisdom: defender.wisdom + (defSyn ? defSyn.wisdom : 0) + (locMod.wisdom || 0) + (defBgMod.wisdom || 0),
+            speed: defender.speed + (defSyn ? defSyn.speed : 0) + (locMod.speed || 0) + (defBgMod.speed || 0)
         };
 
         const atkHand = attackingPlayer === 1 ? this.p1AttackHand : this.p2AttackHand;
@@ -909,10 +1637,11 @@ class GameEngine {
         // Cabeçalho adaptativo baseado no estado
         let msgEstado = this.turn === 1 ? 'Sua vez de jogar. Clique em uma carta.' : 'Aguarde o movimento do Oponente...';
         if (this.gameState === 'SELECT_TARGET') msgEstado = 'ESCOLHA O ALVO INIMIGO!';
+        if (this.gameState === 'SELECT_MUGIC_CASTER') msgEstado = 'QUEM VAI PAGAR O CUSTO DA MÁGICA? CLIQUE EM UMA DE SUAS CRIATURAS.';
         
         this.boardElement.innerHTML = `<div style="width: 100%; text-align: center; margin-bottom: 20px;">
             <h3 style="color: var(--accent); margin-bottom: 5px;">Turno Atual: Jogador ${this.turn}</h3>
-            <p style="color: ${this.gameState === 'SELECT_TARGET' ? 'var(--danger)' : 'var(--text-muted)'}; font-weight: bold; font-size: 1.1em;">${msgEstado}</p>
+            <p style="color: ${this.gameState === 'SELECT_TARGET' || this.gameState === 'SELECT_MUGIC_CASTER' ? 'var(--danger)' : 'var(--text-muted)'}; font-weight: bold; font-size: 1.1em;">${msgEstado}</p>
         </div>`;
         
         const renderPlayerBoard = (board, player) => {
@@ -965,6 +1694,24 @@ class GameEngine {
                             displaySpeed += syn.speed;
                         }
 
+                        let bgDisplayHtml = '';
+                        if (card.bgRevealed && card.battlegear) {
+                            const mod = card.battlegear.modifiers || {};
+                            displayMaxEnergy += mod.energy || 0;
+                            displayEnergy += mod.energy || 0;
+                            displayCourage += mod.courage || 0;
+                            displayPower += mod.power || 0;
+                            displayWisdom += mod.wisdom || 0;
+                            displaySpeed += mod.speed || 0;
+                            bgDisplayHtml = `<div style="text-align: center; font-size: 10px; color: #f1c40f; background: rgba(0,0,0,0.8); margin: 2px 0; padding: 2px; border-radius: 3px;">Equipado: ${card.battlegear.name}</div>`;
+                        } else if (card.battlegear && !card.bgRevealed) {
+                            if (player === 1) {
+                                bgDisplayHtml = `<div style="text-align: center; font-size: 10px; color: #bdc3c7; background: rgba(0,0,0,0.8); margin: 2px 0; padding: 2px; border-radius: 3px; border: 1px dashed #7f8c8d;" title="Oculto para o oponente">[Escondido] ${card.battlegear.name}</div>`;
+                            } else {
+                                bgDisplayHtml = `<div style="text-align: center; font-size: 10px; color: #7f8c8d; background: rgba(0,0,0,0.8); margin: 2px 0; padding: 2px; border-radius: 3px;">Item: Face Down</div>`;
+                            }
+                        }
+
                         html += `
                             <div class="card ${animClass}" onclick="game.handleCardClick(${player}, ${r}, ${c})" style="border: ${borderStyle}; ${shadowStyle} ${cursorStyle} ${opacityStyle} transition: all 0.2s;">
                                 <div class="card-header">
@@ -975,6 +1722,7 @@ class GameEngine {
                                 <div class="card-image-container">
                                     ${card.image ? `<img src="${card.image}" class="card-image" alt="${card.name}">` : `<div class="card-image-placeholder">Sem Imagem</div>`}
                                 </div>
+                                ${bgDisplayHtml}
                                 ${(() => {
                                     let eHtml = '';
                                     if (card.elements && card.elements.length > 0) {
@@ -1002,6 +1750,14 @@ class GameEngine {
                                             ❤️ ${Math.max(0, displayEnergy)} / ${displayMaxEnergy}
                                         </div>
                                     </div>
+                                    ${(() => {
+                                        const mgCnt = card.mugicCounters || 0;
+                                        if (mgCnt === 0) return '';
+                                        let mHtml = '<div style="display: flex; justify-content: center; gap: 2px; margin-top: 5px;">';
+                                        for(let i=0; i<mgCnt; i++) mHtml += '<span style="color: #9b59b6; font-size: 14px; text-shadow: 1px 1px 2px black;">♪</span>';
+                                        mHtml += '</div>';
+                                        return mHtml;
+                                    })()}
                                 </div>
                             </div>
                         `;
@@ -1066,7 +1822,7 @@ class GameEngine {
         let p1Alive = [];
         for(let r=0; r < this.boardP1.length; r++) {
             for(let c=0; c < this.boardP1[r].length; c++) {
-                if(this.boardP1[r][c]) {
+                if(this.boardP1[r][c] && this.isExposed(1, r, c)) {
                     p1Alive.push({card: this.boardP1[r][c], r, c});
                 }
             }
@@ -1102,7 +1858,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const mugics = window.mugicsDatabase || [];
     const attacks = window.attacksDatabase || [];
     const locations = window.locationsDatabase || [];
-    const game = new GameEngine(cards, mugics, attacks, locations);
+    const battlegears = window.battlegearDatabase || [];
+    const game = new GameEngine(cards, mugics, attacks, locations, battlegears);
     game.init();
     window.game = game;
 });
