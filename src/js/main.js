@@ -538,7 +538,9 @@ class GameEngine {
             p1C: initiatingPlayer === 1 ? atkC : defC,
             p2R: initiatingPlayer === 1 ? defR : atkR,
             p2C: initiatingPlayer === 1 ? defC : atkC,
-            currentStriker: firstStriker
+            currentStriker: firstStriker,
+            isFirstAttack: true,
+            initiatingPlayer: initiatingPlayer
         };
 
         this.log(`⚔️ COMBATE INICIADO! Iniciativa: Jogador ${firstStriker} ataca primeiro (${initStat.toUpperCase()}).`);
@@ -697,6 +699,23 @@ class GameEngine {
             ${renderCard(defender, effDef, 'Defensor')}
         `;
 
+        let cancelBtn = document.getElementById('cancel-attack-btn');
+        if (!cancelBtn) {
+            cancelBtn = document.createElement('button');
+            cancelBtn.id = 'cancel-attack-btn';
+            cancelBtn.className = 'btn btn-danger btn-cancel-attack';
+            cancelBtn.innerText = 'Cancelar Ataque';
+            cancelBtn.onclick = () => this.cancelAttackModal();
+            cancelBtn.style.marginTop = '20px';
+            modal.querySelector('.attack-modal-content').appendChild(cancelBtn);
+        }
+        
+        if (this.activeCombat && this.activeCombat.isFirstAttack && this.activeCombat.initiatingPlayer === 1) {
+            cancelBtn.style.display = 'inline-block';
+        } else {
+            cancelBtn.style.display = 'none';
+        }
+
         modal.classList.remove('hidden');
         modal.classList.add('flex-modal');
     }
@@ -721,11 +740,22 @@ class GameEngine {
         }
         this.selectedAttacker = null;
         this.gameState = 'IDLE';
+        this.activeCombat = null;
+        
+        if (this.activeLocation) {
+            this.locationDeck.push(this.activeLocation);
+            this.activeLocation = null;
+            this.renderLocation();
+        }
+
         this.renderBoard();
         this.log("Ataque cancelado.");
     }
 
     resolveAttack(attacker, defender, atkR, atkC, defR, defC, attackingPlayer, attackCardIndex) {
+        if (this.activeCombat) {
+            this.activeCombat.isFirstAttack = false;
+        }
         const atkSyn = this.getSynergyBonus(attackingPlayer, atkR, atkC);
         const defSyn = this.getSynergyBonus(attackingPlayer === 1 ? 2 : 1, defR, defC);
         const locMod = this.activeLocation && this.activeLocation.modifiers ? this.activeLocation.modifiers : { courage: 0, power: 0, wisdom: 0, speed: 0 };
