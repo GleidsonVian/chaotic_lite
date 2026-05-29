@@ -822,6 +822,10 @@ class GameEngine {
         
         if (defender.energy <= 0) {
             this.log(`💀 ${defender.name} foi destruído! O combate terminou.`);
+            
+            attacker.energy = attacker.maxEnergy;
+            this.log(`✨ ${attacker.name} venceu o combate e recuperou toda a sua energia!`);
+            
             this.renderBoard();
 
             setTimeout(() => {
