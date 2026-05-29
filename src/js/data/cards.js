@@ -13,8 +13,10 @@ const cardsDatabase = [
         wisdom: 45,
         speed: 55,
         elements: ["Earth", "Fire"],
-        subtypes: ["Warrior"],
-        mugicCounters: 2
+        subtypes: ["Warrior", "Hero"],
+        mugicCounters: 2,
+        rarity: "Ultra Rare",
+        ability: "Heal 10 Energy to target Creature.\nMaxxor may not enter mixed armies.\nUnique"
     },
     {
         id: 2,
@@ -28,8 +30,10 @@ const cardsDatabase = [
         wisdom: 30,
         speed: 40,
         elements: ["Fire", "Earth"],
-        subtypes: ["Warrior"],
-        mugicCounters: 1
+        subtypes: ["Warrior", "Conqueror"],
+        mugicCounters: 1,
+        rarity: "Ultra Rare",
+        ability: "Intimidate Energy 10.\nChaor deals an extra 5 damage with Fire attacks."
     },
     {
         id: 3,
@@ -43,8 +47,10 @@ const cardsDatabase = [
         wisdom: 60,
         speed: 70,
         elements: ["Earth", "Water"],
-        subtypes: ["Warrior"],
-        mugicCounters: 1
+        subtypes: ["Warrior", "Elementalist"],
+        mugicCounters: 1,
+        rarity: "Super Rare",
+        ability: "Water attacks cost Intress 0 Mugic Counters.\nSwift 1"
     },
     {
         id: 4,
@@ -59,7 +65,9 @@ const cardsDatabase = [
         speed: 85,
         elements: ["Fire", "Air"],
         subtypes: ["Warrior"],
-        mugicCounters: 1
+        mugicCounters: 1,
+        rarity: "Super Rare",
+        ability: "Strike 10. Flying."
     },
     {
         id: 5,
@@ -73,8 +81,10 @@ const cardsDatabase = [
         wisdom: 100,
         speed: 50,
         elements: ["Water", "Air"],
-        subtypes: ["Warrior"],
-        mugicCounters: 3
+        subtypes: ["Muge"],
+        mugicCounters: 3,
+        rarity: "Ultra Rare",
+        ability: "Najarin can cast OverWorld Mugic from any location.\nMugic abilities cost 1 less counter."
     },
     {
         id: 6,
@@ -89,7 +99,9 @@ const cardsDatabase = [
         speed: 45,
         elements: ["Earth", "Fire"],
         subtypes: ["Warrior"],
-        mugicCounters: 1
+        mugicCounters: 1,
+        rarity: "Super Rare",
+        ability: "Tangath Toborn gains +5 Courage and +5 Power for every equipped gear."
     },
     {
         id: 7,
@@ -103,8 +115,10 @@ const cardsDatabase = [
         wisdom: 60,
         speed: 30,
         elements: ["Air"],
-        subtypes: ["Warrior"],
-        mugicCounters: 2
+        subtypes: ["Mage", "Conqueror"],
+        mugicCounters: 2,
+        rarity: "Ultra Rare",
+        ability: "Invisibility: Strike 15.\nExpend 1 Mugic: Deal 10 damage to target engaged creature."
     },
     {
         id: 8,
@@ -118,8 +132,10 @@ const cardsDatabase = [
         wisdom: 40,
         speed: 55,
         elements: ["Earth"],
-        subtypes: ["Warrior"],
-        mugicCounters: 0
+        subtypes: ["Scout"],
+        mugicCounters: 0,
+        rarity: "Common",
+        ability: "Reveal the top card of any deck.\nH'earring gains Swift 1 when Earth is active."
     },
     {
         id: 9,
@@ -134,7 +150,9 @@ const cardsDatabase = [
         speed: 65,
         elements: ["Air"],
         subtypes: ["Warrior"],
-        mugicCounters: 1
+        mugicCounters: 1,
+        rarity: "Rare",
+        ability: "Invisibility: Surprise.\nAttacks deal an extra 5 damage if Mudeenu strikes first."
     },
     {
         id: 10,
@@ -148,8 +166,10 @@ const cardsDatabase = [
         wisdom: 70,
         speed: 75,
         elements: ["Air", "Earth"],
-        subtypes: ["Warrior"],
-        mugicCounters: 1
+        subtypes: ["Stalker"],
+        mugicCounters: 1,
+        rarity: "Super Rare",
+        ability: "Invisibility: Strike 10.\nWhen Zhade defeats an opponent, gain 1 Mugic Counter."
     },
     {
         id: 11,
@@ -163,8 +183,10 @@ const cardsDatabase = [
         wisdom: 90,
         speed: 50,
         elements: ["Water", "Earth"],
-        subtypes: ["Warrior"],
-        mugicCounters: 2
+        subtypes: ["Queen"],
+        mugicCounters: 2,
+        rarity: "Ultra Rare",
+        ability: "Hive: +5 All stats for each Danian.\nInfect an opponent when they attack Illexia."
     },
     {
         id: 12,
@@ -178,8 +200,10 @@ const cardsDatabase = [
         wisdom: 35,
         speed: 40,
         elements: ["Water"],
-        subtypes: ["Warrior"],
-        mugicCounters: 1
+        subtypes: ["Mandiblor"],
+        mugicCounters: 1,
+        rarity: "Common",
+        ability: "Hive: Wamma gains +10 Energy.\nSacrifice Wamma: Heal a target Danian by 20."
     }
 ];
 
