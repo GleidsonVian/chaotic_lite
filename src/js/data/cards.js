@@ -7,11 +7,11 @@ const cardsDatabase = [
         type: "Creature",
         tribe: "OverWorld",
         image: "src/assets/maxxor.jpg",
-        energy: 65,
-        courage: 80,
-        power: 60,
-        wisdom: 45,
-        speed: 55,
+        energy: 60,
+        courage: 100,
+        power: 65,
+        wisdom: 80,
+        speed: 50,
         elements: ["Earth", "Fire"],
         subtypes: ["Warrior", "Hero"],
         mugicCounters: 2,
@@ -216,6 +216,24 @@ const cardsDatabase = [
         rarity: "Common",
         ability: "Hive: Wamma gains +10 Energy.\nSacrifice Wamma: Heal a target Danian by 20.",
         passives: []
+    },
+    {
+        id: 13,
+        name: "Arias",
+        type: "Creature",
+        tribe: "OverWorld",
+        image: "src/assets/arias.jpg",
+        energy: 50,
+        courage: 55,
+        power: 65,
+        wisdom: 65,
+        speed: 55,
+        elements: ["Earth", "Water"],
+        subtypes: ["Warrior"],
+        mugicCounters: 0,
+        rarity: "Rare",
+        ability: "",
+        passives: [{ id: 'adjacentOverWorldPower', value: 5 }]
     }
 ];
 

@@ -95,6 +95,28 @@ const passivesDatabase = {
         }
     },
 
+    adjacentOverWorldPower: {
+        name: "OverWorld Bond",
+        icon: "🌿",
+        description: (p) => `+${p.value ?? 5} Power para cada OverWorld aliado adjacente ao atacar.`,
+        execute(trigger, passive, creature, opponent, log, activeCombat, game) {
+            if (trigger !== 'attackStart') return;
+            if (!game) return;
+            const position = game.getCardPosition(creature);
+            if (!position) return;
+            const board = position.player === 1 ? game.boardP1 : game.boardP2;
+            const adjacent = game.getAdjacentPositions(position.r, position.c);
+            const count = adjacent.reduce((sum, [r, c]) => {
+                const ally = board[r] && board[r][c];
+                return sum + (ally && ally.tribe === 'OverWorld' ? 1 : 0);
+            }, 0);
+            if (count <= 0) return;
+            const bonus = count * (passive.value ?? 5);
+            creature._adjacentOverWorldPower = bonus;
+            log(`🌿 ${creature.name} [OverWorld Bond]: +${bonus} Power (${count} aliados adjacentes).`);
+        }
+    },
+
     reckless: {
         name: "Reckless",
         icon: "💢",

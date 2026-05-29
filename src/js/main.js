@@ -307,7 +307,7 @@ class GameEngine {
             }
 
             html += `
-                <div class="card" onclick="game.addDraftCard(${index})" style="${borderStyle} ${opacityStyle}">
+                <div class="card" onclick="game.addDraftCard(${index})" title="${this.getPassiveDescription(card).replace(/"/g, '&quot;')}" style="${borderStyle} ${opacityStyle}">
                     <div class="card-header">
                         <div class="card-rarity-icon rarity-${(card.rarity || 'Common').toLowerCase().replace(/\s+/g, '-')}" title="${card.rarity || 'Common'}">${card.rarity === 'Ultra Rare' ? '💎' : card.rarity === 'Super Rare' ? '🔷' : card.rarity === 'Rare' ? '🔶' : card.rarity === 'Legendary' ? '🌟' : '⚪'}</div>
                         <div class="card-tribe">${card.tribe}</div>
@@ -1707,8 +1707,46 @@ class GameEngine {
         creature.passives.forEach(passive => {
             const def = catalog[passive.id];
             if (!def) return;
-            def.execute(trigger, passive, creature, opponent, (msg) => this.log(msg), this.activeCombat);
+            def.execute(trigger, passive, creature, opponent, (msg) => this.log(msg), this.activeCombat, this);
         });
+    }
+
+    getCardPosition(card) {
+        const boards = [this.boardP1, this.boardP2];
+        for (let player = 1; player <= boards.length; player++) {
+            const board = boards[player - 1];
+            for (let r = 0; r < board.length; r++) {
+                for (let c = 0; c < board[r].length; c++) {
+                    if (board[r][c] === card) return { player, r, c };
+                }
+            }
+        }
+        return null;
+    }
+
+    getAdjacentPositions(r, c) {
+        const adjacencyList = {
+            "0,0": [[1,0]],
+            "0,1": [[1,0], [1,1]],
+            "0,2": [[1,1]],
+            "1,0": [[0,0], [0,1], [2,0]],
+            "1,1": [[0,1], [0,2], [2,0]],
+            "2,0": [[1,0], [1,1]]
+        };
+        return adjacencyList[`${r},${c}`] || [];
+    }
+
+    getPassiveDescription(card) {
+        if (!card.passives || card.passives.length === 0) return '';
+        const catalog = window.passivesDatabase || {};
+        return card.passives
+            .map(passive => {
+                const def = catalog[passive.id];
+                if (!def) return null;
+                return def.description ? def.description(passive) : `${def.name}: Sem descrição`;
+            })
+            .filter(d => d !== null)
+            .join('\\n');
     }
 
     drawAttackCard(player) {
@@ -1790,8 +1828,13 @@ class GameEngine {
             this.log(`⚡ ${attacker.name} [Strike]: +${attacker._strikeBonus} dano bônus!`);
             attacker._strikeBonus = 0;
         }
-        // Passiva Berserk (baixa energia)
+        // Passivas de ataque
         this.applyPassives('attackStart', attacker, defender);
+        if (attacker._adjacentOverWorldPower) {
+            effAtk.power += attacker._adjacentOverWorldPower;
+            this.log(`🌿 ${attacker.name} recebe +${attacker._adjacentOverWorldPower} Power por aliados adjacentes!`);
+            attacker._adjacentOverWorldPower = 0;
+        }
         if (attacker._berserkBonus) {
             totalDamage += attacker._berserkBonus;
             attacker._berserkBonus = 0;
@@ -2270,7 +2313,7 @@ class GameEngine {
                         }
 
                         html += `
-                            <div class="card ${animClass}" onclick="game.handleCardClick(${player}, ${r}, ${c})" style="border: ${borderStyle}; ${shadowStyle} ${cursorStyle} ${opacityStyle} transition: all 0.2s;">
+                            <div class="card ${animClass}" onclick="game.handleCardClick(${player}, ${r}, ${c})" title="${this.getPassiveDescription(card).replace(/"/g, '&quot;')}" style="border: ${borderStyle}; ${shadowStyle} ${cursorStyle} ${opacityStyle} transition: all 0.2s;">
                                 <div class="card-header">
                                     <div class="card-rarity-icon rarity-${(card.rarity || 'Common').toLowerCase().replace(/\s+/g, '-')}" title="${card.rarity || 'Common'}">${card.rarity === 'Ultra Rare' ? '💎' : card.rarity === 'Super Rare' ? '🔷' : card.rarity === 'Rare' ? '🔶' : card.rarity === 'Legendary' ? '🌟' : '⚪'}</div>
                                     <div class="card-tribe">${card.tribe}</div>
