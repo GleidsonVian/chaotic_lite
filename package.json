@@ -1,0 +1,13 @@
+{
+  "name": "chaotic-lite",
+  "version": "1.0.0",
+  "description": "Simulador tático de batalha inspirado no card game Chaotic",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  }
+}

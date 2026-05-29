@@ -10,6 +10,8 @@ class GameEngine {
         this.p2AttackDeck = [];
         this.p1AttackHand = [];
         this.p2AttackHand = [];
+        this.p1AttackDiscard = [];
+        this.p2AttackDiscard = [];
         this.locationDeck = [];
         this.activeLocation = null;
         
@@ -45,6 +47,13 @@ class GameEngine {
             [null, null],       // Linha 1 (Meio)
             [null]              // Linha 2 (Trás)
         ];
+
+        // Multiplayer
+        this.multiplayerMode = false;
+        this.myPlayerNumber = 1;
+        this.socket = null;
+        this.remoteDraft = null;      // draft recebido do outro jogador
+        this.myDraftReady = false;    // se eu já cliquei em Start Battle
     }
 
     init() {
@@ -58,12 +67,213 @@ class GameEngine {
             this.nextTurnBtn.addEventListener("click", () => this.nextTurn());
         }
 
-        if (this.nextTurnBtn) {
-            this.nextTurnBtn.addEventListener("click", () => this.nextTurn());
+        this.renderDraft();
+        this.initMultiplayer();
+    }
+
+    initMultiplayer() {
+        if (typeof io === 'undefined') return; // não está no modo servidor
+
+        this.socket = io();
+        this.multiplayerMode = true;
+
+        this.socket.on('assigned', ({ playerNumber }) => {
+            this.myPlayerNumber = playerNumber;
+            this.log(`🌐 Modo Multiplayer ativo — Você é o Jogador ${playerNumber}`);
+        });
+
+        this.socket.on('waiting', () => {
+            this.log('⏳ Aguardando segundo jogador conectar...');
+        });
+
+        this.socket.on('room_ready', () => {
+            this.log('🟢 Oponente conectado! Façam o Draft e cliquem em Iniciar Batalha.');
+        });
+
+        this.socket.on('action', (data) => {
+            this.executeRemoteAction(data);
+        });
+
+        this.socket.on('opponent_disconnected', () => {
+            this.log('❌ Oponente desconectou.');
+            this.showAlert('Oponente Desconectou', 'Seu oponente saiu da partida.');
+        });
+    }
+
+    sendAction(type, data = {}) {
+        if (this.socket && this.multiplayerMode) {
+            this.socket.emit('action', { type, ...data });
+        }
+    }
+
+    isMyTurn() {
+        if (!this.multiplayerMode) return this.turn === 1;
+        return this.turn === this.myPlayerNumber;
+    }
+
+    executeRemoteAction(data) {
+        switch (data.type) {
+            case 'opponent_draft':
+                this.remoteDraft = data.draft;
+                this.log('📦 Draft do oponente recebido!');
+                if (this.myDraftReady) this._startBattleMultiplayer();
+                break;
+            case 'move':
+                this.resolveMove(data.player, data.fromR, data.fromC, data.toR, data.toC, true);
+                break;
+            case 'startCombat':
+                const attacker = data.initiatingPlayer === 1
+                    ? this.boardP1[data.atkR][data.atkC]
+                    : this.boardP2[data.atkR][data.atkC];
+                const defender = data.initiatingPlayer === 1
+                    ? this.boardP2[data.defR][data.defC]
+                    : this.boardP1[data.defR][data.defC];
+                if (attacker && defender) {
+                    this.startCombat(attacker, defender, data.atkR, data.atkC, data.defR, data.defC, data.initiatingPlayer, true);
+                }
+                break;
+            case 'confirmAttack':
+                this.confirmAttack(data.cardIndex, true);
+                break;
+            case 'passBurst':
+                this.passBurst(true);
+                break;
+            case 'selectMugic':
+                this.selectMugicToPlay(data.index, true);
+                break;
+            case 'resolveMugicCaster':
+                this.resolveMugicCaster(data.r, data.c, true);
+                break;
+            case 'cancelMugicCaster':
+                this.cancelMugicCaster(true);
+                break;
+            case 'nextTurn':
+                this.nextTurn(true);
+                break;
+            case 'sync_initial_state':
+                // P2 recebe o estado inicial gerado pelo P1 (decks, locais)
+                this.p1AttackDeck = data.p1AttackDeck;
+                this.p2AttackDeck = data.p2AttackDeck;
+                this.p1AttackHand = data.p1AttackHand;
+                this.p2AttackHand = data.p2AttackHand;
+                this.locationDeck = data.locationDeck;
+                this.p2Mugics = data.p2Mugics;
+                this.activeLocation = data.activeLocation;
+                this.renderLocation();
+                this.log(`📍 Local Inicial: ${this.activeLocation ? this.activeLocation.name : '—'}!`);
+                break;
+        }
+    }
+
+    _startBattleMultiplayer() {
+        if (!this.remoteDraft) return;
+
+        const rd = this.remoteDraft;
+
+        if (this.myPlayerNumber === 1) {
+            // P1: boardP1 = meu draft, boardP2 = draft do P2
+            const p2Cards = rd.cards.map(c => { const card = JSON.parse(JSON.stringify(c)); card.player = 2; card.maxEnergy = card.energy; if (card.mugicCounters === undefined) card.mugicCounters = 0; return card; });
+            const p2Bg = rd.battlegears;
+            this.playerMugics = JSON.parse(JSON.stringify(this.draftedMugics)); // minhas mugics
+            this.p2Mugics = JSON.parse(JSON.stringify(rd.mugics));              // mugics do P2
+            this.setupBoard(p2Cards, p2Bg);
+
+            // P1 gera o estado compartilhado (decks aleatórios) e envia ao P2
+            this._generateSharedState();
+            this.sendAction('sync_initial_state', {
+                p1AttackDeck: this.p1AttackDeck,
+                p2AttackDeck: this.p2AttackDeck,
+                p1AttackHand: this.p1AttackHand,
+                p2AttackHand: this.p2AttackHand,
+                locationDeck: this.locationDeck,
+                p2Mugics: this.p2Mugics,
+                activeLocation: this.activeLocation
+            });
+
+            this._finishStartBattle();
+        } else {
+            // P2: boardP1 = draft do P1, boardP2 = meu draft
+            const p1Cards = rd.cards.map(c => { const card = JSON.parse(JSON.stringify(c)); card.player = 1; card.maxEnergy = card.energy; if (card.mugicCounters === undefined) card.mugicCounters = 0; return card; });
+            const p1Bg = rd.battlegears;
+            const p1Mugics = JSON.parse(JSON.stringify(rd.mugics));
+
+            // Posiciona as cartas do P1 no boardP1
+            const p1Formation = [{r:2,c:0},{r:1,c:0},{r:1,c:1},{r:0,c:0},{r:0,c:1},{r:0,c:2}];
+            p1Cards.forEach((card, i) => {
+                if (i < p1Formation.length) {
+                    const pos = p1Formation[i];
+                    if (p1Bg && p1Bg[i]) { card.battlegear = JSON.parse(JSON.stringify(p1Bg[i])); card.bgRevealed = false; }
+                    this.boardP1[pos.r][pos.c] = card;
+                }
+            });
+            this.playerMugics = JSON.parse(JSON.stringify(this.draftedMugics)); // minhas mugics (P2)
+
+            // Posiciona minhas cartas no boardP2
+            const p2Formation = [{r:2,c:0},{r:1,c:0},{r:1,c:1},{r:0,c:0},{r:0,c:1},{r:0,c:2}];
+            this.draftedCards.forEach((baseCard, i) => {
+                if (i < p2Formation.length) {
+                    const pos = p2Formation[i];
+                    const card = JSON.parse(JSON.stringify(baseCard));
+                    card.player = 2; card.maxEnergy = card.energy;
+                    if (card.mugicCounters === undefined) card.mugicCounters = 0;
+                    if (this.draftedBattlegears && this.draftedBattlegears[i]) {
+                        card.battlegear = JSON.parse(JSON.stringify(this.draftedBattlegears[i]));
+                        card.bgRevealed = false;
+                    }
+                    this.boardP2[pos.r][pos.c] = card;
+                }
+            });
+            // Mugics do P2 (minhas mugics ficam como playerMugics pra poder usar no burst)
+            // Nota: em multiplayer P2 usa this.draftedMugics diretamente
+            this.p2Mugics = JSON.parse(JSON.stringify(this.draftedMugics));
+
+            // Estado compartilhado (decks) vem via sync_initial_state
+            this._finishStartBattle();
+        }
+    }
+
+    _generateSharedState() {
+        // Gera attack decks, hands e location deck (mesma lógica do startBattle)
+        this.p1AttackDeck = [];
+        this.p2AttackDeck = [];
+        this.p1AttackHand = [];
+        this.p2AttackHand = [];
+        this.locationDeck = [];
+
+        if (this.attacksData && this.attacksData.length > 0) {
+            for (let i = 0; i < 20; i++) {
+                this.p1AttackDeck.push(this.attacksData[Math.floor(Math.random() * this.attacksData.length)]);
+                this.p2AttackDeck.push(this.attacksData[Math.floor(Math.random() * this.attacksData.length)]);
+            }
+            this.p1AttackHand.push(this.p1AttackDeck.pop());
+            this.p1AttackHand.push(this.p1AttackDeck.pop());
+            this.p2AttackHand.push(this.p2AttackDeck.pop());
+            this.p2AttackHand.push(this.p2AttackDeck.pop());
         }
 
-        this.renderDraft();
+        if (this.locationsData && this.locationsData.length > 0) {
+            let available = [...this.locationsData, ...this.locationsData];
+            for (let i = 0; i < 10; i++) {
+                if (available.length === 0) break;
+                const idx = Math.floor(Math.random() * available.length);
+                this.locationDeck.push(available[idx]);
+                available.splice(idx, 1);
+            }
+        }
+
+        if (this.locationDeck.length > 0) {
+            this.activeLocation = this.locationDeck.pop();
+        }
     }
+
+    _finishStartBattle() {
+        this.renderBoard();
+        this.renderMugics();
+        this.renderLocation();
+        const myRole = this.myPlayerNumber === 1 ? 'Jogador 1 (você ataca primeiro)' : 'Jogador 2 (aguarde o Jogador 1)';
+        this.log(`⚔️ Batalha Multiplayer iniciada! ${myRole}`);
+    }
+
     filterTribe(tribe) {
         this.currentTribeFilter = tribe;
         this.renderDraft();
@@ -291,7 +501,7 @@ class GameEngine {
 
     equipBattlegear(draftIndex) {
         if (this.selectedBgToEquip === null) {
-            alert("Selecione um equipamento primeiro na lista ao lado!");
+            this.showAlert("⚔️ Equipamento não selecionado", "Selecione um equipamento primeiro na lista ao lado!");
             return;
         }
         
@@ -403,7 +613,7 @@ class GameEngine {
 
     draftMugic(index) {
         if (this.draftedMugics.length >= 6) {
-            alert("Você já escolheu 6 Mugics!");
+            this.showAlert("🎶 Mão Completa", "Você já escolheu 6 Mugics!");
             return;
         }
         this.draftedMugics.push(this.mugics[index]);
@@ -417,6 +627,29 @@ class GameEngine {
 
     startBattle() {
         this.appState = 'BATTLE';
+
+        // Modo multiplayer: troca de drafts
+        if (this.multiplayerMode) {
+            const draftScreen = document.getElementById("draft-screen");
+            if (draftScreen) draftScreen.classList.add('hidden');
+            document.getElementById("battle-screen").classList.remove('hidden');
+
+            this.myDraftReady = true;
+            this.sendAction('opponent_draft', {
+                draft: {
+                    cards: this.draftedCards,
+                    battlegears: this.draftedBattlegears,
+                    mugics: this.draftedMugics
+                }
+            });
+            this.log('📤 Seu draft foi enviado. Aguardando draft do oponente...');
+
+            if (this.remoteDraft) {
+                this._startBattleMultiplayer();
+            }
+            return; // não continua o fluxo single-player
+        }
+
         const draftScreen = document.getElementById("draft-screen");
         if (draftScreen) draftScreen.classList.add('hidden');
         document.getElementById("battle-screen").classList.remove('hidden');
@@ -480,8 +713,16 @@ class GameEngine {
         }
         
         this.setupBoard(aiCards, aiBg);
+        
+        // Revela o primeiro local para já estar visível na tela de tabuleiro
+        if (this.locationDeck.length > 0) {
+            this.activeLocation = this.locationDeck.pop();
+            this.log(`📍 Local Inicial Revelado: ${this.activeLocation.name}! (${this.activeLocation.description})`);
+        }
+        
         this.renderBoard();
         this.renderMugics();
+        this.renderLocation();
         this.log("O combate começou! É a sua vez.");
     }
     
@@ -494,9 +735,11 @@ class GameEngine {
             const isSelected = this.selectedMugic === index;
             const borderStyle = isSelected ? 'border: 3px solid #9b59b6; box-shadow: 0 0 15px #9b59b6; transform: scale(1.05);' : 'border: 1px solid #7f8c8d;';
             html += `
-                <div style="width: 100px; height: 120px; background-color: #8e44ad; color: white; border-radius: 5px; padding: 5px; text-align: center; cursor: pointer; ${borderStyle}" onclick="game.handleMugicClick(${index})">
-                    <div style="font-size: 11px; font-weight: bold; margin-bottom: 5px;">${mugic.name}</div>
-                    <div style="font-size: 10px; color: #bdc3c7; line-height: 1.2;">${mugic.description}</div>
+                <div style="width: 100px; height: 120px; background-color: #8e44ad; color: white; border-radius: 5px; padding: 5px; text-align: center; cursor: pointer; display: flex; flex-direction: column; ${borderStyle}" onclick="game.handleMugicClick(${index})">
+                    <div style="font-size: 11px; font-weight: bold; margin-bottom: 2px;">${mugic.name}</div>
+                    <div style="font-size: 9px; color: #f1c40f; font-weight: bold; margin-bottom: 2px;">Tribo: ${mugic.tribe}</div>
+                    <div style="font-size: 9px; color: #ff9f43; font-weight: bold; margin-bottom: 4px;">Custo Base: ${mugic.cost} ♪</div>
+                    <div style="font-size: 9px; color: #bdc3c7; line-height: 1.1; flex: 1; overflow-y: auto;">${mugic.description}</div>
                 </div>
             `;
         });
@@ -744,20 +987,19 @@ class GameEngine {
     }
 
     handleCardClick(player, r, c) {
-        // Interações só são aceitas no Turno do Jogador 1
-        if (this.turn !== 1) return;
-        
-        if (this.turn !== 1) return;
-        
+        // Em multiplayer, verifica se é o turno deste jogador
+        if (!this.isMyTurn()) return;
+        const myPlayer = this.multiplayerMode ? this.myPlayerNumber : 1;
+
         if (this.gameState === 'SELECT_MUGIC_CASTER') {
-            if (player === 1 && this.boardP1[r][c]) {
+            if (player === myPlayer && (myPlayer === 1 ? this.boardP1[r][c] : this.boardP2[r][c])) {
                 this.resolveMugicCaster(r, c);
             } else {
                 this.log("⚠️ Selecione uma de SUAS criaturas para pagar o custo do Mugic.");
             }
             return;
         }
-        
+
         if (this.gameState === 'SELECT_MUGIC_TARGET') {
             this.resolveMugic(player, r, c);
             return;
@@ -765,12 +1007,12 @@ class GameEngine {
 
         const clickedBoard = player === 1 ? this.boardP1 : this.boardP2;
         const clickedCard = clickedBoard[r][c];
-        
+
         // --- Clique em slot vazio (Movimento) ---
         if (!clickedCard) {
-            if (this.gameState === 'SELECT_TARGET' && player === 1 && this.selectedAttacker) {
+            if (this.gameState === 'SELECT_TARGET' && player === myPlayer && this.selectedAttacker) {
                 if (this.isValidMove(this.selectedAttacker.r, this.selectedAttacker.c, r, c)) {
-                    this.resolveMove(1, this.selectedAttacker.r, this.selectedAttacker.c, r, c);
+                    this.resolveMove(myPlayer, this.selectedAttacker.r, this.selectedAttacker.c, r, c);
                 } else {
                     this.log("⚠️ Movimento inválido! Só é possível andar para espaços vazios adjacentes.");
                 }
@@ -780,7 +1022,7 @@ class GameEngine {
 
         const exposed = this.isExposed(player, r, c);
 
-        if (this.gameState === 'IDLE' && player === 1) {
+        if (this.gameState === 'IDLE' && player === myPlayer) {
             if (!exposed) {
                 this.log(`⚠️ ${clickedCard.name} está bloqueado por aliados e não pode atacar!`);
                 return;
@@ -790,9 +1032,9 @@ class GameEngine {
             this.gameState = 'SELECT_TARGET';
             this.log(`🎯 Você escolheu atacar com ${clickedCard.name}. Selecione o alvo!`);
             this.renderBoard();
-        } 
+        }
         else if (this.gameState === 'SELECT_TARGET') {
-            if (player === 1) {
+            if (player === myPlayer) {
                 if (!exposed && !(this.selectedAttacker.r === r && this.selectedAttacker.c === c)) {
                     this.log(`⚠️ ${clickedCard.name} está bloqueado e não pode ser o novo atacante!`);
                     return;
@@ -807,27 +1049,31 @@ class GameEngine {
                     this.log(`🎯 Você mudou o atacante para ${clickedCard.name}. Selecione o alvo!`);
                 }
                 this.renderBoard();
-            } 
-            else if (player === 2) {
+            }
+            else if (player !== myPlayer) {
                 if (!exposed) {
-                    this.log(`🛡️ ${clickedCard.name} está protegido por outras criaturas na frente! Escolha outro alvo.`);
+                    this.log(`🛡️ ${clickedCard.name} está protegido! Escolha outro alvo.`);
                     return;
                 }
-                // Selecionou um inimigo válido! Inicia o combate
-                const attacker = this.boardP1[this.selectedAttacker.r][this.selectedAttacker.c];
-                this.startCombat(attacker, clickedCard, this.selectedAttacker.r, this.selectedAttacker.c, r, c, 1);
+                const myBoard = myPlayer === 1 ? this.boardP1 : this.boardP2;
+                const attacker = myBoard[this.selectedAttacker.r][this.selectedAttacker.c];
+                this.sendAction('startCombat', {
+                    atkR: this.selectedAttacker.r, atkC: this.selectedAttacker.c,
+                    defR: r, defC: c,
+                    initiatingPlayer: myPlayer
+                });
+                this.startCombat(attacker, clickedCard, this.selectedAttacker.r, this.selectedAttacker.c, r, c, myPlayer, true);
             }
         }
     }
 
-    startCombat(attacker, defender, atkR, atkC, defR, defC, initiatingPlayer) {
+    startCombat(attacker, defender, atkR, atkC, defR, defC, initiatingPlayer, fromRemote = false) {
         this.gameState = 'ENGAGED_COMBAT';
         
-        // Revelar novo Local
-        if (this.locationDeck.length > 0) {
-            this.activeLocation = this.locationDeck.pop();
-            this.log(`📍 Novo Local Revelado: ${this.activeLocation.name}! (${this.activeLocation.description})`);
-            this.renderLocation();
+        // O local já foi revelado na startBattle ou no fim do último combate.
+        // Apenas informa no log em qual local a batalha vai acontecer:
+        if (this.activeLocation) {
+            this.log(`📍 Iniciando combate no local: ${this.activeLocation.name}!`);
         }
         
         // Revelar Equipamentos se ainda não foram revelados
@@ -881,12 +1127,77 @@ class GameEngine {
             p2C: initiatingPlayer === 1 ? defC : atkC,
             currentStriker: firstStriker,
             isFirstAttack: true,
-            initiatingPlayer: initiatingPlayer
+            initiatingPlayer: initiatingPlayer,
+            rounds: 0,
+            attackHistory: [],
+            damageHistory: [],
+            winner: null
         };
+
+        // Aplicar passivas de início de combate
+        const c1 = this.activeCombat.p1Card;
+        const c2 = this.activeCombat.p2Card;
+        this.applyPassives('combatStart', c1, c2);
+        this.applyPassives('combatStart', c2, c1);
 
         this.log(`⚔️ COMBATE INICIADO! Iniciativa: Jogador ${firstStriker} ataca primeiro (${initStat.toUpperCase()}).`);
         this.renderBoard();
-        this.processCombatTurn();
+        this._showInitiativeBanner(firstStriker, initStat);
+        setTimeout(() => this.processCombatTurn(), 2600);
+    }
+
+    _showInitiativeBanner(striker, stat) {
+        const existing = document.getElementById('initiative-banner');
+        if (existing) existing.remove();
+
+        const statNames = { courage: 'Coragem', power: 'Poder', wisdom: 'Sabedoria', speed: 'Velocidade' };
+        const statIcons = { courage: '⚔️', power: '💪', wisdom: '🧠', speed: '⚡' };
+        const isMe = !this.multiplayerMode
+            ? striker === 1
+            : striker === this.myPlayerNumber;
+        const strikerLabel = this.multiplayerMode
+            ? (striker === this.myPlayerNumber ? '⚡ VOCÊ ataca primeiro!' : '🛡️ Oponente ataca primeiro!')
+            : (striker === 1 ? '⚡ VOCÊ ataca primeiro!' : '🛡️ Oponente ataca primeiro!');
+        const borderColor = isMe ? '#2ecc71' : '#e74c3c';
+        const glowColor  = isMe ? 'rgba(46,204,113,0.4)' : 'rgba(231,76,60,0.4)';
+
+        const banner = document.createElement('div');
+        banner.id = 'initiative-banner';
+        banner.style.cssText = `
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            background: rgba(10,15,25,0.97);
+            border: 3px solid ${borderColor};
+            border-radius: 16px; padding: 28px 50px;
+            z-index: 9999; text-align: center; color: white;
+            box-shadow: 0 0 40px ${glowColor};
+            animation: initiativePop 0.35s ease forwards;
+        `;
+        banner.innerHTML = `
+            <div style="font-size:13px;color:#bdc3c7;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">⚔️ Combate Iniciado</div>
+            <div style="font-size:26px;font-weight:bold;color:${borderColor};margin-bottom:8px;">${strikerLabel}</div>
+            <div style="font-size:15px;color:#f1c40f;">${statIcons[stat] || '📊'} Iniciativa por <strong>${statNames[stat] || stat.toUpperCase()}</strong></div>
+            ${this.activeLocation ? `<div style="font-size:12px;color:#3498db;margin-top:8px;">📍 ${this.activeLocation.name}</div>` : ''}
+        `;
+
+        if (!document.getElementById('initiative-anim-style')) {
+            const style = document.createElement('style');
+            style.id = 'initiative-anim-style';
+            style.textContent = `
+                @keyframes initiativePop {
+                    from { opacity:0; transform: translate(-50%,-50%) scale(0.7); }
+                    to   { opacity:1; transform: translate(-50%,-50%) scale(1); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        document.body.appendChild(banner);
+        setTimeout(() => {
+            banner.style.transition = 'opacity 0.4s ease';
+            banner.style.opacity = '0';
+            setTimeout(() => banner.remove(), 420);
+        }, 2100);
     }
 
     renderLocation() {
@@ -919,21 +1230,39 @@ class GameEngine {
                 atkR: p1R, atkC: p1C, defR: p2R, defC: p2C,
                 attackingPlayer: 1
             };
-            this.showAttackModal(p1Card, p2Card, p1R, p1C, p2R, p2C, 1);
+            if (this.multiplayerMode && this.myPlayerNumber === 2) {
+                // Sou o P2 — aguardo P1 escolher o ataque via socket
+                this.log('⏳ Aguardando Jogador 1 escolher o ataque...');
+            } else {
+                this.showAttackModal(p1Card, p2Card, p1R, p1C, p2R, p2C, 1);
+            }
         } else {
             this.pendingCombat = {
                 attacker: p2Card, defender: p1Card,
                 atkR: p2R, atkC: p2C, defR: p1R, defC: p1C,
                 attackingPlayer: 2
             };
-            // IA attack delay
-            setTimeout(() => {
-                const hand = this.p2AttackHand;
-                let cardIndex = hand.reduce((bestIdx, currentCard, idx, arr) => {
-                    return currentCard.baseDamage > arr[bestIdx].baseDamage ? idx : bestIdx;
-                }, 0);
-                this.confirmAttack(cardIndex);
-            }, 1500);
+
+            if (this.multiplayerMode) {
+                // Em multiplayer: P2 humano escolhe o ataque pelo modal
+                if (this.myPlayerNumber === 2) {
+                    // Sou o P2 — mostro meu modal de ataque
+                    this.showAttackModal(p2Card, p1Card, p2R, p2C, p1R, p1C, 2);
+                }
+                // Se sou o P1, apenas aguardo o P2 enviar confirmAttack via socket
+            } else {
+                // Single-player: IA escolhe automaticamente
+                setTimeout(() => {
+                    const hand = this.p2AttackHand;
+                    const { attacker: aiAttacker, defender: aiDefender } = this.pendingCombat;
+                    let cardIndex = hand.reduce((bestIdx, card, idx, arr) => {
+                        const scoreNew = this.evaluateAttack(card, aiAttacker, aiDefender);
+                        const scoreBest = this.evaluateAttack(arr[bestIdx], aiAttacker, aiDefender);
+                        return scoreNew > scoreBest ? idx : bestIdx;
+                    }, 0);
+                    this.confirmAttack(cardIndex);
+                }, 1500);
+            }
         }
     }
 
@@ -1077,38 +1406,41 @@ class GameEngine {
         modal.classList.add('flex-modal');
     }
 
-    confirmAttack(cardIndex) {
+    confirmAttack(cardIndex, fromRemote = false) {
         const modal = document.getElementById("attack-modal");
         if (modal) {
             modal.classList.add('hidden');
             modal.classList.remove('flex-modal');
         }
-        
+
+        if (!fromRemote) {
+            this.sendAction('confirmAttack', { cardIndex });
+        }
+
         if (!this.pendingCombat) return;
         const { attacker, defender, atkR, atkC, defR, defC, attackingPlayer } = this.pendingCombat;
         const hand = attackingPlayer === 1 ? this.p1AttackHand : this.p2AttackHand;
         const atkCard = hand[cardIndex];
 
-        // Mover a carta usada e comprar nova
-        hand.splice(cardIndex, 1);
-        const deck = attackingPlayer === 1 ? this.p1AttackDeck : this.p2AttackDeck;
-        if (deck.length > 0) {
-            hand.push(deck.shift());
-        }
+        const usedCard = hand.splice(cardIndex, 1)[0];
+        const discard = attackingPlayer === 1 ? this.p1AttackDiscard : this.p2AttackDiscard;
+        discard.push(usedCard);
+        this.drawAttackCard(attackingPlayer);
 
         // Inicializar a Pilha (Burst)
         this.burstStack = [];
         this.burstPasses = 0;
         this.burstPriority = attackingPlayer; // Atacante tem a 1ª resposta
 
+        const p2Label = this.multiplayerMode ? 'Jogador 2' : 'IA (Oponente)';
         this.burstStack.push({
             type: 'attack',
-            source: attackingPlayer === 1 ? 'Jogador 1' : 'IA (Oponente)',
+            source: attackingPlayer === 1 ? 'Jogador 1' : p2Label,
             attacker, defender, atkR, atkC, defR, defC, attackingPlayer, atkCard,
             description: `Ataque Declarado: ${atkCard.name}`
         });
 
-        this.log(`🔔 BURST ABERTO: ${attackingPlayer === 1 ? 'Jogador 1' : 'IA'} atacou com ${atkCard.name}`);
+        this.log(`🔔 BURST ABERTO: ${attackingPlayer === 1 ? 'Jogador 1' : p2Label} atacou com ${atkCard.name}`);
         this.openBurstModal();
     }
 
@@ -1131,28 +1463,47 @@ class GameEngine {
         container.innerHTML = html;
 
         // Controle de Prioridade
-        let promptText = `Turno de Resposta: ${this.burstPriority === 1 ? 'Jogador 1' : 'IA (Oponente)'}`;
-        if (this.burstPriority === 1 && this.burstPasses === 1) {
-            promptText = `A IA passou. Deseja adicionar outra mágica ou Passar para resolver?`;
-        } else if (this.burstPriority === 2 && this.burstPasses === 1) {
-            promptText = `Jogador 1 passou. A IA está pensando...`;
-        }
-
-        document.getElementById('burst-prompt').innerText = promptText;
-        
         const passBtn = document.getElementById('btn-burst-pass');
         const playBtn = document.getElementById('btn-burst-play');
         const mugicSel = document.getElementById('burst-mugic-selection');
         mugicSel.classList.add('hidden');
 
-        if (this.burstPriority === 1) {
+        // Determina se é minha vez no burst
+        const isMyBurstTurn = this.multiplayerMode
+            ? this.burstPriority === this.myPlayerNumber
+            : this.burstPriority === 1;
+
+        let promptText;
+        if (this.multiplayerMode) {
+            if (isMyBurstTurn) {
+                promptText = this.burstPasses === 1
+                    ? `Oponente passou. Jogar Mugic ou Passar para resolver?`
+                    : `Sua vez no Burst — Jogar Mugic ou Passar?`;
+            } else {
+                promptText = `Aguardando resposta do oponente...`;
+            }
+        } else {
+            // Single-player
+            if (this.burstPriority === 1 && this.burstPasses === 1) {
+                promptText = `A IA passou. Deseja adicionar outra mágica ou Passar para resolver?`;
+            } else if (this.burstPriority === 2 && this.burstPasses === 1) {
+                promptText = `Jogador 1 passou. A IA está pensando...`;
+            } else {
+                promptText = `Turno de Resposta: ${this.burstPriority === 1 ? 'Jogador 1' : 'IA (Oponente)'}`;
+            }
+        }
+        document.getElementById('burst-prompt').innerText = promptText;
+
+        if (isMyBurstTurn) {
             passBtn.disabled = false;
             playBtn.disabled = false;
         } else {
             passBtn.disabled = true;
             playBtn.disabled = true;
-            // IA Priority
-            setTimeout(() => this.aiBurstDecision(), 1500);
+            // Só chama IA em single-player
+            if (!this.multiplayerMode) {
+                setTimeout(() => this.aiBurstDecision(), 1500);
+            }
         }
 
         modal.classList.remove('hidden');
@@ -1178,8 +1529,9 @@ class GameEngine {
                     <div style="background: #2c3e50; border: 2px solid #8e44ad; padding: 10px; border-radius: 5px; cursor: pointer; width: 120px;" 
                          onclick="game.selectMugicToPlay(${i})"
                          title="${mg.description}">
-                        <div style="font-weight: bold; color: #f1c40f; font-size: 12px; margin-bottom: 5px;">${mg.name}</div>
-                        <div style="font-size: 10px; color: white;">Custo: ${mg.cost} ♪</div>
+                        <div style="font-weight: bold; color: #f1c40f; font-size: 12px; margin-bottom: 3px;">${mg.name}</div>
+                        <div style="font-size: 10px; color: #f39c12; margin-bottom: 2px;">Tribo: ${mg.tribe}</div>
+                        <div style="font-size: 10px; color: white;">Custo Base: ${mg.cost} ♪</div>
                     </div>
                 `;
             });
@@ -1188,7 +1540,10 @@ class GameEngine {
         mugicSel.classList.remove('hidden');
     }
 
-    selectMugicToPlay(index) {
+    selectMugicToPlay(index, fromRemote = false) {
+        if (!fromRemote) {
+            this.sendAction('selectMugic', { index });
+        }
         const playerMugics = this.burstPriority === 1 ? this.playerMugics : this.p2Mugics;
         const mg = playerMugics[index];
         
@@ -1213,7 +1568,10 @@ class GameEngine {
         }
     }
 
-    resolveMugicCaster(r, c) {
+    resolveMugicCaster(r, c, fromRemote = false) {
+        if (!fromRemote) {
+            this.sendAction('resolveMugicCaster', { r, c });
+        }
         const mg = this.playerMugics[this.pendingMugicIndex];
         const card = this.boardP1[r][c];
         
@@ -1224,7 +1582,9 @@ class GameEngine {
         }
         
         if (card.mugicCounters < cost) {
-            this.log(`⚠️ ${card.name} não tem contadores suficientes! Precisa de ${cost} ♪.`);
+            const errorMsg = `⚠️ ${card.name} não tem contadores suficientes!\nA Mugic custa ${cost} ♪ (Custo Base: ${mg.cost} + Penalidade de Tribo: ${cost - mg.cost}).\nA criatura tem apenas ${card.mugicCounters} ♪.`;
+            this.log(errorMsg);
+            this.showAlert("Custo Insuficiente", errorMsg);
             return;
         }
 
@@ -1252,7 +1612,24 @@ class GameEngine {
         this.openBurstModal();
     }
 
-    passBurst() {
+    cancelMugicCaster(fromRemote = false) {
+        if (!fromRemote) {
+            this.sendAction('cancelMugicCaster');
+        }
+        if (this.gameState !== 'SELECT_MUGIC_CASTER') return;
+        this.gameState = 'ENGAGED_COMBAT';
+        this.pendingMugicIndex = null;
+        this.log("⚠️ Lançamento de Mugic cancelado pelo jogador.");
+        
+        // Retorna a mão do jogador para a pilha (PlayerMugics continua a mesma)
+        this.renderBoard();
+        this.openBurstModal();
+    }
+
+    passBurst(fromRemote = false) {
+        if (!fromRemote) {
+            this.sendAction('passBurst');
+        }
         this.log(`${this.burstPriority === 1 ? 'Jogador 1' : 'IA'} passou a prioridade.`);
         this.burstPasses++;
         if (this.burstPasses >= 2) {
@@ -1272,7 +1649,7 @@ class GameEngine {
         }
     }
 
-    resolveBurst() {
+    async resolveBurst() {
         this.log(`🔔 BURST FECHADO: Resolvendo pilha em ordem reversa!`);
         
         // Loop pela pilha de trás pra frente (LIFO)
@@ -1280,15 +1657,96 @@ class GameEngine {
             const item = this.burstStack.pop();
             this.log(`Executando: ${item.description}`);
             if (item.type === 'attack') {
-                this.executeAttack(item);
+                await this.executeAttack(item);
             } else if (item.type === 'mugic') {
-                this.executeMugic(item);
+                await this.executeMugic(item);
             }
         }
 
         setTimeout(() => {
             this.endCombatTurn();
         }, 1500);
+    }
+
+    showAlert(title, message) {
+        return new Promise(resolve => {
+            let modal = document.getElementById("custom-alert-modal");
+            if (!modal) {
+                modal = document.createElement("div");
+                modal.id = "custom-alert-modal";
+                modal.className = "modal-overlay";
+                modal.innerHTML = `
+                    <div style="background: #1e293b; border: 2px solid #f1c40f; border-radius: 12px; padding: 25px; width: 450px; max-width: 90%; color: white; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.8);">
+                        <h2 id="custom-alert-title" style="color: #f1c40f; margin-bottom: 15px; font-size: 22px;"></h2>
+                        <div id="custom-alert-message" style="font-size: 16px; margin-bottom: 25px; line-height: 1.5; color: #cbd5e1; white-space: pre-line;"></div>
+                        <button id="custom-alert-btn" class="btn btn-primary" style="padding: 10px 30px; font-size: 16px;">OK</button>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            }
+            
+            document.getElementById("custom-alert-title").innerHTML = title;
+            // Remover '✨ MUGIC RESOLVIDA: nome' do inicio da mensagem pois agora tem titulo
+            document.getElementById("custom-alert-message").innerHTML = message;
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex-modal');
+            
+            const btn = document.getElementById("custom-alert-btn");
+            btn.onclick = () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex-modal');
+                resolve();
+            };
+        });
+    }
+
+    applyPassives(trigger, creature, opponent) {
+        if (!creature.passives || creature.passives.length === 0) return;
+        const catalog = window.passivesDatabase || {};
+        creature.passives.forEach(passive => {
+            const def = catalog[passive.id];
+            if (!def) return;
+            def.execute(trigger, passive, creature, opponent, (msg) => this.log(msg), this.activeCombat);
+        });
+    }
+
+    drawAttackCard(player) {
+        const deck = player === 1 ? this.p1AttackDeck : this.p2AttackDeck;
+        const discard = player === 1 ? this.p1AttackDiscard : this.p2AttackDiscard;
+        const hand = player === 1 ? this.p1AttackHand : this.p2AttackHand;
+
+        if (deck.length === 0 && discard.length > 0) {
+            // Reciclar descarte
+            const shuffled = [...discard].sort(() => Math.random() - 0.5);
+            deck.push(...shuffled);
+            discard.length = 0;
+            this.log(`🔄 Deck de ataques do Jogador ${player} reciclado! (${deck.length} cartas)`);
+        }
+
+        if (deck.length > 0) {
+            hand.push(deck.shift());
+        }
+    }
+
+    evaluateAttack(atkCard, attacker, defender) {
+        let expected = atkCard.baseDamage;
+
+        // Bônus elemental
+        if (atkCard.elementRequirement && attacker.elements && attacker.elements.includes(atkCard.elementRequirement)) {
+            expected += atkCard.elementDamage || 0;
+        }
+
+        // Bônus de challenge (estimativa: se atacante provavelmente supera o threshold)
+        if (atkCard.statRequirement) {
+            const stat = atkCard.statRequirement.toLowerCase();
+            const threshold = atkCard.statThreshold || 0;
+            if ((attacker[stat] || 0) >= (defender[stat] || 0) + threshold) {
+                expected += atkCard.statDamage || 0;
+            }
+        }
+
+        return expected;
     }
 
     aiBurstDecision() {
@@ -1304,45 +1762,105 @@ class GameEngine {
 
     executeAttack(item) {
         const { attacker, defender, atkR, atkC, defR, defC, attackingPlayer, atkCard } = item;
-        
+
         const atkSyn = this.getSynergyBonus(attackingPlayer, atkR, atkC);
         const defSyn = this.getSynergyBonus(attackingPlayer === 1 ? 2 : 1, defR, defC);
+        const locMod = this.activeLocation && this.activeLocation.modifiers ? this.activeLocation.modifiers : {};
+        const atkBgMod = attacker.bgRevealed && attacker.battlegear && attacker.battlegear.modifiers ? attacker.battlegear.modifiers : {};
+        const defBgMod = defender.bgRevealed && defender.battlegear && defender.battlegear.modifiers ? defender.battlegear.modifiers : {};
 
         const effAtk = {
-            courage: attacker.courage + (atkSyn ? atkSyn.courage : 0),
-            power: attacker.power + (atkSyn ? atkSyn.power : 0),
-            wisdom: attacker.wisdom + (atkSyn ? atkSyn.wisdom : 0),
-            speed: attacker.speed + (atkSyn ? atkSyn.speed : 0)
+            courage: attacker.courage + (atkSyn ? atkSyn.courage : 0) + (locMod.courage || 0) + (atkBgMod.courage || 0),
+            power:   attacker.power   + (atkSyn ? atkSyn.power   : 0) + (locMod.power   || 0) + (atkBgMod.power   || 0),
+            wisdom:  attacker.wisdom  + (atkSyn ? atkSyn.wisdom  : 0) + (locMod.wisdom  || 0) + (atkBgMod.wisdom  || 0),
+            speed:   attacker.speed   + (atkSyn ? atkSyn.speed   : 0) + (locMod.speed   || 0) + (atkBgMod.speed   || 0)
         };
         const effDef = {
-            courage: defender.courage + (defSyn ? defSyn.courage : 0),
-            power: defender.power + (defSyn ? defSyn.power : 0),
-            wisdom: defender.wisdom + (defSyn ? defSyn.wisdom : 0),
-            speed: defender.speed + (defSyn ? defSyn.speed : 0)
+            courage: defender.courage + (defSyn ? defSyn.courage : 0) + (locMod.courage || 0) + (defBgMod.courage || 0),
+            power:   defender.power   + (defSyn ? defSyn.power   : 0) + (locMod.power   || 0) + (defBgMod.power   || 0),
+            wisdom:  defender.wisdom  + (defSyn ? defSyn.wisdom  : 0) + (locMod.wisdom  || 0) + (defBgMod.wisdom  || 0),
+            speed:   defender.speed   + (defSyn ? defSyn.speed   : 0) + (locMod.speed   || 0) + (defBgMod.speed   || 0)
         };
 
         let totalDamage = atkCard.baseDamage;
+
+        // Passiva Strike (primeiro ataque bônus)
+        if (attacker._strikeBonus) {
+            totalDamage += attacker._strikeBonus;
+            this.log(`⚡ ${attacker.name} [Strike]: +${attacker._strikeBonus} dano bônus!`);
+            attacker._strikeBonus = 0;
+        }
+        // Passiva Berserk (baixa energia)
+        this.applyPassives('attackStart', attacker, defender);
+        if (attacker._berserkBonus) {
+            totalDamage += attacker._berserkBonus;
+            attacker._berserkBonus = 0;
+        }
+
         if (atkCard.statRequirement) {
             const statKey = atkCard.statRequirement.toLowerCase();
-            if ((effAtk[statKey] || 0) > (effDef[statKey] || 0)) {
+            const threshold = atkCard.statThreshold || 0;
+            const atkVal = effAtk[statKey] || 0;
+            const defVal = effDef[statKey] || 0;
+            if (atkVal >= defVal + threshold) {
                 totalDamage += atkCard.statDamage;
+                this.log(`📊 Challenge ${atkCard.statRequirement.toUpperCase()} (${atkVal} ≥ ${defVal}+${threshold}): +${atkCard.statDamage} dano!`);
+            } else {
+                this.log(`📊 Challenge ${atkCard.statRequirement.toUpperCase()} falhou (${atkVal} < ${defVal}+${threshold}).`);
             }
         }
-        if (atkCard.elementRequirement && attacker.elements && attacker.elements.includes(atkCard.elementRequirement)) {
-            totalDamage += atkCard.elementDamage;
+
+        if (atkCard.elementRequirement) {
+            if (attacker.elements && attacker.elements.includes(atkCard.elementRequirement)) {
+                totalDamage += atkCard.elementDamage;
+                this.log(`🌋 Bônus Elemental ${atkCard.elementRequirement}: +${atkCard.elementDamage} dano!`);
+            } else {
+                this.log(`❄️ Sem elemento ${atkCard.elementRequirement} — bônus elemental não ativado.`);
+            }
         }
 
+        // Passiva Tough / Fireproof — redução de dano no defensor
+        this.applyPassives('damageTaken', defender, attacker);
+        if (defender._damageReduction) {
+            totalDamage = Math.max(0, totalDamage - defender._damageReduction);
+            defender._damageReduction = 0;
+        }
+
+        if (this.activeCombat) {
+            this.activeCombat.rounds++;
+            this.activeCombat.attackHistory.push({
+                round: this.activeCombat.rounds,
+                attacker: attacker.name,
+                defender: defender.name,
+                attack: atkCard.name,
+                baseDamage: atkCard.baseDamage,
+                totalDamage
+            });
+        }
+        const energyBefore = defender.energy;
+
         defender.energy -= totalDamage;
-        this.log(`💥 ${attacker.name} usou ${atkCard.name} e causou ${totalDamage} de dano a ${defender.name}!`);
+
+        if (this.activeCombat) {
+            this.activeCombat.damageHistory.push({
+                round: this.activeCombat.rounds,
+                target: defender.name,
+                damage: totalDamage,
+                energyBefore,
+                energyAfter: defender.energy
+            });
+        }
+
+        this.log(`💥 ${attacker.name} usou ${atkCard.name} e causou ${totalDamage} de dano a ${defender.name}! (Vida restante: ${Math.max(0, defender.energy)})`);
 
         this.renderBoard();
-        
+
         if (defender.energy <= 0) {
             this.log(`💀 ${defender.name} foi derrotado!`);
         }
     }
 
-    executeMugic(item) {
+    async executeMugic(item) {
         const mg = item.mugic;
         const caster = item.caster;
         const sourceName = caster ? caster.name : item.source;
@@ -1361,66 +1879,80 @@ class GameEngine {
         const enemyCard = isPlayer1 ? p2Card : p1Card;
 
         this.log(`✨ Efeito Mágico: ${mg.name} ativado!`);
+        let alertMsg = `✨ MUGIC RESOLVIDA: ${mg.name}\n\n`;
+        let oldVal;
 
         switch (mg.effectType) {
             case "heal":
-                allyCard.energy += mg.effectValue;
-                if (allyCard.energy > allyCard.maxEnergy) allyCard.energy = allyCard.maxEnergy;
-                this.log(`💚 ${allyCard.name} curou ${mg.effectValue} de Energia! (Agora: ${allyCard.energy})`);
-                break;
             case "heal_multiple":
-                // Simplificação temporária: cura apenas o aliado engajado no combate
+                oldVal = allyCard.energy;
                 allyCard.energy += mg.effectValue;
                 if (allyCard.energy > allyCard.maxEnergy) allyCard.energy = allyCard.maxEnergy;
+                alertMsg += `Alvo: ${allyCard.name}\nEfeito: Curou ${mg.effectValue} de Energia!\nEnergia subiu de ${oldVal} para ${allyCard.energy}.`;
                 this.log(`💚 ${allyCard.name} curou ${mg.effectValue} de Energia! (Agora: ${allyCard.energy})`);
                 break;
             case "damage":
             case "damage_all_engaged":
+                oldVal = enemyCard.energy;
                 enemyCard.energy -= mg.effectValue;
+                alertMsg += `Alvo: ${enemyCard.name}\nEfeito: Sofreu ${mg.effectValue} de dano mágico!\nEnergia caiu de ${oldVal} para ${enemyCard.energy}.`;
                 this.log(`💥 ${mg.name} causou ${mg.effectValue} de dano mágico a ${enemyCard.name}!`);
                 if (enemyCard.energy <= 0) {
+                    alertMsg += `\n💀 ${enemyCard.name} foi destruído!`;
                     this.log(`💀 ${enemyCard.name} não resistiu ao ataque mágico!`);
                 }
                 break;
             case "buff_courage":
+                oldVal = allyCard.courage;
                 allyCard.courage += mg.effectValue;
+                alertMsg += `Alvo: ${allyCard.name}\nEfeito: Ganhou +${mg.effectValue} de Coragem!\nCoragem subiu de ${oldVal} para ${allyCard.courage}.`;
                 this.log(`🛡️ ${allyCard.name} ganhou +${mg.effectValue} de Coragem!`);
                 break;
             case "buff_power_strength":
+            case "recklessness":
+                oldVal = allyCard.power;
                 allyCard.power += mg.effectValue;
+                alertMsg += `Alvo: ${allyCard.name}\nEfeito: Ganhou +${mg.effectValue} de Poder/Força!\nPoder subiu de ${oldVal} para ${allyCard.power}.`;
                 this.log(`💪 ${allyCard.name} ganhou +${mg.effectValue} de Poder/Força!`);
                 break;
             case "buff_wisdom":
+                oldVal = allyCard.wisdom;
                 allyCard.wisdom += mg.effectValue;
+                alertMsg += `Alvo: ${allyCard.name}\nEfeito: Ganhou +${mg.effectValue} de Sabedoria!\nSabedoria subiu de ${oldVal} para ${allyCard.wisdom}.`;
                 this.log(`🧠 ${allyCard.name} ganhou +${mg.effectValue} de Sabedoria!`);
                 break;
             case "buff_speed":
+                oldVal = allyCard.speed;
                 allyCard.speed += mg.effectValue;
+                alertMsg += `Alvo: ${allyCard.name}\nEfeito: Ganhou +${mg.effectValue} de Velocidade!\nVelocidade subiu de ${oldVal} para ${allyCard.speed}.`;
                 this.log(`⚡ ${allyCard.name} ganhou +${mg.effectValue} de Velocidade!`);
-                break;
-            case "recklessness":
-                allyCard.power += mg.effectValue; // Dá dano
-                // Efeito real de Recklessness seria reduzir vida no próprio ataque
-                this.log(`🔥 ${allyCard.name} ficou Imprudente (+${mg.effectValue} Poder)!`);
                 break;
             case "cancel_battlegear":
                 if (enemyCard.battlegear) {
-                    enemyCard.bgRevealed = false; // "Desativa"
+                    enemyCard.bgRevealed = false;
+                    alertMsg += `Alvo: ${enemyCard.name}\nEfeito: Battlegear [${enemyCard.battlegear.name}] foi desativado temporariamente!`;
                     this.log(`🚫 Battlegear de ${enemyCard.name} foi desativado temporariamente!`);
+                } else {
+                    alertMsg += `Alvo: ${enemyCard.name}\nEfeito: Nenhum Battlegear equipado para desativar.`;
                 }
                 break;
             case "dispel_buffs":
-                // Simplificado: Resetaria status
+                alertMsg += `Alvo: ${enemyCard.name}\nEfeito: Todos os buffs foram dissipados!`;
                 this.log(`🌀 Buffs de ${enemyCard.name} foram dissipados!`);
                 break;
             case "scramble_initiative":
                 this.activeCombat.currentStriker = this.activeCombat.currentStriker === 1 ? 2 : 1;
+                alertMsg += `Efeito: A Iniciativa foi invertida!\nAgora é a vez do Jogador ${this.activeCombat.currentStriker} atacar!`;
                 this.log(`🔄 Iniciativa foi invertida!`);
                 break;
             default:
+                alertMsg += `Efeito ${mg.effectType} de ${mg.name} ainda não tem lógica implementada.`;
                 this.log(`❓ Efeito ${mg.effectType} de ${mg.name} ainda não tem lógica implementada.`);
                 break;
         }
+        
+        // Alerta na tela para dar feedback super visual do que aconteceu
+        await this.showAlert(`✨ ${mg.name}`, alertMsg.replace(`✨ MUGIC RESOLVIDA: ${mg.name}\n\n`, ''));
         
         this.renderBoard();
     }
@@ -1435,8 +1967,17 @@ class GameEngine {
             p2Card.energy = p2Card.maxEnergy; // Reseta a vida do sobrevivente
             this.activeCombat = null;
             this.selectedAttacker = null;
+            
+            // Renova o local para o próximo combate
+            if (this.locationDeck.length > 0) {
+                this.activeLocation = this.locationDeck.pop();
+                this.log(`📍 Novo Local Revelado para a próxima batalha: ${this.activeLocation.name}!`);
+                this.renderLocation();
+            }
+            
             this.renderBoard();
             this.log("Fim do Combate! A carta do Jogador 1 foi destruída. A energia do Jogador 2 foi restaurada.");
+            setTimeout(() => this.nextTurn(), 1500);
             return;
         }
         if (p2Card.energy <= 0) {
@@ -1444,8 +1985,17 @@ class GameEngine {
             p1Card.energy = p1Card.maxEnergy; // Reseta a vida do sobrevivente
             this.activeCombat = null;
             this.selectedAttacker = null;
+            
+            // Renova o local para o próximo combate
+            if (this.locationDeck.length > 0) {
+                this.activeLocation = this.locationDeck.pop();
+                this.log(`📍 Novo Local Revelado para a próxima batalha: ${this.activeLocation.name}!`);
+                this.renderLocation();
+            }
+            
             this.renderBoard();
             this.log("Fim do Combate! A carta do Jogador 2 foi destruída. A energia do Jogador 1 foi restaurada.");
+            setTimeout(() => this.nextTurn(), 1500);
             return;
         }
 
@@ -1468,11 +2018,7 @@ class GameEngine {
         this.gameState = 'IDLE';
         this.activeCombat = null;
         
-        if (this.activeLocation) {
-            this.locationDeck.push(this.activeLocation);
-            this.activeLocation = null;
-            this.renderLocation();
-        }
+        // Mantém o Local ativo intacto para quando o ataque real ocorrer
 
         this.renderBoard();
         this.log("Ataque cancelado.");
@@ -1615,21 +2161,30 @@ class GameEngine {
         }
     }
 
-    resolveMove(player, fromR, fromC, toR, toC) {
+    resolveMove(player, fromR, fromC, toR, toC, fromRemote = false) {
         const board = player === 1 ? this.boardP1 : this.boardP2;
         const card = board[fromR][fromC];
-        
+
         // Realiza o movimento na matriz
         board[toR][toC] = card;
         board[fromR][fromC] = null;
-        
+
         this.log(`🚶‍♂️ ${card.name} se moveu para uma nova posição estratégica!`);
-        
-        if (player === 1) {
+
+        if (!fromRemote) {
+            this.sendAction('move', { player, fromR, fromC, toR, toC });
+        }
+
+        if (!fromRemote) {
             this.selectedAttacker = null;
             this.gameState = 'IDLE';
             this.renderBoard();
-            setTimeout(() => this.nextTurn(), 1000); 
+            setTimeout(() => this.nextTurn(), 1000);
+        } else {
+            this.selectedAttacker = null;
+            this.gameState = 'IDLE';
+            this.renderBoard();
+            // nextTurn virá via socket do outro jogador
         }
     }
 
@@ -1637,7 +2192,7 @@ class GameEngine {
         // Cabeçalho adaptativo baseado no estado
         let msgEstado = this.turn === 1 ? 'Sua vez de jogar. Clique em uma carta.' : 'Aguarde o movimento do Oponente...';
         if (this.gameState === 'SELECT_TARGET') msgEstado = 'ESCOLHA O ALVO INIMIGO!';
-        if (this.gameState === 'SELECT_MUGIC_CASTER') msgEstado = 'QUEM VAI PAGAR O CUSTO DA MÁGICA? CLIQUE EM UMA DE SUAS CRIATURAS.';
+        if (this.gameState === 'SELECT_MUGIC_CASTER') msgEstado = 'QUEM VAI PAGAR O CUSTO DA MÁGICA? CLIQUE EM UMA DE SUAS CRIATURAS. <button onclick="game.cancelMugicCaster()" style="margin-left: 10px; padding: 5px 10px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-family: Inter, sans-serif;">Cancelar Escolha</button>';
         
         this.boardElement.innerHTML = `<div style="width: 100%; text-align: center; margin-bottom: 20px;">
             <h3 style="color: var(--accent); margin-bottom: 5px;">Turno Atual: Jogador ${this.turn}</h3>
@@ -1668,7 +2223,9 @@ class GameEngine {
                             cursorStyle = 'cursor: not-allowed;';
                             opacityStyle = 'opacity: 0.6; filter: grayscale(30%);';
                         } else {
-                            cursorStyle = (this.turn === 1 && player === 1) || (this.turn === 1 && this.gameState === 'SELECT_TARGET' && player === 2) ? 'cursor: pointer;' : '';
+                            const myP = this.multiplayerMode ? this.myPlayerNumber : 1;
+                            const enemyP = myP === 1 ? 2 : 1;
+                            cursorStyle = (this.isMyTurn() && player === myP) || (this.isMyTurn() && this.gameState === 'SELECT_TARGET' && player === enemyP) ? 'cursor: pointer;' : '';
                         }
                     }
 
@@ -1768,7 +2325,8 @@ class GameEngine {
                         let emptyBg = '';
 
                         // Destacar slot vazio se puder mover para ele
-                        if (this.gameState === 'SELECT_TARGET' && player === 1 && this.selectedAttacker) {
+                        const myPl = this.multiplayerMode ? this.myPlayerNumber : 1;
+                        if (this.gameState === 'SELECT_TARGET' && player === myPl && this.selectedAttacker) {
                             if (this.isValidMove(this.selectedAttacker.r, this.selectedAttacker.c, r, c)) {
                                 emptyCursor = 'cursor: pointer;';
                                 emptyBorder = 'border: 2px dashed #2ecc71;'; // Verde para movimento
@@ -1794,7 +2352,11 @@ class GameEngine {
         this.boardElement.innerHTML += boardsHtml;
     }
 
-    nextTurn() {
+    nextTurn(fromRemote = false) {
+        if (this._nextTurnLock) return;
+        this._nextTurnLock = true;
+        setTimeout(() => { this._nextTurnLock = false; }, 500);
+
         this.selectedAttacker = null;
         this.gameState = 'IDLE';
         this.turn = this.turn === 1 ? 2 : 1;
@@ -1803,8 +2365,19 @@ class GameEngine {
         this.renderBoard();
         this.renderMugics();
 
+        // Em multiplayer: só envia nextTurn quem estava no turno que acabou
+        // (evita que os dois clientes enviem e causem flip duplo)
+        if (!fromRemote && this.multiplayerMode) {
+            const turnThatJustEnded = this.turn === 1 ? 2 : 1; // turn já virou, então quem mandou era o anterior
+            if (turnThatJustEnded === this.myPlayerNumber) {
+                this.sendAction('nextTurn');
+            }
+        }
+
         if (this.turn === 2) {
-            setTimeout(() => this.aiTurn(), 1000);
+            if (!this.multiplayerMode) {
+                setTimeout(() => this.aiTurn(), 1000);
+            }
         }
     }
 

@@ -16,7 +16,8 @@ const cardsDatabase = [
         subtypes: ["Warrior", "Hero"],
         mugicCounters: 2,
         rarity: "Ultra Rare",
-        ability: "Heal 10 Energy to target Creature.\nMaxxor may not enter mixed armies.\nUnique"
+        ability: "Heal 10 Energy to target Creature.\nMaxxor may not enter mixed armies.\nUnique",
+        passives: []
     },
     {
         id: 2,
@@ -33,7 +34,8 @@ const cardsDatabase = [
         subtypes: ["Warrior", "Conqueror"],
         mugicCounters: 3,
         rarity: "Ultra Rare",
-        ability: "Intimidate Energy 10.\nChaor deals an extra 5 damage with Fire attacks."
+        ability: "Intimidate Energy 10.\nChaor deals an extra 5 damage with Fire attacks.",
+        passives: [{ id: 'intimidate', stat: 'courage', value: 10 }]
     },
     {
         id: 3,
@@ -50,7 +52,8 @@ const cardsDatabase = [
         subtypes: ["Warrior", "Elementalist"],
         mugicCounters: 1,
         rarity: "Super Rare",
-        ability: "Water attacks cost Intress 0 Mugic Counters.\nSwift 1"
+        ability: "Water attacks cost Intress 0 Mugic Counters.\nSwift 1",
+        passives: [{ id: 'swift', value: 10 }]
     },
     {
         id: 4,
@@ -67,7 +70,8 @@ const cardsDatabase = [
         subtypes: ["Warrior"],
         mugicCounters: 1,
         rarity: "Super Rare",
-        ability: "Strike 10. Flying."
+        ability: "Strike 10. Flying.",
+        passives: [{ id: 'strike', value: 10 }]
     },
     {
         id: 5,
@@ -84,7 +88,8 @@ const cardsDatabase = [
         subtypes: ["Muge"],
         mugicCounters: 3,
         rarity: "Ultra Rare",
-        ability: "Najarin can cast OverWorld Mugic from any location.\nMugic abilities cost 1 less counter."
+        ability: "Najarin can cast OverWorld Mugic from any location.\nMugic abilities cost 1 less counter.",
+        passives: []
     },
     {
         id: 6,
@@ -101,7 +106,8 @@ const cardsDatabase = [
         subtypes: ["Warrior"],
         mugicCounters: 1,
         rarity: "Super Rare",
-        ability: "Tangath Toborn gains +5 Courage and +5 Power for every equipped gear."
+        ability: "Tangath Toborn gains +5 Courage and +5 Power for every equipped gear.",
+        passives: []
     },
     {
         id: 7,
@@ -118,7 +124,8 @@ const cardsDatabase = [
         subtypes: ["Mage", "Conqueror"],
         mugicCounters: 2,
         rarity: "Ultra Rare",
-        ability: "Invisibility: Strike 15.\nExpend 1 Mugic: Deal 10 damage to target engaged creature."
+        ability: "Invisibility: Strike 15.\nExpend 1 Mugic: Deal 10 damage to target engaged creature.",
+        passives: [{ id: 'strike', value: 15 }]
     },
     {
         id: 8,
@@ -135,7 +142,8 @@ const cardsDatabase = [
         subtypes: ["Scout"],
         mugicCounters: 0,
         rarity: "Common",
-        ability: "Reveal the top card of any deck.\nH'earring gains Swift 1 when Earth is active."
+        ability: "Reveal the top card of any deck.\nH'earring gains Swift 1 when Earth is active.",
+        passives: []
     },
     {
         id: 9,
@@ -152,7 +160,8 @@ const cardsDatabase = [
         subtypes: ["Warrior"],
         mugicCounters: 1,
         rarity: "Rare",
-        ability: "Invisibility: Surprise.\nAttacks deal an extra 5 damage if Mudeenu strikes first."
+        ability: "Invisibility: Surprise.\nAttacks deal an extra 5 damage if Mudeenu strikes first.",
+        passives: []
     },
     {
         id: 10,
@@ -169,7 +178,8 @@ const cardsDatabase = [
         subtypes: ["Stalker"],
         mugicCounters: 1,
         rarity: "Super Rare",
-        ability: "Invisibility: Strike 10.\nWhen Zhade defeats an opponent, gain 1 Mugic Counter."
+        ability: "Invisibility: Strike 10.\nWhen Zhade defeats an opponent, gain 1 Mugic Counter.",
+        passives: [{ id: 'strike', value: 10 }]
     },
     {
         id: 11,
@@ -186,7 +196,8 @@ const cardsDatabase = [
         subtypes: ["Queen"],
         mugicCounters: 2,
         rarity: "Ultra Rare",
-        ability: "Hive: +5 All stats for each Danian.\nInfect an opponent when they attack Illexia."
+        ability: "Hive: +5 All stats for each Danian.\nInfect an opponent when they attack Illexia.",
+        passives: [{ id: 'tough', value: 5 }]
     },
     {
         id: 12,
@@ -203,7 +214,8 @@ const cardsDatabase = [
         subtypes: ["Mandiblor"],
         mugicCounters: 1,
         rarity: "Common",
-        ability: "Hive: Wamma gains +10 Energy.\nSacrifice Wamma: Heal a target Danian by 20."
+        ability: "Hive: Wamma gains +10 Energy.\nSacrifice Wamma: Heal a target Danian by 20.",
+        passives: []
     }
 ];
 

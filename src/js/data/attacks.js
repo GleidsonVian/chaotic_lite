@@ -1,4 +1,5 @@
 // Estrutura de dados das cartas de Ataque
+// statThreshold: atacante precisa de (defensor + threshold) para ativar o bônus do Challenge
 
 const attacksDatabase = [
     {
@@ -9,6 +10,7 @@ const attacksDatabase = [
         elementRequirement: "Fire",
         elementDamage: 10,
         statRequirement: "power",
+        statThreshold: 5,
         statDamage: 5
     },
     {
@@ -19,9 +21,9 @@ const attacksDatabase = [
         elementRequirement: "Earth",
         elementDamage: 10,
         statRequirement: null,
+        statThreshold: 0,
         statDamage: 0
     },
-    
     {
         id: "a3",
         name: "Ember Swarm",
@@ -30,6 +32,7 @@ const attacksDatabase = [
         elementRequirement: "Fire",
         elementDamage: 5,
         statRequirement: "speed",
+        statThreshold: 5,
         statDamage: 5
     },
     {
@@ -40,6 +43,7 @@ const attacksDatabase = [
         elementRequirement: "Water",
         elementDamage: 15,
         statRequirement: "wisdom",
+        statThreshold: 5,
         statDamage: 5
     },
     {
@@ -50,6 +54,7 @@ const attacksDatabase = [
         elementRequirement: "Air",
         elementDamage: 10,
         statRequirement: "speed",
+        statThreshold: 0,
         statDamage: 10
     },
     {
@@ -60,6 +65,7 @@ const attacksDatabase = [
         elementRequirement: "Earth",
         elementDamage: 5,
         statRequirement: "power",
+        statThreshold: 10,
         statDamage: 10
     },
     {
@@ -70,6 +76,7 @@ const attacksDatabase = [
         elementRequirement: null,
         elementDamage: 0,
         statRequirement: "courage",
+        statThreshold: 0,
         statDamage: 5
     }
 ];
