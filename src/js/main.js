@@ -752,10 +752,29 @@ class GameEngine {
             atkHand.splice(attackCardIndex, 1);
             if (atkDeck.length > 0) atkHand.push(atkDeck.pop());
         } else if (atkHand.length > 0) {
-            // IA attack
-            const aiIdx = Math.floor(Math.random() * atkHand.length);
-            attackCard = atkHand[aiIdx];
-            atkHand.splice(aiIdx, 1);
+            // IA escolhe a carta de ataque com maior dano esperado
+            let bestIndex = 0;
+            let bestScore = -Infinity;
+            atkHand.forEach((card, idx) => {
+                let score = card.baseDamage || 0;
+                if (card.statRequirement) {
+                    const statKey = card.statRequirement.toLowerCase();
+                    const atkVal = effAtk[statKey] || 0;
+                    const defVal = effDef[statKey] || 0;
+                    if (atkVal > defVal) score += card.statDamage || 0;
+                }
+                if (card.elementRequirement) {
+                    const hasElement = attacker.elements && attacker.elements.includes(card.elementRequirement);
+                    if (hasElement) score += card.elementDamage || 0;
+                }
+                score += (card.baseDamage || 0) * 0.1; // leve preferência por maior base
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestIndex = idx;
+                }
+            });
+            attackCard = atkHand[bestIndex];
+            atkHand.splice(bestIndex, 1);
             if (atkDeck.length > 0) atkHand.push(atkDeck.pop());
         } else {
             attackCard = { name: "Ataque Básico", baseDamage: 10, statRequirement: "courage", statDamage: 5, elementRequirement: null, elementDamage: 0 };
@@ -791,19 +810,29 @@ class GameEngine {
         defender.energy -= damage;
         const targetBoard = attackingPlayer === 1 ? this.boardP2 : this.boardP1;
 
+        // Configura animação de combate para renderização
+        this.combatAnimationState = {
+            attacker: { player: attackingPlayer, r: atkR, c: atkC },
+            defender: { player: attackingPlayer === 1 ? 2 : 1, r: defR, c: defC },
+            damageDealt: true,
+            destroyed: defender.energy <= 0
+        };
+
         this.log(`💥 ${attacker.name} causou ${damage} de dano a ${defender.name}. Vida restante: ${Math.max(0, defender.energy)}`);
         
         if (defender.energy <= 0) {
             this.log(`💀 ${defender.name} foi destruído! O combate terminou.`);
-            targetBoard[defR][defC] = null; // Retira do tabuleiro
-            
-            // Fim do combate
-            this.activeCombat = null;
-            this.pendingCombat = null;
-            this.selectedAttacker = null;
-            this.gameState = 'IDLE';
-            
             this.renderBoard();
+
+            setTimeout(() => {
+                targetBoard[defR][defC] = null; // Retira do tabuleiro após animação
+                this.activeCombat = null;
+                this.pendingCombat = null;
+                this.selectedAttacker = null;
+                this.gameState = 'IDLE';
+                this.combatAnimationState = null;
+                this.renderBoard();
+            }, 800);
             
             if (this.turn === 1) {
                 setTimeout(() => this.nextTurn(), 1500);
@@ -815,6 +844,10 @@ class GameEngine {
             if (this.activeCombat) {
                 this.activeCombat.currentStriker = attackingPlayer === 1 ? 2 : 1;
                 this.renderBoard();
+                setTimeout(() => {
+                    this.combatAnimationState = null;
+                    this.renderBoard();
+                }, 800);
                 setTimeout(() => this.processCombatTurn(), 1000);
             }
         }
@@ -877,6 +910,10 @@ class GameEngine {
                     }
 
                     if (card) {
+                        const animState = this.combatAnimationState || {};
+                        const isAttackerAnim = animState.attacker && animState.attacker.player === player && animState.attacker.r === r && animState.attacker.c === c;
+                        const isDefenderAnim = animState.defender && animState.defender.player === player && animState.defender.r === r && animState.defender.c === c;
+                        const animClass = isDefenderAnim && animState.destroyed ? 'defeat-anim' : isAttackerAnim ? 'attack-anim' : isDefenderAnim ? 'hit-anim' : '';
                         const syn = this.getSynergyBonus(player, r, c);
                         let displayMaxEnergy = card.maxEnergy;
                         let displayEnergy = card.energy;
@@ -895,7 +932,7 @@ class GameEngine {
                         }
 
                         html += `
-                            <div class="card" onclick="game.handleCardClick(${player}, ${r}, ${c})" style="border: ${borderStyle}; ${shadowStyle} ${cursorStyle} ${opacityStyle} transition: all 0.2s;">
+                            <div class="card ${animClass}" onclick="game.handleCardClick(${player}, ${r}, ${c})" style="border: ${borderStyle}; ${shadowStyle} ${cursorStyle} ${opacityStyle} transition: all 0.2s;">
                                 <div class="card-header">
                                     <div class="card-rarity-icon rarity-${(card.rarity || 'Common').toLowerCase().replace(/\s+/g, '-')}" title="${card.rarity || 'Common'}">${card.rarity === 'Ultra Rare' ? '💎' : card.rarity === 'Super Rare' ? '🔷' : card.rarity === 'Rare' ? '🔶' : card.rarity === 'Legendary' ? '🌟' : '⚪'}</div>
                                     <div class="card-tribe">${card.tribe}</div>
@@ -982,7 +1019,7 @@ class GameEngine {
     }
 
     aiTurn() {
-        // Encontra alvos vivos e expostos
+        // Encontra atacantes expostos e alvos vivos
         let p2Alive = [];
         for(let r=0; r < this.boardP2.length; r++) {
             for(let c=0; c < this.boardP2[r].length; c++) {
@@ -995,26 +1032,33 @@ class GameEngine {
         let p1Alive = [];
         for(let r=0; r < this.boardP1.length; r++) {
             for(let c=0; c < this.boardP1[r].length; c++) {
-                if(this.boardP1[r][c] && this.isExposed(1, r, c)) {
+                if(this.boardP1[r][c]) {
                     p1Alive.push({card: this.boardP1[r][c], r, c});
                 }
             }
         }
 
         if (p2Alive.length > 0 && p1Alive.length > 0) {
-            // Seleciona atacante e defensor aleatórios
-            const attacker = p2Alive[Math.floor(Math.random() * p2Alive.length)];
-            const defender = p1Alive[Math.floor(Math.random() * p1Alive.length)];
-            
-            // Finge seleção na UI para feedback visual
+            // Escolhe o atacante exposto mais forte e o alvo inimigo mais fraco
+            const attacker = p2Alive.reduce((best, candidate) => {
+                const score = (candidate.card.power || 0) * 2 + (candidate.card.courage || 0) * 1.5 + (candidate.card.speed || 0) + (candidate.card.energy || 0) * 0.5;
+                return !best || score > best.score ? { candidate, score } : best;
+            }, null).candidate;
+
+            const defender = p1Alive.reduce((best, candidate) => {
+                const rowPenalty = candidate.r * 2;
+                const threat = (candidate.card.energy || 0) * 3 + (candidate.card.power || 0) * 2 + (candidate.card.courage || 0) * 1.5 + rowPenalty;
+                return !best || threat < best.threat ? { candidate, threat } : best;
+            }, null).candidate;
+
             this.selectedAttacker = { player: 2, r: attacker.r, c: attacker.c };
             this.renderBoard();
-            
+
             setTimeout(() => {
                 this.startCombat(attacker.card, defender.card, attacker.r, attacker.c, defender.r, defender.c, 2);
             }, 1000);
         } else {
-             this.log("🏆 O Jogo acabou!");
+            this.log("🏆 O Jogo acabou!");
         }
     }
 }
