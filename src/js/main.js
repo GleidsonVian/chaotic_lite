@@ -874,6 +874,13 @@ class GameEngine {
                 this.log(`💀 ${target.name} foi destruído pelo Mugic!`);
                 board[r][c] = null;
             }
+        } else if (mugic.effectType === "reduce_elemental_damage") {
+            // Aplica redução de dano elemental temporária na criatura alvo até o fim do turno
+            if (!target._elementalReductions) target._elementalReductions = [];
+            const amount = mugic.effectValue || 0;
+            const elements = mugic.effectElements || [];
+            target._elementalReductions.push({ elements, amount, expiresOnTurn: this.turn });
+            this.log(`🔰 ${target.name} afetado por ${mugic.name}: -${amount} dano de ${elements.join('/')} até o fim do turno.`);
         } else if (mugic.effectType === "heal") {
             target.energy = Math.min(target.maxEnergy, target.energy + mugic.effectValue);
             this.log(`✨ ${target.name} foi curado em ${mugic.effectValue} pontos de vida!`);
@@ -1884,6 +1891,27 @@ class GameEngine {
         if (defender._damageReduction) {
             totalDamage = Math.max(0, totalDamage - defender._damageReduction);
             defender._damageReduction = 0;
+        }
+
+        // Aplicar reduções específicas por elemento (ex.: Cascade Symphony)
+        let elementalReduction = 0;
+        try {
+            const atkElement = atkCard.elementRequirement || null;
+            if (atkElement && defender._elementalReductions && Array.isArray(defender._elementalReductions)) {
+                defender._elementalReductions.forEach(r => {
+                    if (!r || !r.elements) return;
+                    if (r.expiresOnTurn !== this.turn) return; // só vale neste turno
+                    if (r.elements.includes(atkElement)) {
+                        elementalReduction += (r.amount || r.value || 0);
+                    }
+                });
+            }
+            if (elementalReduction > 0) {
+                totalDamage = Math.max(0, totalDamage - elementalReduction);
+                this.log(`🔰 Redução Elemental aplicada: -${elementalReduction} (${atkCard.elementRequirement})`);
+            }
+        } catch (e) {
+            console.error('Erro aplicando redução elemental:', e);
         }
 
         if (this.activeCombat) {
