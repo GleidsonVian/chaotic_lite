@@ -32,8 +32,45 @@
                 <h3 id="draft-counter" class="text-success mb-small">0 / 6 Escolhidas</h3>
                 <p class="text-muted text-small mb-small">(Clique nas cartas abaixo para adicionar. Max 2 cópias por criatura. Clique nas cartas escolhidas para remover.)</p>
                 <div id="drafted-deck" class="deck-container"></div>
-                
-                <div id="synergy-preview" style="margin: 15px auto; padding: 10px; background: rgba(52, 152, 219, 0.1); border: 1px solid #3498db; border-radius: 5px; max-width: 600px; text-align: center; color: #3498db; font-size: 14px; font-weight: bold; min-height: 20px;">
+
+                <!-- Estatísticas do deck em tempo real -->
+                <div id="deck-stats-panel" style="display:none; margin: 12px auto; max-width: 640px; background: rgba(15,23,42,0.8); border: 1px solid #334155; border-radius: 12px; padding: 14px 18px;">
+                    <div style="display:flex; gap:20px; justify-content:center; flex-wrap:wrap; align-items:flex-start;">
+                        <!-- Médias de stats -->
+                        <div>
+                            <div style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Média de Stats</div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                                <div class="ds-stat" id="ds-courage"><span class="ds-icon">⚔️</span><span class="ds-label">COR</span><span id="ds-v-courage" class="ds-val">—</span></div>
+                                <div class="ds-stat" id="ds-power">  <span class="ds-icon">💪</span><span class="ds-label">POD</span><span id="ds-v-power"   class="ds-val">—</span></div>
+                                <div class="ds-stat" id="ds-wisdom"> <span class="ds-icon">🧠</span><span class="ds-label">SAB</span><span id="ds-v-wisdom"  class="ds-val">—</span></div>
+                                <div class="ds-stat" id="ds-speed">  <span class="ds-icon">⚡</span><span class="ds-label">VEL</span><span id="ds-v-speed"   class="ds-val">—</span></div>
+                            </div>
+                            <div class="ds-stat" style="margin-top:6px; justify-content:center;">
+                                <span class="ds-icon">❤️</span><span class="ds-label">Vida média</span><span id="ds-v-energy" class="ds-val" style="color:#ef4444;">—</span>
+                            </div>
+                        </div>
+
+                        <!-- Divisor -->
+                        <div style="width:1px; background:#334155; align-self:stretch;"></div>
+
+                        <!-- Distribuição de tribos -->
+                        <div>
+                            <div style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Tribos</div>
+                            <div id="ds-tribes" style="display:flex; flex-direction:column; gap:4px; min-width:150px;"></div>
+                        </div>
+
+                        <!-- Divisor -->
+                        <div style="width:1px; background:#334155; align-self:stretch;"></div>
+
+                        <!-- Passivas únicas -->
+                        <div>
+                            <div style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Passivas no Deck</div>
+                            <div id="ds-passives" style="display:flex; flex-wrap:wrap; gap:4px; max-width:160px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="synergy-preview" style="margin: 10px auto; padding: 10px; background: rgba(52, 152, 219, 0.1); border: 1px solid #3498db; border-radius: 5px; max-width: 600px; text-align: center; color: #3498db; font-size: 14px; font-weight: bold; min-height: 20px;">
                     Nenhuma sinergia ativa ainda.
                 </div>
                 
@@ -42,31 +79,81 @@
                 </button>
             </div>
             
+            <!-- Barra de filtros do draft de criaturas -->
+            <div id="draft-filters" style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; align-items:center; padding:12px 0; margin-bottom:4px; border-bottom:1px solid #1e293b;">
+                <!-- Tribo -->
+                <select id="df-tribe" onchange="game.applyDraftFilters()" style="background:#1e293b; border:1px solid #334155; color:#e2e8f0; border-radius:8px; padding:6px 10px; font-size:12px; cursor:pointer;">
+                    <option value="All">🌍 Todas as Tribos</option>
+                    <option value="OverWorld">🔵 OverWorld</option>
+                    <option value="UnderWorld">🔴 UnderWorld</option>
+                    <option value="Mipedian">🟠 Mipedian</option>
+                    <option value="Danian">🟣 Danian</option>
+                    <option value="M'arrillian">🟦 M'arrillian</option>
+                </select>
+
+                <!-- Stat mínimo -->
+                <select id="df-stat" onchange="game.applyDraftFilters()" style="background:#1e293b; border:1px solid #334155; color:#e2e8f0; border-radius:8px; padding:6px 10px; font-size:12px; cursor:pointer;">
+                    <option value="none">📊 Qualquer Stat</option>
+                    <option value="courage">⚔️ Coragem mín.</option>
+                    <option value="power">💪 Poder mín.</option>
+                    <option value="wisdom">🧠 Sabedoria mín.</option>
+                    <option value="speed">⚡ Velocidade mín.</option>
+                    <option value="energy">❤️ Vida mín.</option>
+                </select>
+                <input id="df-stat-val" type="number" min="0" max="200" value="50" onchange="game.applyDraftFilters()" oninput="game.applyDraftFilters()"
+                       style="width:60px; background:#1e293b; border:1px solid #334155; color:#e2e8f0; border-radius:8px; padding:6px 8px; font-size:12px; text-align:center;">
+
+                <!-- Passiva -->
+                <select id="df-passive" onchange="game.applyDraftFilters()" style="background:#1e293b; border:1px solid #334155; color:#e2e8f0; border-radius:8px; padding:6px 10px; font-size:12px; cursor:pointer;">
+                    <option value="none">✦ Qualquer Passiva</option>
+                    <option value="intimidate">😰 Intimidate</option>
+                    <option value="swift">💨 Swift</option>
+                    <option value="strike">⚡ Strike</option>
+                    <option value="tough">🛡️ Tough</option>
+                    <option value="berserk">🔥 Berserk</option>
+                    <option value="reckless">💢 Reckless</option>
+                    <option value="fireproof">🧯 Fireproof</option>
+                    <option value="adjacentOverWorldPower">🌿 OW Bond</option>
+                </select>
+
+                <!-- Ordenação -->
+                <select id="df-sort" onchange="game.applyDraftFilters()" style="background:#1e293b; border:1px solid #334155; color:#e2e8f0; border-radius:8px; padding:6px 10px; font-size:12px; cursor:pointer;">
+                    <option value="default">🔢 Ordem padrão</option>
+                    <option value="courage">⚔️ Maior Coragem</option>
+                    <option value="power">💪 Maior Poder</option>
+                    <option value="wisdom">🧠 Maior Sabedoria</option>
+                    <option value="speed">⚡ Maior Velocidade</option>
+                    <option value="energy">❤️ Maior Vida</option>
+                </select>
+
+                <!-- Botão limpar -->
+                <button onclick="game.clearDraftFilters()" style="background:transparent; border:1px solid #475569; color:#94a3b8; border-radius:8px; padding:6px 12px; font-size:12px; cursor:pointer;">
+                    ✕ Limpar
+                </button>
+
+                <span id="df-count" style="font-size:11px; color:#64748b;"></span>
+            </div>
+
             <div id="draft-cards-container" class="cards-grid">
                 <!-- Cartas/Equipamentos serão renderizados aqui pelo JavaScript -->
             </div>
             
             <div id="battlegear-draft-screen" style="display: none; text-align: center;">
-                <h2 style="color: #f1c40f; margin-bottom: 10px;">Equipe Suas Criaturas (6 Battlegears)</h2>
-                <h3 id="bg-draft-counter" style="color: #2ecc71; margin-bottom: 10px;">0 / 6 Equipadas</h3>
-                <p style="color: #bdc3c7; font-size: 14px; margin-bottom: 20px;">Selecione um equipamento e depois clique na criatura que o usará.</p>
-                
-                <div id="bg-selection-container" style="display: flex; gap: 20px; justify-content: center; margin-bottom: 30px;">
-                    <div style="flex: 1; max-width: 500px;">
-                        <h4 style="margin-bottom: 10px; color: #3498db;">Equipamentos Disponíveis</h4>
-                        <div id="battlegear-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; max-height: 400px; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.4); border-radius: 10px;">
-                            <!-- Battlegears renderizados aqui -->
-                        </div>
-                    </div>
-                    <div style="flex: 1; max-width: 600px;">
-                        <h4 style="margin-bottom: 10px; color: #e74c3c;">Seu Exército</h4>
-                        <div id="army-list" style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; padding: 10px; background: rgba(0,0,0,0.4); border-radius: 10px; min-height: 150px;">
-                            <!-- Exército draftado renderizado aqui -->
-                        </div>
-                    </div>
+                <h2 style="color: #f1c40f; margin-bottom: 6px;">Equipe Suas Criaturas</h2>
+                <h3 id="bg-draft-counter" style="color: #2ecc71; margin-bottom: 6px;">0 / 6 Equipadas</h3>
+                <p style="color: #bdc3c7; font-size: 13px; margin-bottom: 20px;">
+                    Cada criatura recebeu uma sugestão automática. Clique em <b>🔀 Trocar Battlegear</b> para personalizar.
+                </p>
+
+                <!-- Sem o container de lista antiga — army-list agora é a tela inteira -->
+                <div id="battlegear-list" style="display:none;"></div>
+
+                <div id="army-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+                                           gap: 14px; padding: 10px; max-width: 1100px; margin: 0 auto 24px;">
+                    <!-- Cards de criatura + picker renderizados aqui -->
                 </div>
-                
-                <button id="btn-finish-draft" class="btn btn-primary btn-large hidden" onclick="game.startBattle()">Ir para Batalha!</button>
+
+                <button id="btn-finish-draft" class="btn btn-primary btn-large hidden" onclick="game.startBattle()">Escolher Mugics →</button>
             </div>
                 
             <!-- Estágio 3 do Draft: Mugics -->
@@ -99,14 +186,14 @@
                             </select>
                         </div>
                         
-                        <div id="mugic-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; max-height: 400px; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.4); border-radius: 10px;">
+                        <div id="mugic-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; max-height: 520px; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.4); border-radius: 10px;">
                             <!-- Mugics disponíveis renderizadas aqui -->
                         </div>
                     </div>
                     
                     <div style="flex: 1; max-width: 300px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
                         <h4 style="color: #e74c3c; margin-bottom: 10px;">Sua Mão de Mugics</h4>
-                        <div id="drafted-mugics-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; background: rgba(0,0,0,0.4); padding: 10px; border-radius: 10px; width: 100%; min-height: 300px;">
+                        <div id="drafted-mugics-grid" style="display: grid; grid-template-columns: 1fr; gap: 10px; background: rgba(0,0,0,0.4); padding: 10px; border-radius: 10px; width: 100%; min-height: 300px; max-height: 520px; overflow-y: auto;">
                             <!-- Slots vazios -->
                         </div>
                     </div>
@@ -149,6 +236,9 @@
                         <button onclick="document.getElementById('lore-modal').classList.remove('hidden'); document.getElementById('lore-modal').classList.add('flex-modal')" class="btn btn-purple">
                             📖 Codex de Perim
                         </button>
+                        <button onclick="game.openDiscardViewer()" class="btn" style="background:#2c3e50; border:1px solid #7f8c8d; color:#bdc3c7;">
+                            🗑️ Descartes
+                        </button>
                         <button id="btn-next-turn" class="btn btn-danger">
                             Passar Turno
                         </button>
@@ -157,6 +247,25 @@
                 <div id="combat-log" class="combat-log-box">
                     Batalha pronta para iniciar!
                 </div>
+            </div>
+        </div>
+
+        <!-- Discard Viewer Modal -->
+        <div id="discard-modal" class="modal-overlay hidden" style="z-index:2000;" onclick="if(event.target===this){this.classList.add('hidden');this.classList.remove('flex-modal')}">
+            <div style="background:#12122a; border:2px solid #4a4a6a; border-radius:14px; padding:24px; width:700px; max-width:95vw; max-height:88vh; overflow-y:auto; color:#fff; position:relative;">
+                <button onclick="document.getElementById('discard-modal').classList.add('hidden');document.getElementById('discard-modal').classList.remove('flex-modal')"
+                        style="position:absolute;top:12px;right:14px;background:transparent;border:none;color:#aaa;font-size:20px;cursor:pointer;">✕</button>
+                <h2 style="text-align:center;color:#f1c40f;margin-bottom:18px;">🗑️ Pilhas de Descarte</h2>
+
+                <!-- Tabs -->
+                <div style="display:flex;gap:8px;justify-content:center;margin-bottom:18px;">
+                    <button onclick="game._discardTab('crit1')" id="dtab-crit1" class="dtab dtab-active">⚔️ Criaturas (Você)</button>
+                    <button onclick="game._discardTab('crit2')" id="dtab-crit2" class="dtab">⚔️ Criaturas (IA)</button>
+                    <button onclick="game._discardTab('mug1')"  id="dtab-mug1"  class="dtab">🎵 Mugics (Você)</button>
+                    <button onclick="game._discardTab('mug2')"  id="dtab-mug2"  class="dtab">🎵 Mugics (IA)</button>
+                </div>
+
+                <div id="discard-content" style="min-height:200px;"></div>
             </div>
         </div>
 
@@ -171,14 +280,15 @@
                 
                 <h3 id="burst-prompt" style="color: #3498db; margin-bottom: 15px;">Jogador X, deseja responder?</h3>
                 
-                <div style="display: flex; gap: 20px; justify-content: center; margin-bottom: 20px;">
+                <div style="display: flex; gap: 20px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
                     <button id="btn-burst-pass" class="btn btn-danger" onclick="game.passBurst()">Passar (Não Responder)</button>
                     <button id="btn-burst-play" class="btn btn-success" onclick="game.showBurstMugicSelection()">Jogar Mugic</button>
+                    <button id="btn-burst-sacrifice" class="btn" style="background:#e67e22;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;display:none;" onclick="game.sacrificeBattlegear()">⚔️ Sacrificar Battlegear</button>
                 </div>
                 
                 <div id="burst-mugic-selection" class="hidden">
                     <h4 style="color: #9b59b6; margin-bottom: 10px;">Sua Mão:</h4>
-                    <div id="burst-hand-container" style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 15px;">
+                    <div id="burst-hand-container" style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-bottom: 15px; max-height: 340px; overflow-y: auto; padding: 4px;">
                         <!-- Cartas da mão -->
                     </div>
                     <button class="btn btn-danger" style="padding: 5px 15px; font-size: 12px;" onclick="document.getElementById('burst-mugic-selection').classList.add('hidden')">Cancelar Escolha</button>
@@ -254,5 +364,132 @@
     <script src="src/js/data/passives.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="src/js/main.js"></script>
+
+    <!-- Feed de batalha animado -->
+    <div id="battle-feed"></div>
+
+    <!-- Tooltip global de stat — fica no body, nunca é cortado por overflow -->
+    <div id="stat-global-tooltip"></div>
+    <script>
+    (function () {
+        const tip = document.getElementById('stat-global-tooltip');
+        let showTimer = null;
+        let currentBox = null;
+
+        function hideTip() {
+            clearTimeout(showTimer);
+            tip.style.opacity = '0';
+            currentBox = null;
+        }
+
+        document.addEventListener('mouseover', function (e) {
+            const box = e.target.closest('[data-tip]');
+
+            // Entrou em elemento sem data-tip → esconde imediatamente
+            if (!box) {
+                hideTip();
+                return;
+            }
+
+            // Mesmo elemento — não reinicia o timer
+            if (box === currentBox) return;
+
+            hideTip();
+            currentBox = box;
+
+            showTimer = setTimeout(() => {
+                tip.textContent = box.dataset.tip;
+                tip.style.opacity = '1';
+                positionTip(e);
+            }, 220);
+        });
+
+        document.addEventListener('mousemove', function (e) {
+            if (tip.style.opacity === '1') positionTip(e);
+        });
+
+        // Também esconde ao clicar (troca de tela)
+        document.addEventListener('click', hideTip);
+
+        // Esconde se o mouse sair da janela
+        document.addEventListener('mouseleave', hideTip);
+
+        function positionTip(e) {
+            const margin = 12;
+            const tw = tip.offsetWidth  || 220;
+            const th = tip.offsetHeight || 60;
+            let x = e.clientX + margin;
+            let y = e.clientY - th - margin;
+            if (x + tw > window.innerWidth  - 8) x = e.clientX - tw - margin;
+            if (y < 8) y = e.clientY + margin;
+            tip.style.left = x + 'px';
+            tip.style.top  = y + 'px';
+        }
+    })();
+    </script>
+
+    <!-- ── Modal: Resumo do Combate ── -->
+    <div id="combat-summary-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;">
+        <div style="background:#0f172a;border:1px solid #334155;border-radius:16px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,0.8);">
+
+            <!-- Header resultado -->
+            <div id="cs-header" style="padding:20px 24px 16px;border-bottom:1px solid #1e293b;">
+                <div style="text-align:center;margin-bottom:14px;">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#64748b;margin-bottom:4px;">Resultado do Combate</div>
+                    <div style="display:flex;justify-content:center;align-items:center;gap:24px;">
+
+                        <!-- Vencedor -->
+                        <div style="text-align:center;">
+                            <img id="cs-winner-img" src="" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:2px solid #22c55e;box-shadow:0 0 12px #22c55e66;">
+                            <div style="font-size:10px;color:#22c55e;margin-top:4px;text-transform:uppercase;font-weight:700" id="cs-winner-label">J1</div>
+                            <div style="font-size:13px;font-weight:700;color:#f0fdf4;margin-top:2px" id="cs-winner-name">—</div>
+                        </div>
+
+                        <div style="font-size:28px">⚔️</div>
+
+                        <!-- Derrotado -->
+                        <div style="text-align:center;opacity:0.65;filter:grayscale(60%);">
+                            <img id="cs-loser-img" src="" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:2px solid #ef4444;">
+                            <div style="font-size:10px;color:#ef4444;margin-top:4px;text-transform:uppercase;font-weight:700" id="cs-loser-label">J2</div>
+                            <div style="font-size:13px;font-weight:700;color:#fca5a5;margin-top:2px" id="cs-loser-name">—</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Métricas rápidas -->
+                <div style="display:flex;justify-content:center;gap:20px;flex-wrap:wrap;">
+                    <div class="cs-metric"><span class="cs-metric-val" id="cs-rounds">0</span><span class="cs-metric-lbl">Rounds</span></div>
+                    <div class="cs-metric"><span class="cs-metric-val" style="color:#ef4444" id="cs-dmg-winner">0</span><span class="cs-metric-lbl">Dano recebido (venc.)</span></div>
+                    <div class="cs-metric"><span class="cs-metric-val" style="color:#fbbf24" id="cs-dmg-loser">0</span><span class="cs-metric-lbl">Dano recebido (derrot.)</span></div>
+                </div>
+            </div>
+
+            <!-- Linha do tempo -->
+            <div style="padding:16px 24px;border-bottom:1px solid #1e293b;">
+                <div class="cs-section-title">⚔️ Linha do Tempo</div>
+                <div id="cs-timeline" style="display:flex;flex-direction:column;gap:4px;margin-top:8px;max-height:180px;overflow-y:auto;"></div>
+            </div>
+
+            <!-- Mugics -->
+            <div style="padding:16px 24px;border-bottom:1px solid #1e293b;">
+                <div class="cs-section-title">🎶 Mugics Usadas</div>
+                <div id="cs-mugics" style="display:flex;flex-direction:column;gap:4px;margin-top:8px;"></div>
+            </div>
+
+            <!-- Curas -->
+            <div style="padding:16px 24px;border-bottom:1px solid #1e293b;">
+                <div class="cs-section-title">💚 Curas</div>
+                <div id="cs-heals" style="display:flex;flex-direction:column;gap:4px;margin-top:8px;"></div>
+            </div>
+
+            <!-- Botão fechar -->
+            <div style="padding:16px 24px;text-align:center;">
+                <button onclick="document.getElementById('combat-summary-modal').classList.add('hidden');document.getElementById('combat-summary-modal').classList.remove('flex-modal');"
+                    style="background:linear-gradient(135deg,#1e40af,#3b82f6);border:none;border-radius:8px;color:white;padding:10px 32px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.05em;">
+                    Continuar
+                </button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
