@@ -733,21 +733,38 @@ class GameEngine {
         let html = '';
         this.playerMugics.forEach((mugic, index) => {
             const isSelected = this.selectedMugic === index;
-            const borderStyle = isSelected ? 'border: 3px solid #9b59b6; box-shadow: 0 0 15px #9b59b6; transform: scale(1.05);' : 'border: 1px solid #7f8c8d;';
+            const selClass = isSelected ? ' selected' : '';
+            const tribeColor = (mugic.tribe === 'OverWorld') ? 'var(--overworld)'
+                              : (mugic.tribe === 'UnderWorld') ? 'var(--underworld)'
+                              : (mugic.tribe === 'Mipedian') ? 'var(--mipedian)'
+                              : (mugic.tribe === 'Danian') ? 'var(--danian)'
+                              : (mugic.tribe === "M'arrillian") ? 'var(--marrillian)'
+                              : 'var(--accent)';
+
+            // montar estilo da arte: usa imagem se disponível, senão fallback para cor da tribo
+            const artStyle = mugic.image
+                ? `background-image: linear-gradient(180deg, rgba(0,0,0,0.25), rgba(0,0,0,0.5)), url('${mugic.image}'); background-size: cover; background-position: center;`
+                : `background: linear-gradient(180deg, rgba(0,0,0,0.2), rgba(0,0,0,0.45)), ${tribeColor};`;
+
             html += `
-                <div style="width: 100px; height: 120px; background-color: #8e44ad; color: white; border-radius: 5px; padding: 5px; text-align: center; cursor: pointer; display: flex; flex-direction: column; ${borderStyle}" onclick="game.handleMugicClick(${index})">
-                    <div style="font-size: 11px; font-weight: bold; margin-bottom: 2px;">${mugic.name}</div>
-                    <div style="font-size: 9px; color: #f1c40f; font-weight: bold; margin-bottom: 2px;">Tribo: ${mugic.tribe}</div>
-                    <div style="font-size: 9px; color: #ff9f43; font-weight: bold; margin-bottom: 4px;">Custo Base: ${mugic.cost} ♪</div>
-                    <div style="font-size: 9px; color: #bdc3c7; line-height: 1.1; flex: 1; overflow-y: auto;">${mugic.description}</div>
+                <div class="mugic-card${selClass}" onclick="game.handleMugicClick(${index})" title="${mugic.name}: ${mugic.description.replace(/"/g,'&quot;')}">
+                    <div class="mugic-header">
+                        <div class="mugic-name">${mugic.name}</div>
+                        <div class="mugic-cost">${mugic.cost} ♪</div>
+                    </div>
+                    <div class="mugic-art" style="${artStyle}">
+                        ${!mugic.image ? `<div style="text-align:center; padding:8px;"><div style="font-weight:800; font-size:18px; color: rgba(255,255,255,0.95);">♪</div></div>` : ''}
+                    </div>
+                    <div class="mugic-desc">${mugic.description}</div>
+                    <div class="mugic-footer">${mugic.type}</div>
                 </div>
             `;
         });
-        
+
         if (this.playerMugics.length === 0) {
             html = '<div style="color: #7f8c8d; padding-top: 50px;">Sem Mugics na mão.</div>';
         }
-        
+
         container.innerHTML = html;
     }
 
