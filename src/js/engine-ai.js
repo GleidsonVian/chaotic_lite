@@ -3,6 +3,39 @@ Object.assign(GameEngine.prototype, {
 
     // ─── Dificuldade ─────────────────────────────────────────────────────────
 
+    setAiTribe(tribe) {
+        this.aiTribeChoice = tribe;
+
+        const tribeColors = {
+            auto:       '#3b82f6',
+            OverWorld:  '#0ea5e9',
+            UnderWorld: '#dc2626',
+            Mipedian:   '#d97706',
+            Danian:     '#9333ea',
+        };
+        const tribeDescs = {
+            auto:       'IA escolhe a tribo conforme a dificuldade.',
+            OverWorld:  'IA usa criaturas OverWorld — fortes em Coragem e Sabedoria.',
+            UnderWorld: 'IA usa criaturas UnderWorld — alto Poder e agressivas.',
+            Mipedian:   'IA usa criaturas Mipedian — rápidas, focadas em Velocidade.',
+            Danian:     'IA usa criaturas Danian — sinergia crescente conforme o time.',
+        };
+
+        const descEl = document.getElementById('ai-tribe-desc');
+        if (descEl) descEl.textContent = tribeDescs[tribe] || '';
+
+        // Destaca botão ativo
+        ['auto','OverWorld','UnderWorld','Mipedian','Danian'].forEach(t => {
+            const btn = document.getElementById(`ai-tribe-${t}`);
+            if (!btn) return;
+            const color = tribeColors[t];
+            const active = t === tribe;
+            btn.style.borderColor = active ? color  : '#475569';
+            btn.style.color       = active ? color  : '#94a3b8';
+            btn.style.background  = active ? `rgba(${t==='auto'?'59,130,246':t==='OverWorld'?'14,165,233':t==='UnderWorld'?'220,38,38':t==='Mipedian'?'217,119,6':'147,51,234'},0.18)` : 'transparent';
+        });
+    },
+
     setDifficulty(level) {
         this.aiDifficulty = level;
         const descs = {

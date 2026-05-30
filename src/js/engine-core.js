@@ -54,7 +54,8 @@ class GameEngine {
         ];
 
         // IA
-        this.aiDifficulty = 'easy'; // 'easy' | 'medium' | 'hard'
+        this.aiDifficulty  = 'easy'; // 'easy' | 'medium' | 'hard'
+        this.aiTribeChoice = 'auto'; // 'auto' | 'OverWorld' | 'UnderWorld' | 'Mipedian' | 'Danian'
 
         // Histórico de partida completo
         this.matchHistory = []; // array de combates encerrados
@@ -79,7 +80,8 @@ class GameEngine {
         }
 
         this.renderDraft();
-        this.setDifficulty('easy'); // marca botão Fácil como ativo por padrão
+        this.setDifficulty('easy');  // marca botão Fácil como ativo por padrão
+        this.setAiTribe('auto');     // marca Automático como ativo por padrão
         this.initMultiplayer();
     }
 }

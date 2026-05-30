@@ -134,8 +134,10 @@ Object.assign(GameEngine.prototype, {
     _mugicCountersHtml(card) {
         const n = card.mugicCounters || 0;
         if (n === 0) return '';
-        let html = '<div style="display:flex;justify-content:center;gap:2px;margin-top:3px;">';
-        for (let i = 0; i < n; i++) html += '<span style="color:#9b59b6;font-size:14px;text-shadow:1px 1px 2px black;">♪</span>';
+        let html = '<div style="display:flex;justify-content:center;gap:3px;">';
+        for (let i = 0; i < n; i++) {
+            html += '<span style="color:#9b59b6;font-size:14px;text-shadow:1px 1px 2px black;line-height:1;">♪</span>';
+        }
         html += '</div>';
         return html;
     },
@@ -165,7 +167,7 @@ Object.assign(GameEngine.prototype, {
                     <div class="stat-box" data-tip="Sabedoria — usado em ataques mágicos de Sabedoria. Também define quem pode conjurar Mugics mais caras."><span class="stat-icon">🧠</span><span class="stat-label">SAB</span><span class="stat-value">${card.wisdom}</span></div>
                     <div class="stat-box" data-tip="Velocidade — usado em ataques de Speed e na disputa de iniciativa. Swift aumenta este valor."><span class="stat-icon">⚡</span><span class="stat-label">VEL</span><span class="stat-value">${card.speed}</span></div>
                 </div>
-                <div class="card-energy-container" style="padding:6px;background:#c0392b;border-top:2px solid #7f8c8d;text-align:center;color:white;font-weight:bold;">
+                <div class="card-energy-container">
                     ❤️ ${card.energy}
                     ${this._mugicCountersHtml(card)}
                 </div>

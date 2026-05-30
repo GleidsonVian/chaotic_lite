@@ -3,8 +3,132 @@ Object.assign(GameEngine.prototype, {
 
     initMultiplayer() {
         if (typeof io === 'undefined') return;
-
+        this._showLobby('connecting');
         this._connectSocket();
+    },
+
+    // ─── Lobby UI ────────────────────────────────────────────────────────────
+
+    _showLobby(state, playerNum) {
+        const screen = document.getElementById('lobby-screen');
+        if (!screen) return;
+        screen.style.display = 'flex';
+
+        const icon    = document.getElementById('lobby-icon');
+        const title   = document.getElementById('lobby-title');
+        const sub     = document.getElementById('lobby-sub');
+        const spinner = document.getElementById('lobby-spinner');
+        const spinTxt = document.getElementById('lobby-spin-text');
+        const linkBox = document.getElementById('lobby-link-box');
+        const actBtn  = document.getElementById('lobby-action-btn');
+
+        const s1icon   = document.getElementById('lobby-slot-1-icon');
+        const s1status = document.getElementById('lobby-slot-1-status');
+        const s2icon   = document.getElementById('lobby-slot-2-icon');
+        const s2status = document.getElementById('lobby-slot-2-status');
+
+        // Reset
+        if (actBtn) actBtn.style.display = 'none';
+        if (linkBox) linkBox.style.display = 'none';
+        if (spinner) spinner.style.display = 'flex';
+
+        const states = {
+            connecting: {
+                icon: '🌐', title: 'Conectando ao servidor...',
+                sub: 'Aguarde um momento.',
+                spin: 'Conectando...',
+                s1: ['👤', '—'], s2: ['❓', 'Aguardando...']
+            },
+            waiting: {
+                icon: '⏳', title: 'Aguardando oponente...',
+                sub: 'Compartilhe o link abaixo para chamar um amigo.',
+                spin: 'Aguardando Jogador 2...',
+                s1: [playerNum === 1 ? '🟢' : '👤', playerNum === 1 ? 'Você' : 'Conectado'],
+                s2: ['❓', 'Aguardando...'],
+                showLink: true,
+            },
+            ready: {
+                icon: '🟢', title: 'Oponente conectado!',
+                sub: 'Ambos os jogadores estão na sala. Faça o Draft das suas criaturas e clique em "Iniciar Batalha".',
+                spin: null,
+                s1: ['🟢', playerNum === 1 ? 'Você' : 'Conectado'],
+                s2: ['🟢', playerNum === 2 ? 'Você' : 'Conectado'],
+                showAction: true,
+            },
+            drafting: {
+                icon: '🃏', title: 'Fazendo o Draft...',
+                sub: 'Escolha suas 6 criaturas, battlegears e mugics. Quando terminar, clique em "Iniciar Batalha".',
+                spin: null,
+                s1: ['🟢', playerNum === 1 ? 'Você' : 'Oponente'],
+                s2: ['🟢', playerNum === 2 ? 'Você' : 'Oponente'],
+                showAction: true,
+                actionLabel: 'Ir para o Draft →',
+            },
+        };
+
+        const cfg = states[state] || states.connecting;
+
+        if (icon)    icon.textContent    = cfg.icon;
+        if (title)   title.textContent   = cfg.title;
+        if (sub)     sub.textContent     = cfg.sub;
+        if (s1icon)  s1icon.textContent  = cfg.s1[0];
+        if (s1status) s1status.textContent = cfg.s1[1];
+        if (s2icon)  s2icon.textContent  = cfg.s2[0];
+        if (s2status) s2status.textContent = cfg.s2[1];
+
+        if (cfg.spin && spinTxt) {
+            spinTxt.textContent = cfg.spin;
+            if (spinner) spinner.style.display = 'flex';
+        } else {
+            if (spinner) spinner.style.display = 'none';
+        }
+
+        if (cfg.showLink && linkBox) {
+            linkBox.style.display = 'block';
+            const input = document.getElementById('lobby-link-input');
+            if (input) {
+                // Usa URL pública do ngrok se disponível, senão a URL atual
+                input.value = this._lobbyPublicUrl || window.location.href;
+            }
+        }
+
+        if (cfg.showAction && actBtn) {
+            actBtn.style.display = 'inline-block';
+            actBtn.textContent   = cfg.actionLabel || 'Ir para o Draft →';
+        }
+    },
+
+    _hideLobby() {
+        const screen = document.getElementById('lobby-screen');
+        if (screen) screen.style.display = 'none';
+    },
+
+    _copyLobbyLink() {
+        const input = document.getElementById('lobby-link-input');
+        if (!input) return;
+        navigator.clipboard.writeText(input.value).then(() => {
+            const btn = document.getElementById('lobby-copy-btn');
+            if (btn) {
+                btn.textContent = '✅ Copiado!';
+                setTimeout(() => { btn.textContent = '📋 Copiar'; }, 2000);
+            }
+        }).catch(() => {
+            input.select();
+            document.execCommand('copy');
+        });
+    },
+
+    _lobbyAction() {
+        // Fecha o lobby e vai para o draft
+        this._hideLobby();
+    },
+
+    _exitLobbyToSolo() {
+        // Desativa multiplayer e vai direto ao draft solo
+        this.multiplayerMode = false;
+        if (this.socket) { this.socket.disconnect(); this.socket = null; }
+        this._hideLobby();
+        this.log('🎮 Modo solo ativado.');
     },
 
     _connectSocket() {
@@ -12,35 +136,38 @@ Object.assign(GameEngine.prototype, {
 
         this.socket = io({
             reconnection:        true,
-            reconnectionAttempts: 10,        // até 10 tentativas
-            reconnectionDelay:    1000,       // espera 1s antes da 1ª tentativa
-            reconnectionDelayMax: 5000,       // no máximo 5s entre tentativas
+            reconnectionAttempts: 10,
+            reconnectionDelay:    1000,
+            reconnectionDelayMax: 5000,
             timeout:              10000,
         });
         this.multiplayerMode = true;
         this._reconnecting   = false;
 
-        // ── Conexão bem-sucedida ───────────────────────────────────────────────
-        this.socket.on('assigned', ({ playerNumber }) => {
+        // ── Conexão bem-sucedida ─────────────────────────────────────────────
+        this.socket.on('assigned', ({ playerNumber, publicUrl }) => {
             this.myPlayerNumber = playerNumber;
+            if (publicUrl) this._lobbyPublicUrl = publicUrl;
             this.log(`🌐 Modo Multiplayer ativo — Você é o Jogador ${playerNumber}`);
             this._hideReconnectOverlay();
 
-            // Se estava reconectando e a batalha já havia começado, pede re-sync
             if (this._reconnecting && this.appState === 'BATTLE') {
                 this._reconnecting = false;
                 this.log('🔄 Reconectado! Solicitando sincronização de estado...');
                 this.sendAction('request_resync');
             }
             this._reconnecting = false;
+            this._showLobby('waiting', playerNumber);
         });
 
         this.socket.on('waiting', () => {
             this.log('⏳ Aguardando segundo jogador conectar...');
+            this._showLobby('waiting', this.myPlayerNumber);
         });
 
         this.socket.on('room_ready', () => {
             this.log('🟢 Oponente conectado! Façam o Draft e cliquem em Iniciar Batalha.');
+            this._showLobby('ready', this.myPlayerNumber);
         });
 
         this.socket.on('action', (data) => {

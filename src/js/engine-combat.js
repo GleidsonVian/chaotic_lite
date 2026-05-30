@@ -703,8 +703,9 @@ Object.assign(GameEngine.prototype, {
         const modal = document.getElementById("attack-modal");
         if (modal) {
             modal.classList.add('hidden');
-            modal.classList.remove('flex-modal');
+            modal.classList.remove('flex-modal', 'modal-minimized');
         }
+        this.restoreModal && this.restoreModal('attack-modal'); // limpa pílula se existir
 
         if (!fromRemote) {
             this.sendAction('confirmAttack', { cardIndex });
@@ -1263,8 +1264,9 @@ Object.assign(GameEngine.prototype, {
         const modal = document.getElementById("attack-modal");
         if (modal) {
             modal.classList.add('hidden');
-            modal.classList.remove('flex-modal');
+            modal.classList.remove('flex-modal', 'modal-minimized');
         }
+        this.restoreModal && this.restoreModal('attack-modal');
         this.selectedAttacker = null;
         this.gameState = 'IDLE';
         this.activeCombat = null;

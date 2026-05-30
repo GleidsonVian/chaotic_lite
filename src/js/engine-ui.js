@@ -1,6 +1,61 @@
 // engine-ui.js
 Object.assign(GameEngine.prototype, {
 
+    // ── Minimizar / Restaurar Modais ─────────────────────────────────────────
+
+    /**
+     * Minimiza um modal para uma pílula flutuante na base da tela.
+     * @param {string} modalId  - id do elemento modal
+     * @param {string} label    - texto da pílula (ex: "⚔️ Seleção de Ataque")
+     */
+    minimizeModal(modalId, label) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+
+        // Esconde o modal (sem remover flex-modal, para restaurar depois)
+        modal.classList.add('modal-minimized');
+
+        // Cria a pílula flutuante
+        const tray = document.getElementById('minimized-modals');
+        if (!tray) return;
+
+        // Evita duplicatas
+        if (tray.querySelector(`[data-modal="${modalId}"]`)) return;
+
+        const pill = document.createElement('button');
+        pill.className = 'modal-pill';
+        pill.setAttribute('data-modal', modalId);
+        pill.innerHTML = `${label} <span class="modal-pill-restore">▲ Restaurar</span>`;
+        pill.style.pointerEvents = 'auto';
+        pill.onclick = () => this.restoreModal(modalId);
+        tray.appendChild(pill);
+
+        // Animação de entrada
+        requestAnimationFrame(() => pill.classList.add('modal-pill-visible'));
+    },
+
+    /**
+     * Restaura um modal minimizado para sua posição original.
+     * @param {string} modalId
+     */
+    restoreModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) modal.classList.remove('modal-minimized');
+
+        // Remove pílula
+        const tray = document.getElementById('minimized-modals');
+        const pill = tray && tray.querySelector(`[data-modal="${modalId}"]`);
+        if (pill) {
+            pill.classList.remove('modal-pill-visible');
+            setTimeout(() => pill.remove(), 250);
+        }
+
+        // Scroll suave de volta ao modal
+        setTimeout(() => {
+            if (modal) modal.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 50);
+    },
+
     // ── Visualizador de Descarte ─────────────────────────────────────────────
     openDiscardViewer() {
         const modal = document.getElementById('discard-modal');

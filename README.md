@@ -6,18 +6,38 @@ Simulador tático multiplayer de batalha em turnos rodando no navegador, inspira
 
 ## Como rodar
 
+### ⚡ Jeito rápido (recomendado)
+
+Dê dois cliques em **`iniciar.bat`** — o script faz tudo automaticamente:
+
+1. Verifica se Node.js e ngrok estão instalados
+2. Roda `npm install` se for a primeira vez
+3. Sobe o servidor Node.js na porta 3000
+4. Abre o ngrok e exibe o link público no terminal
+
+Para encerrar tudo, clique em **`encerrar.bat`**.
+
+**Pré-requisitos:**
+- [Node.js](https://nodejs.org) — para rodar o servidor
+- [ngrok](https://ngrok.com/download) — para gerar o link público (opcional; sem ele só funciona na rede local)
+
+---
+
+### Manual
+
 ```bash
-# Instalar dependências
+# Instalar dependências (só na primeira vez)
 npm install
 
 # Iniciar servidor
 node server.js
 
-# Acessar no navegador
-http://127.0.0.1:5500/chaotic_lite/
+# Em outro terminal: expor para a internet (opcional)
+ngrok http 3000
 ```
 
-Dois jogadores abrem a URL no mesmo servidor. O jogo aguarda as duas conexões antes de iniciar o draft.
+O link gerado pelo ngrok (ex: `https://abc123.ngrok-free.app`) é o que você manda para o amigo.  
+Dois jogadores abrem a mesma URL — o jogo aguarda as duas conexões antes de liberar o draft.
 
 ---
 

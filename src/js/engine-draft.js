@@ -305,11 +305,19 @@ Object.assign(GameEngine.prototype, {
         // Gera sugestões se ainda não foram aplicadas
         if (!this._bgRecommendations) {
             this._bgRecommendations = this._recommendBattlegears();
-            // Pré-equipar com o top-1 de cada criatura
+            // Pré-equipar com um battlegear aleatório entre os "muito indicados" (≥50% do top score)
+            // Assim cada vez que o jogador entra na tela de battlegear, a sugestão varia.
             this.draftedCards.forEach((_, i) => {
-                if (!this.draftedBattlegears[i] && this._bgRecommendations[i]?.[0]) {
-                    this.draftedBattlegears[i] = this._bgRecommendations[i][0].bg;
-                }
+                if (this.draftedBattlegears[i]) return; // já equipado manualmente, não sobrescreve
+                const recs = this._bgRecommendations[i] || [];
+                if (recs.length === 0) return;
+                const topScore  = recs[0].score || 1;
+                // Filtra apenas os que têm pelo menos 50% da afinidade do melhor
+                const goodOnes  = recs.filter(r => r.score >= topScore * 0.5);
+                // Sorteia entre os bons (máximo 5 candidatos para não pegar lixo)
+                const pool      = goodOnes.slice(0, 5);
+                const picked    = pool[Math.floor(Math.random() * pool.length)];
+                this.draftedBattlegears[i] = picked.bg;
             });
         }
 
@@ -443,6 +451,40 @@ Object.assign(GameEngine.prototype, {
             }
         }
         if (counter) counter.innerText = `${equippedCount} / ${this.draftedCards.length} Equipadas`;
+
+        // Botão "Randomizar tudo" — injeta uma única vez
+        const bgScreenEl = document.getElementById('battlegear-draft-screen');
+        if (bgScreenEl && !bgScreenEl.querySelector('#btn-randomize-bg')) {
+            const randBtn = document.createElement('button');
+            randBtn.id = 'btn-randomize-bg';
+            randBtn.className = 'btn';
+            randBtn.innerHTML = '🎲 Randomizar Equipamentos';
+            randBtn.style.cssText = 'margin:0 auto 12px;display:block;background:rgba(99,102,241,0.15);border:1px solid #6366f1;color:#a5b4fc;font-size:13px;padding:7px 18px;border-radius:8px;cursor:pointer;transition:all 0.15s;';
+            randBtn.onmouseover = () => { randBtn.style.background = 'rgba(99,102,241,0.3)'; };
+            randBtn.onmouseout  = () => { randBtn.style.background = 'rgba(99,102,241,0.15)'; };
+            randBtn.onclick = () => this.randomizeBattlegears();
+            const existingBack = bgScreenEl.querySelector('.back-btn');
+            if (existingBack && existingBack.nextSibling) {
+                bgScreenEl.insertBefore(randBtn, existingBack.nextSibling);
+            } else {
+                bgScreenEl.insertBefore(randBtn, bgScreenEl.firstChild);
+            }
+        }
+    },
+
+    /** Re-sorteia todos os battlegears entre os "muito indicados" para cada criatura */
+    randomizeBattlegears() {
+        if (!this._bgRecommendations) {
+            this._bgRecommendations = this._recommendBattlegears();
+        }
+        this.draftedCards.forEach((_, i) => {
+            const recs = this._bgRecommendations[i] || [];
+            if (recs.length === 0) return;
+            const topScore = recs[0].score || 1;
+            const pool     = recs.filter(r => r.score >= topScore * 0.5).slice(0, 5);
+            this.draftedBattlegears[i] = pool[Math.floor(Math.random() * pool.length)].bg;
+        });
+        this.renderBattlegearDraft();
     },
 
     toggleBgPicker(creatureIndex) {
@@ -675,55 +717,66 @@ Object.assign(GameEngine.prototype, {
         let aiBg    = [];
         let aiMugics = [];
 
-        if (diff === 'easy') {
-            // Fácil: tudo aleatório
-            for (let i = 0; i < 6; i++) {
-                aiCards.push(JSON.parse(JSON.stringify(
-                    this.cards[Math.floor(Math.random() * this.cards.length)]
-                )));
-            }
-        } else if (diff === 'medium') {
-            // Médio: escolhe cartas com alto poder/coragem
-            const sorted = [...this.cards].sort((a, b) =>
-                (b.power + b.courage + b.energy) - (a.power + a.courage + a.energy)
-            );
-            // Top 50% + alguma aleatoriedade
-            const pool = sorted.slice(0, Math.ceil(sorted.length * 0.5));
-            for (let i = 0; i < 6; i++) {
-                aiCards.push(JSON.parse(JSON.stringify(
-                    pool[Math.floor(Math.random() * pool.length)]
-                )));
-            }
-        } else {
-            // Difícil: escolhe a melhor tribo sinérgica e monta deck focado
-            // 1. Conta qual tribo do jogador tem mais cartas (para contrariar)
+        // ── Resolve qual tribo a IA vai usar ────────────────────────────────
+        const tribeChoice = this.aiTribeChoice || 'auto';
+        const allTribes   = ['OverWorld','UnderWorld','Mipedian','Danian'];
+
+        const _resolveAiTribe = () => {
+            if (tribeChoice !== 'auto') return tribeChoice;
+
+            if (diff === 'easy') return null; // aleatório total
+
+            if (diff === 'medium') return null; // top stats, sem tribo fixa
+
+            // Difícil/auto: counter-pick da tribo principal do jogador
             const playerTribes = {};
             this.draftedCards.forEach(c => { playerTribes[c.tribe] = (playerTribes[c.tribe] || 0) + 1; });
-            const playerMainTribe = Object.entries(playerTribes).sort((a,b) => b[1]-a[1])[0]?.[0];
-
-            // 2. Escolhe uma tribo diferente com boas cartas
-            const tribes = ['OverWorld','UnderWorld','Mipedian','Danian'];
-            const counterTribe = tribes.filter(t => t !== playerMainTribe)
+            const playerMain = Object.entries(playerTribes).sort((a,b) => b[1]-a[1])[0]?.[0];
+            return allTribes.filter(t => t !== playerMain)
                 .map(t => ({
                     tribe: t,
                     score: this.cards.filter(c => c.tribe === t)
-                                     .reduce((s, c) => s + c.power + c.courage + c.energy, 0)
+                                     .reduce((s,c) => s + c.power + c.courage + c.energy, 0)
                 }))
-                .sort((a, b) => b.score - a.score)[0]?.tribe || 'UnderWorld';
+                .sort((a,b) => b.score - a.score)[0]?.tribe || 'UnderWorld';
+        };
 
-            // 3. 4 cartas da tribo escolhida (melhores) + 2 cartas de alta energia
-            const tribeCards = this.cards.filter(c => c.tribe === counterTribe)
-                .sort((a, b) => (b.power + b.courage + b.energy) - (a.power + a.courage + a.energy));
-            const topTribe = tribeCards.slice(0, 6);
+        const aiTribe = _resolveAiTribe(); // null = sem restrição de tribo
 
+        // ── Monta o pool de cartas ────────────────────────────────────────
+        const _tribePool = (tribe) => {
+            const cards = tribe
+                ? this.cards.filter(c => c.tribe === tribe)
+                : [...this.cards];
+            // fallback: se a tribo não tiver cartas suficientes, completa com qualquer uma
+            if (cards.length < 6) cards.push(...this.cards);
+            return cards.sort((a,b) => (b.power + b.courage + b.energy) - (a.power + a.courage + a.energy));
+        };
+
+        if (diff === 'easy') {
+            // Fácil: aleatório (respeita tribo se escolhida)
+            const pool = aiTribe ? this.cards.filter(c => c.tribe === aiTribe) : this.cards;
+            const src  = pool.length >= 6 ? pool : this.cards;
             for (let i = 0; i < 6; i++) {
-                const src = topTribe[i] || tribeCards[Math.floor(Math.random() * tribeCards.length)]
-                            || this.cards[Math.floor(Math.random() * this.cards.length)];
-                aiCards.push(JSON.parse(JSON.stringify(src)));
+                aiCards.push(JSON.parse(JSON.stringify(src[Math.floor(Math.random() * src.length)])));
             }
-
-            this.log(`🤖 IA [Difícil] montou deck ${counterTribe} para contra-atacar!`);
+        } else if (diff === 'medium') {
+            // Médio: top 50% por stats (respeita tribo se escolhida)
+            const pool   = _tribePool(aiTribe);
+            const topHalf = pool.slice(0, Math.max(6, Math.ceil(pool.length * 0.5)));
+            for (let i = 0; i < 6; i++) {
+                aiCards.push(JSON.parse(JSON.stringify(topHalf[Math.floor(Math.random() * topHalf.length)])));
+            }
+        } else {
+            // Difícil: top 6 da tribo escolhida (auto = counter-pick)
+            const pool = _tribePool(aiTribe);
+            for (let i = 0; i < 6; i++) {
+                aiCards.push(JSON.parse(JSON.stringify(pool[i] || pool[Math.floor(Math.random() * pool.length)])));
+            }
         }
+
+        const chosenTribeLabel = aiTribe || (tribeChoice !== 'auto' ? tribeChoice : 'aleatório');
+        this.log(`🤖 IA [${diff}] montou deck — Tribo: ${chosenTribeLabel}`);
 
         // Battlegears: fácil=aleatório, médio/difícil=melhor por criatura
         for (let i = 0; i < aiCards.length; i++) {

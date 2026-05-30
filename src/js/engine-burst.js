@@ -308,8 +308,9 @@ Object.assign(GameEngine.prototype, {
         const modal = document.getElementById('burst-modal');
         if (modal) {
             modal.classList.add('hidden');
-            modal.classList.remove('flex-modal');
+            modal.classList.remove('flex-modal', 'modal-minimized');
         }
+        this.restoreModal && this.restoreModal('burst-modal');
     },
 
     async resolveBurst() {

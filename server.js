@@ -50,8 +50,8 @@ io.on('connection', (socket) => {
     socket.roomId = roomId;
     socket.playerNumber = playerNumber;
 
-    // Informa o jogador qual número ele é (1 = Host, 2 = Visitante)
-    socket.emit('assigned', { playerNumber, roomId });
+    // Informa o jogador qual número ele é + URL pública se disponível
+    socket.emit('assigned', { playerNumber, roomId, publicUrl });
 
     const room = rooms[roomId];
 
@@ -89,6 +89,34 @@ io.on('connection', (socket) => {
     });
 });
 
+// ─── Detectar URL pública do ngrok ───────────────────────────────────────────
+let publicUrl = null;
+
+function detectNgrok() {
+    const http = require('http');
+    const req = http.get('http://localhost:4040/api/tunnels', (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+            try {
+                const tunnels = JSON.parse(data).tunnels;
+                const https   = tunnels.find(t => t.proto === 'https');
+                if (https) {
+                    publicUrl = https.public_url;
+                    console.log(`║  Público: ${publicUrl}`);
+                    console.log('╚════════════════════════════════════════╝');
+                }
+            } catch(e) {}
+        });
+    });
+    req.on('error', () => {
+        // ngrok não está rodando — normal no modo local
+        console.log('║  Público: (ngrok não detectado)        ║');
+        console.log('╚════════════════════════════════════════╝');
+    });
+    req.setTimeout(3000, () => req.destroy());
+}
+
 // ─── Iniciar servidor ─────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
@@ -97,10 +125,6 @@ server.listen(PORT, () => {
     console.log('║   Chaotic Lite — Servidor Multiplayer  ║');
     console.log('╠════════════════════════════════════════╣');
     console.log(`║  Local:  http://localhost:${PORT}          ║`);
-    console.log('║  Aguardando conexões...                ║');
-    console.log('╚════════════════════════════════════════╝');
-    console.log('');
-    console.log('Próximo passo: rode "ngrok http 3000" em outro terminal');
-    console.log('e envie a URL gerada para seu amigo.');
-    console.log('');
+    // Tenta detectar ngrok após 2s (tempo para o ngrok iniciar)
+    setTimeout(detectNgrok, 2000);
 });

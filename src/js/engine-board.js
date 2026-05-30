@@ -390,21 +390,14 @@ Object.assign(GameEngine.prototype, {
                                     <div class="stat-box" data-tip="Sabedoria — usado em ataques mágicos de Sabedoria. Também define quem pode conjurar Mugics mais caras."><span class="stat-icon">🧠</span><span class="stat-label">SAB</span><span class="stat-value" style="${syn && syn.wisdom ? 'color:#3498db;font-weight:bold;' : ''}">${displayWisdom}</span></div>
                                     <div class="stat-box" data-tip="Velocidade — usado em ataques de Speed e na disputa de iniciativa. Swift aumenta este valor."><span class="stat-icon">⚡</span><span class="stat-label">VEL</span><span class="stat-value" style="${syn && syn.speed ? 'color:#3498db;font-weight:bold;' : ''}">${displaySpeed}</span></div>
                                 </div>
-                                <div class="card-energy-container" style="padding: 6px; background: #c0392b; border-top: 2px solid #7f8c8d;">
-                                    <div style="background-color: #2c3e50; border-radius: 4px; overflow: hidden; width: 100%; position: relative; height: 22px; border: 1px solid #000;">
-                                        <div style="width: ${Math.max(0, (displayEnergy / displayMaxEnergy) * 100)}%; height: 100%; background-color: ${(displayEnergy / displayMaxEnergy) > 0.5 ? '#2ecc71' : (displayEnergy / displayMaxEnergy) > 0.2 ? '#f1c40f' : '#e74c3c'}; transition: width 0.4s ease-out, background-color 0.4s ease-out;"></div>
-                                        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-size: 0.9em; font-weight: bold; color: white; text-shadow: 1px 1px 3px rgba(0,0,0,0.8);">
-                                            ❤️ ${Math.max(0, displayEnergy)} / ${displayMaxEnergy}
+                                <div class="card-energy-container">
+                                    <div style="background-color:#2c3e50;border-radius:4px;overflow:hidden;width:100%;position:relative;height:22px;border:1px solid #000;">
+                                        <div style="width:${Math.max(0,(displayEnergy/displayMaxEnergy)*100)}%;height:100%;background-color:${(displayEnergy/displayMaxEnergy)>0.5?'#2ecc71':(displayEnergy/displayMaxEnergy)>0.2?'#f1c40f':'#e74c3c'};transition:width 0.4s ease-out,background-color 0.4s ease-out;"></div>
+                                        <div style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;justify-content:center;align-items:center;font-size:0.9em;font-weight:bold;color:white;text-shadow:1px 1px 3px rgba(0,0,0,0.8);">
+                                            ❤️ ${Math.max(0,displayEnergy)} / ${displayMaxEnergy}
                                         </div>
                                     </div>
-                                    ${(() => {
-                                        const mgCnt = card.mugicCounters || 0;
-                                        if (mgCnt === 0) return '';
-                                        let mHtml = '<div style="display: flex; justify-content: center; gap: 2px; margin-top: 5px;">';
-                                        for(let i=0; i<mgCnt; i++) mHtml += '<span style="color: #9b59b6; font-size: 14px; text-shadow: 1px 1px 2px black;">♪</span>';
-                                        mHtml += '</div>';
-                                        return mHtml;
-                                    })()}
+                                    ${this._mugicCountersHtml(card)}
                                 </div>
                             </div>
                         `;
