@@ -396,200 +396,129 @@ class GameEngine {
         this.log(`⚔️ Batalha Multiplayer iniciada! ${myRole}`);
     }
 
+    // ─── Helpers reutilizáveis de renderização ────────────────────────────────
+
+    /** Ícone de raridade da carta */
+    _rarityIcon(rarity) {
+        if (rarity === 'Ultra Rare')  return '💎';
+        if (rarity === 'Super Rare')  return '🔷';
+        if (rarity === 'Rare')        return '🔶';
+        if (rarity === 'Legendary')   return '🌟';
+        return '⚪';
+    }
+
+    /** HTML dos ícones de elemento de uma carta */
+    _elementsHtml(card) {
+        if (!card.elements || card.elements.length === 0) return '';
+        const iconMap = { Fire: '🔥', Water: '💧', Earth: '🪨', Air: '🌪️' };
+        let html = `<div style="display:flex;gap:5px;justify-content:center;margin-top:-10px;z-index:2;position:relative;">`;
+        card.elements.forEach(el => {
+            html += `<div title="${el}" style="background:rgba(0,0,0,0.8);border:1px solid #7f8c8d;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:12px;">${iconMap[el] || '✨'}</div>`;
+        });
+        html += `</div>`;
+        return html;
+    }
+
+    /** HTML dos contadores de mugic (♪♪♪) */
+    _mugicCountersHtml(card) {
+        const n = card.mugicCounters || 0;
+        if (n === 0) return '';
+        let html = '<div style="display:flex;justify-content:center;gap:2px;margin-top:3px;">';
+        for (let i = 0; i < n; i++) html += '<span style="color:#9b59b6;font-size:14px;text-shadow:1px 1px 2px black;">♪</span>';
+        html += '</div>';
+        return html;
+    }
+
+    /** HTML de uma carta no draft (card grid) */
+    _draftCardHtml(card, index) {
+        const count      = this.draftedCards.filter(c => c.name === card.name).length;
+        const disabled   = this.draftedCards.length >= 6 || count >= 2;
+        const borderStyle  = count > 0 ? 'border:3px solid #2ecc71;box-shadow:0 0 15px #2ecc71;' : 'border:2px solid #7f8c8d;';
+        const opacityStyle = disabled ? 'opacity:0.5;filter:grayscale(80%);cursor:not-allowed;' : 'cursor:pointer;';
+        const rarity = card.rarity || 'Common';
+        return `
+            <div class="card" onclick="game.addDraftCard(${index})" title="${this.getPassiveDescription(card).replace(/"/g, '&quot;')}" style="${borderStyle}${opacityStyle}">
+                <div class="card-header">
+                    <div class="card-rarity-icon rarity-${rarity.toLowerCase().replace(/\s+/g,'-')}" title="${rarity}">${this._rarityIcon(rarity)}</div>
+                    <div class="card-tribe">${card.tribe}</div>
+                    <div class="card-name">${card.name}${count > 0 ? ` (x${count})` : ''}</div>
+                </div>
+                <div class="card-image-container">
+                    ${card.image ? `<img src="${card.image}" class="card-image" alt="${card.name}">` : `<div class="card-image-placeholder">Sem Imagem</div>`}
+                </div>
+                ${this._elementsHtml(card)}
+                ${this._getPassiveBadgesHtml(card)}
+                <div class="card-stats">
+                    <div class="stat-box" data-tip="Coragem — define quem ataca primeiro na iniciativa. Usada em ataques de Courage e pela passiva Intimidate."><span class="stat-icon">⚔️</span><span class="stat-label">COR</span><span class="stat-value">${card.courage}</span></div>
+                    <div class="stat-box" data-tip="Poder — usado em ataques físicos de Poder. Quanto maior, mais dano em ataques de Power."><span class="stat-icon">💪</span><span class="stat-label">POD</span><span class="stat-value">${card.power}</span></div>
+                    <div class="stat-box" data-tip="Sabedoria — usado em ataques mágicos de Sabedoria. Também define quem pode conjurar Mugics mais caras."><span class="stat-icon">🧠</span><span class="stat-label">SAB</span><span class="stat-value">${card.wisdom}</span></div>
+                    <div class="stat-box" data-tip="Velocidade — usado em ataques de Speed e na disputa de iniciativa. Swift aumenta este valor."><span class="stat-icon">⚡</span><span class="stat-label">VEL</span><span class="stat-value">${card.speed}</span></div>
+                </div>
+                <div class="card-energy-container" style="padding:6px;background:#c0392b;border-top:2px solid #7f8c8d;text-align:center;color:white;font-weight:bold;">
+                    ❤️ ${card.energy}
+                    ${this._mugicCountersHtml(card)}
+                </div>
+            </div>`;
+    }
+
+    /** Atualiza o painel de cartas selecionadas, contador e botão de início */
+    _syncDraftControls() {
+        const draftedContainer = document.getElementById('drafted-deck');
+        if (draftedContainer) {
+            draftedContainer.innerHTML = this.draftedCards.map((c, i) => `
+                <div onclick="game.removeDraftCard(${i})" style="width:80px;height:80px;cursor:pointer;border:2px solid #e74c3c;border-radius:5px;overflow:hidden;position:relative;">
+                    ${c.image ? `<img src="${c.image}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="background:#2c3e50;width:100%;height:100%;"></div>`}
+                    <div style="background:rgba(0,0,0,0.7);color:white;font-size:10px;position:absolute;bottom:0;width:100%;text-align:center;padding:2px 0;">Remover</div>
+                </div>`).join('');
+        }
+        const counter = document.getElementById('draft-counter');
+        if (counter) counter.innerText = `${this.draftedCards.length} / 6 Escolhidas`;
+        const btnStart = document.getElementById('btn-start-battle');
+        if (btnStart) {
+            const full = this.draftedCards.length === 6;
+            btnStart.classList.toggle('hidden', !full);
+            btnStart.style.display = full ? 'block' : 'none';
+        }
+        this.updateSynergyPreview();
+        this.updateDeckStats();
+    }
+
+    // ─── Filtro de tribo (botões antigos de tribo, mantido por compatibilidade) ─
     filterTribe(tribe) {
         this.currentTribeFilter = tribe;
         this.renderDraft();
     }
     
     renderDraft() {
-        const container = document.getElementById("draft-cards-container");
-        const draftedContainer = document.getElementById("drafted-deck");
-        let html = '';
-        
-        this.cards.forEach((card, index) => {
-            if (this.currentTribeFilter !== 'All' && card.tribe !== this.currentTribeFilter) return;
-
-            const count = this.draftedCards.filter(c => c.name === card.name).length;
-            const isFull = this.draftedCards.length >= 6;
-            const isMaxedOut = count >= 2;
-            const disabled = isFull || isMaxedOut;
-            
-            const borderStyle = count > 0 ? 'border: 3px solid #2ecc71; box-shadow: 0 0 15px #2ecc71;' : 'border: 2px solid #7f8c8d;';
-            const opacityStyle = disabled ? 'opacity: 0.5; filter: grayscale(80%); cursor: not-allowed;' : 'cursor: pointer;';
-            
-            // Elementos da criatura
-            let elementsHtml = '';
-            if (card.elements && card.elements.length > 0) {
-                const iconMap = { "Fire": "🔥", "Water": "💧", "Earth": "🪨", "Air": "🌪️" };
-                elementsHtml = `<div style="display: flex; gap: 5px; justify-content: center; margin-top: -10px; z-index: 2; position: relative;">`;
-                card.elements.forEach(el => {
-                    elementsHtml += `<div title="${el}" style="background: rgba(0,0,0,0.8); border: 1px solid #7f8c8d; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 12px;">${iconMap[el] || '✨'}</div>`;
-                });
-                elementsHtml += `</div>`;
-            }
-
-            html += `
-                <div class="card" onclick="game.addDraftCard(${index})" title="${this.getPassiveDescription(card).replace(/"/g, '&quot;')}" style="${borderStyle} ${opacityStyle}">
-                    <div class="card-header">
-                        <div class="card-rarity-icon rarity-${(card.rarity || 'Common').toLowerCase().replace(/\s+/g, '-')}" title="${card.rarity || 'Common'}">${card.rarity === 'Ultra Rare' ? '💎' : card.rarity === 'Super Rare' ? '🔷' : card.rarity === 'Rare' ? '🔶' : card.rarity === 'Legendary' ? '🌟' : '⚪'}</div>
-                        <div class="card-tribe">${card.tribe}</div>
-                        <div class="card-name">${card.name} ${count > 0 ? `(x${count})` : ''}</div>
-                    </div>
-                    <div class="card-image-container">
-                        ${card.image ? `<img src="${card.image}" class="card-image" alt="${card.name}">` : `<div class="card-image-placeholder">Sem Imagem</div>`}
-                    </div>
-                    
-                    ${elementsHtml}
-                    ${this._getPassiveBadgesHtml(card)}
-                    <div class="card-stats">
-                        <div class="stat-box" data-tip="Coragem — define quem ataca primeiro na iniciativa. Usada em ataques de Courage e pela passiva Intimidate."><span class="stat-icon">⚔️</span><span class="stat-label">COR</span><span class="stat-value">${card.courage}</span></div>
-                        <div class="stat-box" data-tip="Poder — usado em ataques físicos de Poder. Quanto maior, mais dano em ataques de Power."><span class="stat-icon">💪</span><span class="stat-label">POD</span><span class="stat-value">${card.power}</span></div>
-                        <div class="stat-box" data-tip="Sabedoria — usado em ataques mágicos de Sabedoria. Também define quem pode conjurar Mugics mais caras."><span class="stat-icon">🧠</span><span class="stat-label">SAB</span><span class="stat-value">${card.wisdom}</span></div>
-                        <div class="stat-box" data-tip="Velocidade — usado em ataques de Speed e na disputa de iniciativa. Swift aumenta este valor."><span class="stat-icon">⚡</span><span class="stat-label">VEL</span><span class="stat-value">${card.speed}</span></div>
-                    </div>
-                    <div class="card-energy-container" style="padding: 6px; background: #c0392b; border-top: 2px solid #7f8c8d; text-align: center; color: white; font-weight: bold;">
-                        ❤️ ${card.energy}
-                        ${(() => {
-                            const mgCnt = card.mugicCounters || 0;
-                            if (mgCnt === 0) return '';
-                            let mHtml = '<div style="display: flex; justify-content: center; gap: 2px; margin-top: 3px;">';
-                            for(let i=0; i<mgCnt; i++) mHtml += '<span style="color: #9b59b6; font-size: 14px; text-shadow: 1px 1px 2px black;">♪</span>';
-                            mHtml += '</div>';
-                            return mHtml;
-                        })()}
-                    </div>
-                </div>
-            `;
-        });
-        container.innerHTML = html;
-        
-        if (draftedContainer) {
-            let draftedHtml = '';
-            this.draftedCards.forEach((c, i) => {
-                draftedHtml += `
-                    <div onclick="game.removeDraftCard(${i})" style="width: 80px; height: 80px; cursor: pointer; border: 2px solid #e74c3c; border-radius: 5px; overflow: hidden; position: relative;">
-                        ${c.image ? `<img src="${c.image}" style="width: 100%; height: 100%; object-fit: cover;">` : `<div style="background:#2c3e50;width:100%;height:100%;"></div>`}
-                        <div style="background: rgba(0,0,0,0.7); color: white; font-size: 10px; position: absolute; bottom: 0; width: 100%; text-align: center; padding: 2px 0;">Remover</div>
-                    </div>
-                `;
-            });
-            draftedContainer.innerHTML = draftedHtml;
-        }
-        
-        const counter = document.getElementById("draft-counter");
-        counter.innerText = `${this.draftedCards.length} / 6 Escolhidas`;
-        
-        const btnStart = document.getElementById("btn-start-battle");
-        if (this.draftedCards.length === 6) {
-            btnStart.classList.remove("hidden");
-            btnStart.style.display = "block";
-        } else {
-            btnStart.classList.add("hidden");
-            btnStart.style.display = "none";
-        }
-        
-        this.updateSynergyPreview();
-        this.updateDeckStats();
+        const container = document.getElementById('draft-cards-container');
+        if (!container) return;
+        container.innerHTML = this.cards
+            .filter(card => this.currentTribeFilter === 'All' || card.tribe === this.currentTribeFilter)
+            .map((card, index) => this._draftCardHtml(card, this.cards.indexOf(card)))
+            .join('');
+        this._syncDraftControls();
     }
 
     applyDraftFilters() {
-        const tribe   = (document.getElementById('df-tribe')    || {}).value || 'All';
-        const stat    = (document.getElementById('df-stat')     || {}).value || '';
+        const tribe   = (document.getElementById('df-tribe')   || {}).value || 'All';
+        const stat    = (document.getElementById('df-stat')    || {}).value || 'none';
         const statVal = parseInt((document.getElementById('df-stat-val') || {}).value) || 0;
-        const passive = (document.getElementById('df-passive')  || {}).value || '';
-        const sort    = (document.getElementById('df-sort')     || {}).value || 'default';
+        const passive = (document.getElementById('df-passive') || {}).value || 'none';
+        const sort    = (document.getElementById('df-sort')    || {}).value || 'default';
 
         let filtered = this.cards.map((card, index) => ({ card, index }));
+        if (tribe !== 'All')                        filtered = filtered.filter(({ card }) => card.tribe === tribe);
+        if (stat !== 'none' && statVal > 0)         filtered = filtered.filter(({ card }) => (card[stat] || 0) >= statVal);
+        if (passive !== 'none')                     filtered = filtered.filter(({ card }) => card.passives && card.passives.some(p => (typeof p === 'string' ? p : p.id) === passive));
+        if (sort !== 'default')                     filtered.sort((a, b) => (b.card[sort] || 0) - (a.card[sort] || 0));
 
-        // Tribe filter
-        if (tribe !== 'All') {
-            filtered = filtered.filter(({ card }) => card.tribe === tribe);
-        }
-
-        // Stat minimum filter
-        if (stat && stat !== 'none' && statVal > 0) {
-            filtered = filtered.filter(({ card }) => (card[stat] || 0) >= statVal);
-        }
-
-        // Passive filter
-        if (passive && passive !== 'none') {
-            filtered = filtered.filter(({ card }) =>
-                card.passives && card.passives.some(p => (typeof p === 'string' ? p : p.id) === passive)
-            );
-        }
-
-        // Sort
-        if (sort !== 'default') {
-            filtered.sort((a, b) => (b.card[sort] || 0) - (a.card[sort] || 0));
-        }
-
-        // Count display
         const countEl = document.getElementById('df-count');
         if (countEl) countEl.textContent = `${filtered.length} de ${this.cards.length} criaturas`;
 
-        // Render only filtered cards
         const container = document.getElementById('draft-cards-container');
         if (!container) return;
-        const iconMap = { Fire: '🔥', Water: '💧', Earth: '🪨', Air: '🌪️' };
-        let html = '';
-        filtered.forEach(({ card, index }) => {
-            const count      = this.draftedCards.filter(c => c.name === card.name).length;
-            const isFull     = this.draftedCards.length >= 6;
-            const isMaxedOut = count >= 2;
-            const disabled   = isFull || isMaxedOut;
-            const borderStyle  = count > 0 ? 'border: 3px solid #2ecc71; box-shadow: 0 0 15px #2ecc71;' : 'border: 2px solid #7f8c8d;';
-            const opacityStyle = disabled ? 'opacity: 0.5; filter: grayscale(80%); cursor: not-allowed;' : 'cursor: pointer;';
-            let elementsHtml = '';
-            if (card.elements && card.elements.length > 0) {
-                elementsHtml = `<div style="display:flex;gap:5px;justify-content:center;margin-top:-10px;z-index:2;position:relative;">`;
-                card.elements.forEach(el => {
-                    elementsHtml += `<div title="${el}" style="background:rgba(0,0,0,0.8);border:1px solid #7f8c8d;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:12px;">${iconMap[el] || '✨'}</div>`;
-                });
-                elementsHtml += `</div>`;
-            }
-            html += `
-                <div class="card" onclick="game.addDraftCard(${index})" title="${this.getPassiveDescription(card).replace(/"/g, '&quot;')}" style="${borderStyle} ${opacityStyle}">
-                    <div class="card-header">
-                        <div class="card-rarity-icon rarity-${(card.rarity||'Common').toLowerCase().replace(/\s+/g,'-')}" title="${card.rarity||'Common'}">${card.rarity==='Ultra Rare'?'💎':card.rarity==='Super Rare'?'🔷':card.rarity==='Rare'?'🔶':card.rarity==='Legendary'?'🌟':'⚪'}</div>
-                        <div class="card-tribe">${card.tribe}</div>
-                        <div class="card-name">${card.name} ${count>0?`(x${count})`:''}</div>
-                    </div>
-                    <div class="card-image-container">${card.image?`<img src="${card.image}" class="card-image" alt="${card.name}">`:`<div class="card-image-placeholder">Sem Imagem</div>`}</div>
-                    ${elementsHtml}
-                    ${this._getPassiveBadgesHtml(card)}
-                    <div class="card-stats">
-                        <div class="stat-box" data-tip="Coragem — define quem ataca primeiro na iniciativa."><span class="stat-icon">⚔️</span><span class="stat-label">COR</span><span class="stat-value">${card.courage}</span></div>
-                        <div class="stat-box" data-tip="Poder — usado em ataques físicos de Poder."><span class="stat-icon">💪</span><span class="stat-label">POD</span><span class="stat-value">${card.power}</span></div>
-                        <div class="stat-box" data-tip="Sabedoria — usado em ataques mágicos."><span class="stat-icon">🧠</span><span class="stat-label">SAB</span><span class="stat-value">${card.wisdom}</span></div>
-                        <div class="stat-box" data-tip="Velocidade — iniciativa e ataques de Speed."><span class="stat-icon">⚡</span><span class="stat-label">VEL</span><span class="stat-value">${card.speed}</span></div>
-                    </div>
-                    <div class="card-energy-container" style="padding:6px;background:#c0392b;border-top:2px solid #7f8c8d;text-align:center;color:white;font-weight:bold;">❤️ ${card.energy}</div>
-                </div>`;
-        });
-        container.innerHTML = html;
-
-        // Sync drafted deck panel, counter, and start button (same as renderDraft)
-        const draftedContainer = document.getElementById('drafted-deck');
-        if (draftedContainer) {
-            let draftedHtml = '';
-            this.draftedCards.forEach((c, i) => {
-                draftedHtml += `
-                    <div onclick="game.removeDraftCard(${i})" style="width:80px;height:80px;cursor:pointer;border:2px solid #e74c3c;border-radius:5px;overflow:hidden;position:relative;">
-                        ${c.image ? `<img src="${c.image}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="background:#2c3e50;width:100%;height:100%;"></div>`}
-                        <div style="background:rgba(0,0,0,0.7);color:white;font-size:10px;position:absolute;bottom:0;width:100%;text-align:center;padding:2px 0;">Remover</div>
-                    </div>`;
-            });
-            draftedContainer.innerHTML = draftedHtml;
-        }
-        const counter = document.getElementById('draft-counter');
-        if (counter) counter.innerText = `${this.draftedCards.length} / 6 Escolhidas`;
-        const btnStart = document.getElementById('btn-start-battle');
-        if (btnStart) {
-            if (this.draftedCards.length === 6) { btnStart.classList.remove('hidden'); btnStart.style.display = 'block'; }
-            else { btnStart.classList.add('hidden'); btnStart.style.display = 'none'; }
-        }
-        this.updateSynergyPreview();
-        this.updateDeckStats();
+        container.innerHTML = filtered.map(({ card, index }) => this._draftCardHtml(card, index)).join('');
+        this._syncDraftControls();
     }
 
     clearDraftFilters() {

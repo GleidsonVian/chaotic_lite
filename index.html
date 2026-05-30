@@ -74,6 +74,17 @@
                     Nenhuma sinergia ativa ainda.
                 </div>
                 
+                <!-- Seletor de dificuldade da IA -->
+                <div id="difficulty-selector" class="hidden" style="margin:14px auto;max-width:420px;display:flex;flex-direction:column;align-items:center;gap:10px;">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#64748b;">Dificuldade da IA</div>
+                    <div style="display:flex;gap:10px;">
+                        <button class="diff-btn" id="diff-easy"   onclick="game.setDifficulty('easy')"   style="background:rgba(16,185,129,0.15);border:2px solid #10b981;color:#10b981;border-radius:10px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;">😴 Fácil</button>
+                        <button class="diff-btn" id="diff-medium" onclick="game.setDifficulty('medium')" style="background:rgba(245,158,11,0.15);border:2px solid #475569;color:#94a3b8;border-radius:10px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;">🧠 Médio</button>
+                        <button class="diff-btn" id="diff-hard"   onclick="game.setDifficulty('hard')"   style="background:rgba(239,68,68,0.15);border:2px solid #475569;color:#94a3b8;border-radius:10px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;">💀 Difícil</button>
+                    </div>
+                    <div id="diff-desc" style="font-size:12px;color:#64748b;text-align:center;min-height:18px;">IA escolhe ataques e alvos aleatoriamente.</div>
+                </div>
+
                 <button id="btn-start-battle" class="btn btn-primary btn-large hidden" onclick="game.advanceDraft()">
                     Equipar Battlegears
                 </button>
@@ -239,6 +250,10 @@
                         <button onclick="game.openDiscardViewer()" class="btn" style="background:#2c3e50; border:1px solid #7f8c8d; color:#bdc3c7;">
                             🗑️ Descartes
                         </button>
+                        <button id="mh-toggle-btn" onclick="game.toggleMatchHistory()" class="btn" style="background:#1e293b; border:1px solid #334155; color:#94a3b8; position:relative;" aria-expanded="false">
+                            📜 Histórico
+                            <span id="mh-badge" style="display:none;position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;font-size:10px;font-weight:700;border-radius:50%;width:18px;height:18px;line-height:18px;text-align:center;">0</span>
+                        </button>
                         <button id="btn-next-turn" class="btn btn-danger">
                             Passar Turno
                         </button>
@@ -247,6 +262,17 @@
                 <div id="combat-log" class="combat-log-box">
                     Batalha pronta para iniciar!
                 </div>
+            </div>
+        </div>
+
+        <!-- Painel Histórico de Partida -->
+        <div id="match-history-panel" class="mh-panel mh-closed">
+            <div class="mh-panel-header">
+                <span>📜 Histórico da Partida</span>
+                <button class="mh-close-btn" onclick="game.toggleMatchHistory()" title="Fechar">✕</button>
+            </div>
+            <div id="mh-list" class="mh-list">
+                <div class="mh-empty">Nenhum combate encerrado ainda.</div>
             </div>
         </div>
 
@@ -363,7 +389,28 @@
     <script src="src/js/data/locations.js"></script>
     <script src="src/js/data/passives.js"></script>
     <script src="/socket.io/socket.io.js"></script>
-    <script src="src/js/main.js"></script>
+    <script src="src/js/engine-core.js"></script>
+    <script src="src/js/engine-helpers.js"></script>
+    <script src="src/js/engine-draft.js"></script>
+    <script src="src/js/engine-ui.js"></script>
+    <script src="src/js/engine-board.js"></script>
+    <script src="src/js/engine-multiplayer.js"></script>
+    <script src="src/js/engine-ai.js"></script>
+    <script src="src/js/engine-burst.js"></script>
+    <script src="src/js/engine-combat.js"></script>
+    <script src="src/js/engine-turn.js"></script>
+    <script>
+document.addEventListener("DOMContentLoaded", () => {
+    const cards = window.cardsDatabase || [];
+    const mugics = window.mugicsDatabase || [];
+    const attacks = window.attacksDatabase || [];
+    const locations = window.locationsDatabase || [];
+    const battlegears = window.battlegearDatabase || [];
+    const game = new GameEngine(cards, mugics, attacks, locations, battlegears);
+    game.init();
+    window.game = game;
+});
+    </script>
 
     <!-- Feed de batalha animado -->
     <div id="battle-feed"></div>

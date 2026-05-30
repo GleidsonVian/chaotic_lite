@@ -40,6 +40,8 @@ body {
     padding: 0;
     box-sizing: border-box;
     overflow-x: hidden;
+    /* Necessário para cortar o painel do histórico quando fechado */
+    overflow-y: auto;
 }
 
 @keyframes gradientBG {
@@ -333,6 +335,216 @@ header h1 {
 }
 
 /* ── Discard Viewer tabs ── */
+/* ── Painel Histórico de Partida ── */
+.mh-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 320px;
+    height: 100vh;
+    background: #0a0f1e;
+    border-left: 1px solid #1e293b;
+    display: flex;
+    flex-direction: column;
+    z-index: 8000;
+    transform: translateX(0);
+    /* Garante que o painel não afete o layout do jogo */
+    pointer-events: auto;
+    visibility: visible;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: -6px 0 24px rgba(0,0,0,0.5);
+}
+.mh-panel.mh-closed {
+    transform: translateX(100%);
+    visibility: hidden;
+    pointer-events: none;
+}
+.mh-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid #1e293b;
+    font-size: 13px;
+    font-weight: 700;
+    color: #f1f5f9;
+    flex-shrink: 0;
+    background: #0f172a;
+}
+.mh-close-btn {
+    background: none;
+    border: none;
+    color: #64748b;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.15s;
+    font-family: inherit;
+}
+.mh-close-btn:hover { color: #f1f5f9; }
+
+.mh-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.mh-empty {
+    color: #475569;
+    font-size: 12px;
+    text-align: center;
+    padding: 24px 0;
+}
+.mh-entry {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+.mh-entry:hover {
+    border-color: #334155;
+    background: rgba(255,255,255,0.06);
+}
+.mh-entry-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 10px;
+    color: #64748b;
+}
+.mh-num {
+    background: #1e293b;
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: #94a3b8;
+    font-weight: 700;
+}
+.mh-location { flex: 1; color: #64748b; }
+.mh-rounds   { color: #475569; }
+
+.mh-fighters {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.mh-fighter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+.mh-fighter.mh-loser { flex-direction: row-reverse; }
+.mh-avatar {
+    width: 36px;
+    height: 36px;
+    object-fit: cover;
+    border-radius: 6px;
+    flex-shrink: 0;
+    border: 2px solid #22c55e;
+}
+.mh-avatar.mh-dead {
+    filter: grayscale(70%) brightness(0.6);
+    border-color: #ef4444;
+}
+.mh-avatar-ph {
+    width: 36px;
+    height: 36px;
+    background: #1e293b;
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+.mh-fighter-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    flex: 1;
+}
+.mh-fighter-name {
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.mh-fighter-detail {
+    font-size: 10px;
+    color: #64748b;
+}
+.mh-fighter.mh-loser .mh-fighter-info { align-items: flex-end; }
+.mh-vs   { font-size: 14px; flex-shrink: 0; }
+.mh-crown { font-size: 14px; flex-shrink: 0; }
+.mh-skull { font-size: 14px; flex-shrink: 0; }
+
+.mh-extras {
+    margin-top: 6px;
+    font-size: 10px;
+    color: #64748b;
+    text-align: center;
+}
+
+/* Detalhes colapsáveis */
+.mh-detail { margin-top: 8px; border-top: 1px solid #1e293b; padding-top: 8px; }
+.mh-detail.hidden { display: none; }
+.mh-detail-inner { display: flex; flex-direction: column; gap: 4px; }
+.mh-detail-section {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: #475569;
+    margin: 4px 0 2px;
+}
+.mh-detail-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #94a3b8;
+    padding: 2px 4px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.02);
+}
+
+/* ── Botão Voltar do Draft ── */
+.back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid #334155;
+    border-radius: 8px;
+    color: #94a3b8;
+    font-size: 13px;
+    font-family: inherit;
+    padding: 8px 16px;
+    margin: 12px 0 16px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.back-btn:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: #64748b;
+    color: #f1f5f9;
+    transform: translateX(-2px);
+}
+
+/* ── Seletor de Dificuldade da IA ── */
+.diff-btn {
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+.diff-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
 .dtab {
     background: rgba(255,255,255,0.06);
     border: 1px solid #334155;
@@ -345,6 +557,65 @@ header h1 {
 }
 .dtab:hover { background: rgba(255,255,255,0.12); color:#fff; }
 .dtab-active { background: #1e3a5f; border-color: #38bdf8; color: #38bdf8; font-weight: 700; }
+
+/* ── Reconnect Overlay ── */
+#reconnect-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#reconnect-overlay.hidden { display: none; }
+
+#reconnect-box {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 16px;
+    padding: 36px 48px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    max-width: 340px;
+}
+
+.reconnect-spinner {
+    width: 44px;
+    height: 44px;
+    border: 4px solid #1e293b;
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.reconnect-msg {
+    color: #cbd5e1;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.reconnect-reload {
+    background: #1e40af;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    padding: 10px 24px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-family: inherit;
+}
+.reconnect-reload:hover { background: #2563eb; }
+.reconnect-reload.hidden { display: none; }
 
 /* ── Combat Summary Modal ── */
 .cs-metric {
