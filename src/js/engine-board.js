@@ -385,7 +385,7 @@ Object.assign(GameEngine.prototype, {
                             displayPower += mod.power || 0;
                             displayWisdom += mod.wisdom || 0;
                             displaySpeed += mod.speed || 0;
-                            bgDisplayHtml = `<div class="board-bg-revealed">Equipado: ${card.battlegear.name}</div>`;
+                            bgDisplayHtml = `<div class="board-bg-revealed" data-tip="${card.battlegear.description || card.battlegear.name}">🗡️ ${card.battlegear.name}</div>`;
                         } else if (card.battlegear && !card.bgRevealed) {
                             if (player === 1) {
                                 bgDisplayHtml = `<div class="board-bg-hidden" title="Oculto para o oponente">[Escondido] ${card.battlegear.name}</div>`;

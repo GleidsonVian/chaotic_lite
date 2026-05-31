@@ -10,12 +10,9 @@ Object.assign(GameEngine.prototype, {
             this.log(`📍 Iniciando combate no local: ${this.activeLocation.name}!`);
         }
 
-        // Revelar Equipamentos se ainda não foram revelados
-        this._revealBattlegear(attacker);
-        this._revealBattlegear(defender);
-        // Efeitos de combatStart dos battlegears
-        this._applyBattlegearCombatStart(attacker);
-        this._applyBattlegearCombatStart(defender);
+        // Battlegears são revelados apenas quando o ataque é CONFIRMADO (confirmAttack)
+        // — não ao selecionar o alvo — para evitar que o jogador "espia" os equipamentos
+        // inimigos cancelando o combate antes de atacar.
 
         // Iniciativa baseada no Local Ativo (ou Speed padrão se não houver local)
         let initStat = "speed";
@@ -420,7 +417,7 @@ Object.assign(GameEngine.prototype, {
                 <div class="card-image-container combat-card-image">
                     ${card.image ? `<img src="${card.image}" style="width: 100%; height: 100%; object-fit: cover;" alt="${card.name}">` : `<div class="card-image-placeholder">Sem Imagem</div>`}
                 </div>
-                ${card.battlegear && card.bgRevealed ? `<div class="combat-card-battlegear" title="${card.battlegear.description || 'Equipamento'}">🗡️ ${card.battlegear.name}</div>` : ''}
+                ${card.battlegear ? `<div class="combat-card-battlegear" title="${card.battlegear.description || 'Equipamento'}">🗡️ ${card.battlegear.name}${!card.bgRevealed ? ' <span style="font-size:9px;opacity:0.6;">(oculto ao oponente)</span>' : ''}</div>` : ''}
                 ${elementsHtml}
 
                 <div class="card-stats" style="grid-template-columns: 1fr 1fr;">
@@ -713,22 +710,11 @@ Object.assign(GameEngine.prototype, {
             else modalContent.appendChild(bannerEl.firstChild);
         }
 
-        let cancelBtn = document.getElementById('cancel-attack-btn');
-        if (!cancelBtn) {
-            cancelBtn = document.createElement('button');
-            cancelBtn.id = 'cancel-attack-btn';
-            cancelBtn.className = 'btn btn-danger btn-cancel-attack';
-            cancelBtn.innerText = 'Cancelar Ataque';
-            cancelBtn.onclick = () => this.cancelAttackModal();
-            cancelBtn.style.marginTop = '20px';
-            modal.querySelector('.attack-modal-content').appendChild(cancelBtn);
-        }
-
-        if (this.activeCombat && this.activeCombat.isFirstAttack && this.activeCombat.initiatingPlayer === 1) {
-            cancelBtn.style.display = 'inline-block';
-        } else {
-            cancelBtn.style.display = 'none';
-        }
+        // Botão de cancelar REMOVIDO intencionalmente:
+        // no TCG original, uma vez que o atacante e alvo são escolhidos, o combate é obrigatório.
+        // "Escolheu, cabou." — remover o cancel evita exploits de espiar battlegears.
+        const existingCancelBtn = document.getElementById('cancel-attack-btn');
+        if (existingCancelBtn) existingCancelBtn.remove();
 
         modal.classList.remove('hidden');
         modal.classList.add('flex-modal');
@@ -751,6 +737,15 @@ Object.assign(GameEngine.prototype, {
         const { attacker, defender, atkR, atkC, defR, defC, attackingPlayer } = this.pendingCombat;
         const hand = attackingPlayer === 1 ? this.p1AttackHand : this.p2AttackHand;
         const atkCard = hand[cardIndex];
+
+        // Revelar battlegears no momento em que o ataque é confirmado (1ª vez apenas)
+        // _revealBattlegear é idempotente — não faz nada se já revelado
+        if (this.activeCombat.isFirstAttack) {
+            this._revealBattlegear(attacker);
+            this._revealBattlegear(defender);
+            this._applyBattlegearCombatStart(attacker);
+            this._applyBattlegearCombatStart(defender);
+        }
 
         const usedCard = hand.splice(cardIndex, 1)[0];
         const discard = attackingPlayer === 1 ? this.p1AttackDiscard : this.p2AttackDiscard;
