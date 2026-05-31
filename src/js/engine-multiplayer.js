@@ -98,8 +98,74 @@ Object.assign(GameEngine.prototype, {
         }
 
         if (cfg.showAction && actBtn) {
-            actBtn.style.display = 'inline-block';
-            actBtn.textContent   = cfg.actionLabel || 'Ir para o Draft →';
+            // Mostra seletor de modo quando oponente conectar
+            const modeSection = document.getElementById('lobby-mode-section');
+            if (modeSection) modeSection.style.display = 'block';
+            // Botão começa desabilitado — precisa de acordo de modo
+            actBtn.style.display   = 'inline-block';
+            actBtn.textContent     = cfg.actionLabel || 'Ir para o Draft →';
+            actBtn.disabled        = true;
+            actBtn.style.opacity   = '0.4';
+            actBtn.style.cursor    = 'not-allowed';
+        }
+    },
+
+    // ─── Sistema de votação de modo ──────────────────────────────────────────
+
+    _voteMode(mode) {
+        this._myVote = mode;
+        this.setGameMode(mode); // aplica localmente
+
+        // Destaca botão escolhido
+        ['6v6','3v3','1v1'].forEach(m => {
+            const btn = document.getElementById(`lm-${m}`);
+            if (!btn) return;
+            const active = m === mode;
+            btn.style.borderColor = active ? '#f59e0b' : '#334155';
+            btn.style.color       = active ? '#f59e0b' : '#64748b';
+            btn.style.background  = active ? 'rgba(245,158,11,0.18)' : 'transparent';
+        });
+
+        // Envia voto ao oponente
+        this.sendAction('vote_mode', { mode });
+        this._updateVoteStatus();
+    },
+
+    _updateVoteStatus() {
+        const statusEl = document.getElementById('lobby-vote-status');
+        const actBtn   = document.getElementById('lobby-action-btn');
+        if (!statusEl) return;
+
+        const myVote   = this._myVote;
+        const oppVote  = this._oppVote;
+        const myLabel  = { '6v6':'⚔️ 6v6', '3v3':'⚡ 3v3', '1v1':'🥊 1v1' };
+
+        if (!myVote) {
+            statusEl.style.color = '#64748b';
+            statusEl.textContent = 'Escolha um modo acima...';
+        } else if (!oppVote) {
+            statusEl.style.color = '#f59e0b';
+            statusEl.textContent = `Você: ${myLabel[myVote]} — aguardando oponente...`;
+        } else if (myVote === oppVote) {
+            // ACORDO!
+            statusEl.style.color = '#22c55e';
+            statusEl.innerHTML = `✅ Acordo! Ambos escolheram <strong>${myLabel[myVote]}</strong>`;
+            if (actBtn) {
+                actBtn.disabled      = false;
+                actBtn.style.opacity = '1';
+                actBtn.style.cursor  = 'pointer';
+                actBtn.textContent   = `Iniciar Draft (${myVote}) →`;
+            }
+        } else {
+            // DESACORDO
+            statusEl.style.color = '#ef4444';
+            statusEl.textContent = `⚠️ Você: ${myLabel[myVote]} · Oponente: ${myLabel[oppVote]} — precisam concordar`;
+            if (actBtn) {
+                actBtn.disabled      = true;
+                actBtn.style.opacity = '0.4';
+                actBtn.style.cursor  = 'not-allowed';
+                actBtn.textContent   = 'Aguardando acordo...';
+            }
         }
     },
 
@@ -336,6 +402,15 @@ Object.assign(GameEngine.prototype, {
 
     executeRemoteAction(data) {
         switch (data.type) {
+            case 'vote_mode':
+                this._oppVote = data.mode;
+                // Se oponente votou no mesmo modo que eu, aplica
+                if (this._myVote && this._oppVote === this._myVote) {
+                    this.setGameMode(data.mode);
+                }
+                this._updateVoteStatus();
+                break;
+
             case 'opponent_draft':
                 this.remoteDraft = data.draft;
                 this.log('📦 Draft do oponente recebido!');
@@ -433,7 +508,7 @@ Object.assign(GameEngine.prototype, {
             });
             const p1Bg = rd.battlegears;
 
-            const p1Formation = [{r:2,c:0},{r:1,c:0},{r:1,c:1},{r:0,c:0},{r:0,c:1},{r:0,c:2}];
+            const p1Formation = this._getFormation();
             p1Cards.forEach((card, i) => {
                 if (i < p1Formation.length) {
                     const pos = p1Formation[i];
@@ -443,7 +518,7 @@ Object.assign(GameEngine.prototype, {
             });
             this.playerMugics = JSON.parse(JSON.stringify(this.draftedMugics));
 
-            const p2Formation = [{r:2,c:0},{r:1,c:0},{r:1,c:1},{r:0,c:0},{r:0,c:1},{r:0,c:2}];
+            const p2Formation = this._getFormation();
             this.draftedCards.forEach((baseCard, i) => {
                 if (i < p2Formation.length) {
                     const pos = p2Formation[i];

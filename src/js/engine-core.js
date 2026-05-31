@@ -41,17 +41,13 @@ class GameEngine {
         this.logElement = document.getElementById("combat-log");
         this.nextTurnBtn = document.getElementById("btn-next-turn");
 
-        // Tabuleiro 6v6: Pirâmide Invertida com 3 Linhas (Frente=3, Meio=2, Trás=1)
-        this.boardP1 = [
-            [null, null, null], // Linha 0 (Frente)
-            [null, null],       // Linha 1 (Meio)
-            [null]              // Linha 2 (Trás)
-        ];
-        this.boardP2 = [
-            [null, null, null], // Linha 0 (Frente)
-            [null, null],       // Linha 1 (Meio)
-            [null]              // Linha 2 (Trás)
-        ];
+        // Modo de jogo
+        this.gameMode = '6v6'; // '6v6' | '3v3'
+
+        // Tabuleiro — shape depende do modo, inicializado em _initBoards()
+        this.boardP1 = [];
+        this.boardP2 = [];
+        this._initBoards();
 
         // IA
         this.aiDifficulty  = 'easy'; // 'easy' | 'medium' | 'hard'
@@ -61,11 +57,67 @@ class GameEngine {
         this.matchHistory = []; // array de combates encerrados
 
         // Multiplayer
+        this._myVote  = null; // voto de modo no lobby ('6v6','3v3','1v1')
+        this._oppVote = null;
         this.multiplayerMode = false;
         this.myPlayerNumber = 1;
         this.socket = null;
         this.remoteDraft = null;      // draft recebido do outro jogador
         this.myDraftReady = false;    // se eu já cliquei em Start Battle
+    }
+
+    // ─── Helpers de modo de jogo ─────────────────────────────────────────────
+
+    /** Inicializa os tabuleiros com o shape correto para o modo atual */
+    _initBoards() {
+        if (this.gameMode === '1v1') {
+            // 1v1: 1 linha, 1 slot por lado
+            this.boardP1 = [[null]];
+            this.boardP2 = [[null]];
+        } else if (this.gameMode === '3v3') {
+            // 3v3: 2 linhas (Frente:2, Trás:1) = 3 total por lado
+            this.boardP1 = [[null, null], [null]];
+            this.boardP2 = [[null, null], [null]];
+        } else {
+            // 6v6: 3 linhas (Frente:3, Meio:2, Trás:1) = 6 total por lado
+            this.boardP1 = [[null, null, null], [null, null], [null]];
+            this.boardP2 = [[null, null, null], [null, null], [null]];
+        }
+    }
+
+    /** Limite máximo de criaturas/mugics/battlegears no draft */
+    _getDraftLimit() {
+        if (this.gameMode === '1v1') return 1;
+        if (this.gameMode === '3v3') return 3;
+        return 6;
+    }
+
+    /** Formação de posicionamento no tabuleiro */
+    _getFormation() {
+        if (this.gameMode === '1v1') return [{r:0,c:0}];
+        if (this.gameMode === '3v3') return [{r:1,c:0}, {r:0,c:0}, {r:0,c:1}];
+        return [
+            {r:2,c:0},
+            {r:1,c:0}, {r:1,c:1},
+            {r:0,c:0}, {r:0,c:1}, {r:0,c:2}
+        ];
+    }
+
+    setGameMode(mode) {
+        this.gameMode = mode;
+        this._initBoards();
+
+        ['6v6','3v3','1v1'].forEach(m => {
+            const btn = document.getElementById(`mode-${m}`);
+            if (!btn) return;
+            const active = m === mode;
+            btn.style.borderColor = active ? '#f59e0b' : '#334155';
+            btn.style.color       = active ? '#f59e0b' : '#64748b';
+            btn.style.background  = active ? 'rgba(245,158,11,0.18)' : 'transparent';
+        });
+
+        const teamsBtn = document.querySelector('button[onclick="game.openTeamSuggestions()"]');
+        if (teamsBtn) teamsBtn.textContent = `✨ Ver Duelos Sugeridos (${mode})`;
     }
 
     init() {

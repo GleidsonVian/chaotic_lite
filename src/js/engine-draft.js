@@ -8,7 +8,8 @@ Object.assign(GameEngine.prototype, {
         const grid  = document.getElementById('teams-grid');
         if (!modal || !grid) return;
 
-        const teams = window.teamsDatabase || [];
+        const allTeams = window.teamsDatabase || [];
+        const teams = allTeams.filter(t => !t.mode || t.mode === this.gameMode);
         const tribeColors = {
             OverWorld: '#0ea5e9', UnderWorld: '#dc2626',
             Mipedian: '#d97706', Danian: '#9333ea', Misto: '#64748b'
@@ -90,10 +91,11 @@ Object.assign(GameEngine.prototype, {
         // Limpa seleção atual
         this.draftedCards = [];
 
-        // Adiciona as criaturas do time (máximo 6, só as que existem no banco)
+        // Adiciona as criaturas do time (máximo = limite do modo, só as que existem no banco)
+        const teamLimit = this._getDraftLimit();
         let added = 0;
         for (const name of team.creatures) {
-            if (added >= 6) break;
+            if (added >= teamLimit) break;
             const card = this.cards.find(c => c.name === name);
             if (card) { this.draftedCards.push(card); added++; }
         }
@@ -325,7 +327,7 @@ Object.assign(GameEngine.prototype, {
         const card = this.cards[index];
         const count = this.draftedCards.filter(c => c.name === card.name).length;
 
-        if (this.draftedCards.length < 6 && count < 2) {
+        if (this.draftedCards.length < this._getDraftLimit() && count < 2) {
             this.draftedCards.push(card);
             this._refreshDraftView();
         }
@@ -715,20 +717,15 @@ Object.assign(GameEngine.prototype, {
     autoSelectMugics() {
         this.draftedMugics = [];
         const recs = this._recommendMugics();
-        // Pega as top 6, priorizando variedade de effectType
-        const seenTypes = new Set();
+        const mgLim = this._getDraftLimit();
         for (const { mg } of recs) {
-            if (this.draftedMugics.length >= 6) break;
-            // Evita 3+ do mesmo tipo
+            if (this.draftedMugics.length >= mgLim) break;
             const typeCount = this.draftedMugics.filter(m => m.effectType === mg.effectType).length;
-            if (typeCount < 2) {
-                this.draftedMugics.push(mg);
-                seenTypes.add(mg.effectType);
-            }
+            if (typeCount < 2) this.draftedMugics.push(mg);
         }
         // Completa se ainda faltou (caso raro)
         for (const { mg } of recs) {
-            if (this.draftedMugics.length >= 6) break;
+            if (this.draftedMugics.length >= mgLim) break;
             if (!this.draftedMugics.includes(mg)) this.draftedMugics.push(mg);
         }
         this.renderMugicDraft();
@@ -742,15 +739,16 @@ Object.assign(GameEngine.prototype, {
         const topScore = recs[0]?.score || 1;
         const pool   = recs.filter(r => r.score >= topScore * 0.5).slice(0, 12);
         const picked = [];
-        while (picked.length < 6 && pool.length > 0) {
+        while (picked.length < this._getDraftLimit() && pool.length > 0) {
             const i   = Math.floor(Math.random() * pool.length);
             const { mg } = pool.splice(i, 1)[0];
             const typeCount = picked.filter(m => m.effectType === mg.effectType).length;
             if (typeCount < 2) picked.push(mg);
         }
         // Completa se necessário
+        const lim = this._getDraftLimit();
         for (const { mg } of recs) {
-            if (picked.length >= 6) break;
+            if (picked.length >= lim) break;
             if (!picked.includes(mg)) picked.push(mg);
         }
         this.draftedMugics = picked;
@@ -808,6 +806,10 @@ Object.assign(GameEngine.prototype, {
         const typeSelect = document.getElementById("mg-type-filter");
         if(tribeSelect) tribeSelect.value = 'All';
         if(typeSelect) typeSelect.value = 'All';
+
+        // Atualiza título com limite correto
+        const titleEl = document.getElementById('mugic-draft-title');
+        if (titleEl) titleEl.textContent = `Componha seu Arsenal Mugic (${this._getDraftLimit()} Cartas)`;
 
         // Pré-seleciona automaticamente se a mão ainda está vazia
         if (this.draftedMugics.length === 0) this.autoSelectMugics();
@@ -907,7 +909,7 @@ Object.assign(GameEngine.prototype, {
         mgListContainer.innerHTML = mgHtml;
 
         let draftedHtml = '';
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < this._getDraftLimit(); i++) {
             if (i < this.draftedMugics.length) {
                 const mg = this.draftedMugics[i];
                 const dtc = mg.tribe === 'OverWorld' ? '#3498db' : mg.tribe === 'UnderWorld' ? '#e74c3c' : mg.tribe === 'Mipedian' ? '#f39c12' : mg.tribe === 'Danian' ? '#27ae60' : '#9b59b6';
@@ -935,9 +937,10 @@ Object.assign(GameEngine.prototype, {
         }
         draftedContainer.innerHTML = draftedHtml;
 
-        counter.innerText = `${this.draftedMugics.length} / 6 Escolhidas`;
+        const mgLimit = this._getDraftLimit();
+        counter.innerText = `${this.draftedMugics.length} / ${mgLimit} Escolhidas`;
 
-        if (this.draftedMugics.length === 6) {
+        if (this.draftedMugics.length === mgLimit) {
             finishBtn.classList.remove('hidden');
             finishBtn.style.display = 'block';
         } else {
@@ -947,8 +950,9 @@ Object.assign(GameEngine.prototype, {
     },
 
     draftMugic(index) {
-        if (this.draftedMugics.length >= 6) {
-            this.showAlert("🎶 Mão Completa", "Você já escolheu 6 Mugics!");
+        const mgLim = this._getDraftLimit();
+        if (this.draftedMugics.length >= mgLim) {
+            this.showAlert("🎶 Mão Completa", `Você já escolheu ${mgLim} Mugics!`);
             return;
         }
         this.draftedMugics.push(this.mugics[index]);
@@ -991,12 +995,12 @@ Object.assign(GameEngine.prototype, {
 
         // Jogador P1 recebe as 6 Mugics draftadas na mão
         this.playerMugics = [];
-        if (this.draftedMugics && this.draftedMugics.length === 6) {
+        if (this.draftedMugics && this.draftedMugics.length === this._getDraftLimit()) {
             this.playerMugics = JSON.parse(JSON.stringify(this.draftedMugics));
         } else {
             // Fallback caso as mugics não existam (ex: pulou o draft no dev mode)
             if (this.mugics && this.mugics.length > 0) {
-                for (let i = 0; i < 6; i++) {
+                for (let i = 0; i < this._getDraftLimit(); i++) {
                     const randIndex = Math.floor(Math.random() * this.mugics.length);
                     this.playerMugics.push(JSON.parse(JSON.stringify(this.mugics[randIndex])));
                 }
@@ -1045,24 +1049,23 @@ Object.assign(GameEngine.prototype, {
             return cards.sort((a,b) => (b.power + b.courage + b.energy) - (a.power + a.courage + a.energy));
         };
 
+        const aiLimit = this._getDraftLimit();
+
         if (diff === 'easy') {
-            // Fácil: aleatório (respeita tribo se escolhida)
             const pool = aiTribe ? this.cards.filter(c => c.tribe === aiTribe) : this.cards;
-            const src  = pool.length >= 6 ? pool : this.cards;
-            for (let i = 0; i < 6; i++) {
+            const src  = pool.length >= aiLimit ? pool : this.cards;
+            for (let i = 0; i < aiLimit; i++) {
                 aiCards.push(JSON.parse(JSON.stringify(src[Math.floor(Math.random() * src.length)])));
             }
         } else if (diff === 'medium') {
-            // Médio: top 50% por stats (respeita tribo se escolhida)
-            const pool   = _tribePool(aiTribe);
-            const topHalf = pool.slice(0, Math.max(6, Math.ceil(pool.length * 0.5)));
-            for (let i = 0; i < 6; i++) {
+            const pool    = _tribePool(aiTribe);
+            const topHalf = pool.slice(0, Math.max(aiLimit, Math.ceil(pool.length * 0.5)));
+            for (let i = 0; i < aiLimit; i++) {
                 aiCards.push(JSON.parse(JSON.stringify(topHalf[Math.floor(Math.random() * topHalf.length)])));
             }
         } else {
-            // Difícil: top 6 da tribo escolhida (auto = counter-pick)
             const pool = _tribePool(aiTribe);
-            for (let i = 0; i < 6; i++) {
+            for (let i = 0; i < aiLimit; i++) {
                 aiCards.push(JSON.parse(JSON.stringify(pool[i] || pool[Math.floor(Math.random() * pool.length)])));
             }
         }
@@ -1093,26 +1096,21 @@ Object.assign(GameEngine.prototype, {
         // Mugics: fácil=aleatório, médio=heals+dano, difícil=melhor combo
         if (this.mugics && this.mugics.length > 0) {
             if (diff === 'easy') {
-                for (let i = 0; i < 6; i++) {
+                for (let i = 0; i < aiLimit; i++) {
                     aiMugics.push(JSON.parse(JSON.stringify(
                         this.mugics[Math.floor(Math.random() * this.mugics.length)]
                     )));
                 }
             } else {
                 const aiTribe = aiCards[0]?.tribe || 'Generic';
-                // Prefere mugics da tribo da IA ou Generic
                 const tribePool = this.mugics.filter(m => m.tribe === aiTribe || m.tribe === 'Generic');
-                const usePool   = tribePool.length >= 4 ? tribePool : this.mugics;
-
-                // Prioridade: heal > damage > buff > resto
-                const priority = { heal: 4, damage: 3, buff_all_stats: 2, buff_combat_stats: 2 };
-                const sorted   = [...usePool].sort((a, b) =>
+                const usePool   = tribePool.length >= aiLimit ? tribePool : this.mugics;
+                const priority  = { heal: 4, damage: 3, buff_all_stats: 2, buff_combat_stats: 2 };
+                const sorted    = [...usePool].sort((a, b) =>
                     (priority[b.effectType] || 0) - (priority[a.effectType] || 0)
                 );
-                for (let i = 0; i < 6; i++) {
-                    aiMugics.push(JSON.parse(JSON.stringify(
-                        sorted[i % sorted.length]
-                    )));
+                for (let i = 0; i < aiLimit; i++) {
+                    aiMugics.push(JSON.parse(JSON.stringify(sorted[i % sorted.length])));
                 }
             }
         }

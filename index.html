@@ -16,7 +16,25 @@
         <div class="setup-logo">⚔️ Chaotic Lite</div>
 
         <div class="setup-card">
-            <div class="setup-section-label">Modo de Jogo</div>
+            <!-- Modo 3v3 / 6v6 -->
+            <div class="setup-section-label">Formato</div>
+            <div style="display:flex;gap:10px;justify-content:center;">
+                <button id="mode-6v6" onclick="game.setGameMode('6v6')"
+                    style="flex:1;padding:10px;border-radius:10px;border:2px solid #f59e0b;color:#f59e0b;background:rgba(245,158,11,0.18);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">
+                    ⚔️ 6v6 <span style="font-size:10px;font-weight:400;display:block;opacity:0.7;">Padrão</span>
+                </button>
+                <button id="mode-3v3" onclick="game.setGameMode('3v3')"
+                    style="flex:1;padding:10px;border-radius:10px;border:2px solid #334155;color:#64748b;background:transparent;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">
+                    ⚡ 3v3 <span style="font-size:10px;font-weight:400;display:block;opacity:0.7;">Rápido</span>
+                </button>
+                <button id="mode-1v1" onclick="game.setGameMode('1v1')"
+                    style="flex:1;padding:10px;border-radius:10px;border:2px solid #334155;color:#64748b;background:transparent;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">
+                    🥊 1v1 <span style="font-size:10px;font-weight:400;display:block;opacity:0.7;">Duelo</span>
+                </button>
+            </div>
+
+            <div class="setup-divider"></div>
+            <div class="setup-section-label">Dificuldade da IA</div>
 
             <!-- Dificuldade -->
             <div class="setup-diff-row">
@@ -104,6 +122,32 @@
                 <div style="display:flex; gap:8px; align-items:center;">
                     <input id="lobby-link-input" readonly style="flex:1; background:transparent; border:none; color:#94a3b8; font-size:12px; font-family:monospace; outline:none; min-width:0;" value="">
                     <button id="lobby-copy-btn" onclick="game._copyLobbyLink()" style="background:#1e40af; border:none; border-radius:6px; color:white; font-size:11px; font-weight:700; padding:6px 12px; cursor:pointer; white-space:nowrap; font-family:inherit;">📋 Copiar</button>
+                </div>
+            </div>
+
+            <!-- Seletor de Modo — votação entre os jogadores -->
+            <div id="lobby-mode-section" style="display:none; width:100%;">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:10px;text-align:center;">Escolha o Modo de Jogo</div>
+
+                <!-- Botões de modo -->
+                <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
+                    <button class="lobby-mode-btn" id="lm-6v6" onclick="game._voteMode('6v6')"
+                        style="flex:1;padding:10px 8px;border-radius:10px;border:2px solid #f59e0b;color:#f59e0b;background:rgba(245,158,11,0.15);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.15s;">
+                        ⚔️ 6v6<br><span style="font-size:9px;font-weight:400;opacity:.7;">Padrão</span>
+                    </button>
+                    <button class="lobby-mode-btn" id="lm-3v3" onclick="game._voteMode('3v3')"
+                        style="flex:1;padding:10px 8px;border-radius:10px;border:2px solid #334155;color:#64748b;background:transparent;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.15s;">
+                        ⚡ 3v3<br><span style="font-size:9px;font-weight:400;opacity:.7;">Rápido</span>
+                    </button>
+                    <button class="lobby-mode-btn" id="lm-1v1" onclick="game._voteMode('1v1')"
+                        style="flex:1;padding:10px 8px;border-radius:10px;border:2px solid #334155;color:#64748b;background:transparent;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.15s;">
+                        🥊 1v1<br><span style="font-size:9px;font-weight:400;opacity:.7;">Duelo</span>
+                    </button>
+                </div>
+
+                <!-- Status dos votos -->
+                <div id="lobby-vote-status" style="background:rgba(255,255,255,0.03);border:1px solid #1e293b;border-radius:10px;padding:10px 14px;font-size:12px;text-align:center;color:#64748b;margin-bottom:12px;">
+                    Escolha um modo acima...
                 </div>
             </div>
 
@@ -277,7 +321,7 @@
                 
             <!-- Estágio 3 do Draft: Mugics -->
             <div id="mugic-draft-screen" style="display: none; text-align: center;">
-                <h2 style="color: #9b59b6; margin-bottom: 10px;">Componha seu Arsenal Mugic (6 Cartas)</h2>
+                <h2 id="mugic-draft-title" style="color: #9b59b6; margin-bottom: 10px;">Componha seu Arsenal Mugic</h2>
                 <h3 id="mg-draft-counter" style="color: #2ecc71; margin-bottom: 10px;">0 / 6 Escolhidas</h3>
                 <p style="color: #bdc3c7; font-size: 14px; margin-bottom: 20px;">Você só pode escolher Mugics das Tribos do seu exército, ou Genéricas.</p>
                 
@@ -558,6 +602,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     <!-- Tooltip global de stat — fica no body, nunca é cortado por overflow -->
     <div id="stat-global-tooltip"></div>
+
+    <!-- Tooltip rico de mugic -->
+    <div id="mugic-tooltip" style="
+        position:fixed; z-index:99998; pointer-events:none;
+        background:#0f172a; border:1px solid #334155; border-radius:14px;
+        padding:0; width:240px; opacity:0; visibility:hidden;
+        transition:opacity 0.15s, visibility 0.15s;
+        box-shadow:0 20px 40px rgba(0,0,0,0.8);
+        overflow:hidden;
+    "></div>
     <script>
     (function () {
         const tip = document.getElementById('stat-global-tooltip');

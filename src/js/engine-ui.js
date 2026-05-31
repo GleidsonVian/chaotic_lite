@@ -1,6 +1,117 @@
 // engine-ui.js
 Object.assign(GameEngine.prototype, {
 
+    // ── Tooltip Rico de Mugic ────────────────────────────────────────────────
+
+    /** Conselho contextual baseado no tipo de efeito */
+    _mugicAdvice(mg) {
+        const adviceMap = {
+            heal:                    '💡 Use quando sua criatura tiver pouca vida.',
+            conditional_heal:        '💡 Use quando a condição for favorável (HP baixo ou elemento ativo).',
+            heal_and_grant_element:  '💡 Cura e concede elemento — use para ativar bônus elemental.',
+            heal_and_reduce_fire:    '💡 Ideal contra criaturas Fire para curar e reduzir dano.',
+            energy_steal:            '💡 Rouba vida do inimigo — poderoso se inimigo tiver muita vida.',
+            energy_transfer:         '💡 Transfere vida — use para equilibrar HP entre suas criaturas.',
+            damage:                  '💡 Use para finalizar criaturas com pouca vida.',
+            buff_all_stats:          '💡 Booste todos os stats — ideal no início do combate.',
+            buff_combat_stats:       '💡 Aumenta stats de combate — use antes de um ataque decisivo.',
+            damage_reduction_aura:   '💡 Reduz dano elemental — use antes de receber ataque elemental.',
+            negate_mugic:            '🚫 Nega uma mugic inimiga — use no burst quando oponente jogar.',
+            grant_element:           '💡 Concede elemento — ativa bônus de ataques elementais.',
+            debuff_all_stats:        '💡 Enfraquece o inimigo — use antes de um strike.',
+            destroy_battlegear:      '💡 Destrói o equipamento inimigo — remove bônus passivos.',
+            remove_abilities:        '💡 Remove habilidades — neutraliza criaturas com passivas fortes.',
+            shuffle_attack_deck:     '💡 Embaralha o deck — use para dar aleatoriedade ao oponente.',
+            swap_combat_stats:       '💡 Troca stats — útil se seu stat for maior que o do inimigo.',
+        };
+        return adviceMap[mg.effectType] || '💡 Avalie o momento certo para jogar.';
+    },
+
+    _showMugicTooltip(event, index) {
+        const mg = this.playerMugics[index];
+        if (!mg) return;
+
+        const tip = document.getElementById('mugic-tooltip');
+        if (!tip) return;
+
+        const tribeColors = {
+            OverWorld: '#0ea5e9', UnderWorld: '#dc2626',
+            Mipedian: '#d97706', Danian: '#9333ea',
+            "M'arrillian": '#0f766e', Generic: '#64748b'
+        };
+        const tribeColor = tribeColors[mg.tribe] || '#64748b';
+        const rarityIcon = mg.rarity === 'Ultra Rare' ? '💎' : mg.rarity === 'Super Rare' ? '🔷' : mg.rarity === 'Rare' ? '🔶' : mg.rarity === 'Uncommon' ? '🔹' : '⚪';
+
+        // Contexto de combate — mostra custo real se houver penalidade de tribo
+        const armyTribes = new Set((this.draftedCards || []).map(c => c.tribe));
+        const penalty    = mg.tribe !== 'Generic' && !armyTribes.has(mg.tribe);
+
+        const countersAvailable = (() => {
+            let total = 0;
+            const board = this.boardP1 || [];
+            for (const row of board) for (const card of row) if (card) total += (card.mugicCounters || 0);
+            return total;
+        })();
+        const realCost  = penalty ? mg.cost + 1 : mg.cost;
+        const canPlay   = countersAvailable >= realCost;
+
+        tip.innerHTML = `
+            <!-- Header com cor da tribo -->
+            <div style="padding:12px 14px 10px; background:linear-gradient(135deg, ${tribeColor}22, transparent); border-bottom:1px solid ${tribeColor}33;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
+                    <span style="font-size:15px;font-weight:900;color:#f1f5f9;line-height:1.2;">${mg.name}</span>
+                    <span style="font-size:16px;" title="${mg.rarity||'Common'}">${rarityIcon}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="background:${tribeColor}33;border:1px solid ${tribeColor}66;color:${tribeColor};font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;">${mg.tribe}</span>
+                    <span style="font-size:11px;color:#9b59b6;font-weight:700;margin-left:auto;">
+                        Custo: ${realCost} ♪ ${penalty ? '<span style="color:#ef4444;font-size:10px;">(+1 penalidade)</span>' : ''}
+                    </span>
+                </div>
+            </div>
+
+            <!-- Descrição completa -->
+            <div style="padding:10px 14px;border-bottom:1px solid #1e293b;">
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#475569;margin-bottom:5px;">Efeito</div>
+                <div style="font-size:12px;color:#e2e8f0;line-height:1.5;">${mg.description || '—'}</div>
+            </div>
+
+            <!-- Quando usar -->
+            <div style="padding:10px 14px;border-bottom:1px solid #1e293b;">
+                <div style="font-size:11px;color:#94a3b8;line-height:1.4;">${this._mugicAdvice(mg)}</div>
+            </div>
+
+            <!-- Status de uso -->
+            <div style="padding:8px 14px;display:flex;align-items:center;gap:6px;">
+                <span style="font-size:11px;color:${canPlay?'#22c55e':'#ef4444'};font-weight:600;">
+                    ${canPlay ? `✅ Pode jogar (${countersAvailable} ♪ disponíveis)` : `❌ Counters insuficientes (${countersAvailable}/${realCost})`}
+                </span>
+            </div>`;
+
+        tip.style.visibility = 'visible';
+        tip.style.opacity    = '1';
+        this._moveMugicTooltip(event);
+    },
+
+    _moveMugicTooltip(event) {
+        const tip = document.getElementById('mugic-tooltip');
+        if (!tip || tip.style.opacity === '0') return;
+        const margin = 14;
+        const tw = tip.offsetWidth  || 240;
+        const th = tip.offsetHeight || 220;
+        let x = event.clientX + margin;
+        let y = event.clientY - th - margin;
+        if (x + tw > window.innerWidth  - 8) x = event.clientX - tw - margin;
+        if (y < 8)                           y = event.clientY + margin;
+        tip.style.left = x + 'px';
+        tip.style.top  = y + 'px';
+    },
+
+    _hideMugicTooltip() {
+        const tip = document.getElementById('mugic-tooltip');
+        if (tip) { tip.style.opacity = '0'; tip.style.visibility = 'hidden'; }
+    },
+
     // ── Animação de Ataque (salto do atacante) ───────────────────────────────
 
     /**

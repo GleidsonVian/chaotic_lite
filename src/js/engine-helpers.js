@@ -152,8 +152,9 @@ Object.assign(GameEngine.prototype, {
 
     /** HTML de uma carta no draft (card grid) */
     _draftCardHtml(card, index) {
+        const limit      = this._getDraftLimit();
         const count      = this.draftedCards.filter(c => c.name === card.name).length;
-        const disabled   = this.draftedCards.length >= 6 || count >= 2;
+        const disabled   = this.draftedCards.length >= limit || count >= 2;
         const borderStyle  = count > 0 ? 'border:3px solid #2ecc71;box-shadow:0 0 15px #2ecc71;' : 'border:2px solid #7f8c8d;';
         const opacityStyle = disabled ? 'opacity:0.5;filter:grayscale(80%);cursor:not-allowed;' : 'cursor:pointer;';
         const rarity = card.rarity || 'Common';
@@ -214,8 +215,9 @@ Object.assign(GameEngine.prototype, {
                 </div>`).join('');
         }
         const counter = document.getElementById('draft-counter');
-        if (counter) counter.innerText = `${this.draftedCards.length} / 6 Escolhidas`;
-        const full = this.draftedCards.length === 6;
+        const limit = this._getDraftLimit();
+        if (counter) counter.innerText = `${this.draftedCards.length} / ${limit} Escolhidas`;
+        const full = this.draftedCards.length === limit;
         const btnStart = document.getElementById('btn-start-battle');
         if (btnStart) {
             btnStart.classList.toggle('hidden', !full);
@@ -282,16 +284,8 @@ Object.assign(GameEngine.prototype, {
 
     setupBoard(aiCards, aiBg) {
         // Posicionamento: [[2,0], [1,0], [1,1], [0,0], [0,1], [0,2]] (Retaguarda, Meio, Frente)
-        const p1Formation = [
-            {r: 2, c: 0},
-            {r: 1, c: 0}, {r: 1, c: 1},
-            {r: 0, c: 0}, {r: 0, c: 1}, {r: 0, c: 2}
-        ];
-        const p2Formation = [
-            {r: 2, c: 0},
-            {r: 1, c: 0}, {r: 1, c: 1},
-            {r: 0, c: 0}, {r: 0, c: 1}, {r: 0, c: 2}
-        ];
+        const p1Formation = this._getFormation();
+        const p2Formation = this._getFormation();
 
         let p1Index = 0;
         p1Formation.forEach(pos => {

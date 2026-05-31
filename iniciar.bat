@@ -47,6 +47,10 @@ if not exist "node_modules\express" (
 )
 echo.
 
+echo Encerrando instancias antigas (se houver)...
+taskkill /f /im node.exe >nul 2>&1
+timeout /t 1 /nobreak >nul
+
 echo Iniciando servidor Node.js...
 start "SERVIDOR" cmd /k "cd /d "%~dp0" && node server.js"
 timeout /t 2 /nobreak >nul

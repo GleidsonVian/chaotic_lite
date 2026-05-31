@@ -127,6 +127,19 @@ server.listen(PORT, () => {
     console.log('║   Chaotic Lite — Servidor Multiplayer  ║');
     console.log('╠════════════════════════════════════════╣');
     console.log(`║  Local:  http://localhost:${PORT}          ║`);
-    // Tenta detectar ngrok após 2s (tempo para o ngrok iniciar)
     setTimeout(detectNgrok, 2000);
+});
+
+// Trata erro se a porta já estiver em uso
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error('');
+        console.error(`[ERRO] A porta ${PORT} já está em uso!`);
+        console.error('Execute encerrar.bat primeiro e tente novamente.');
+        console.error('');
+        process.exit(1);
+    } else {
+        console.error('[ERRO] Falha ao iniciar servidor:', err.message);
+        process.exit(1);
+    }
 });

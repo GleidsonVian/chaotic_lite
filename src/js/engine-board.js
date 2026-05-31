@@ -22,7 +22,12 @@ Object.assign(GameEngine.prototype, {
                 : `background: linear-gradient(180deg, rgba(0,0,0,0.2), rgba(0,0,0,0.45)), ${tribeColor};`;
 
             html += `
-                <div class="mugic-card${selClass}" onclick="game.handleMugicClick(${index})" title="${mugic.name}: ${mugic.description.replace(/"/g,'&quot;')}">
+                <div class="mugic-card${selClass}"
+                     onclick="game.handleMugicClick(${index})"
+                     data-mugic-index="${index}"
+                     onmouseenter="game._showMugicTooltip(event, ${index})"
+                     onmouseleave="game._hideMugicTooltip()"
+                     onmousemove="game._moveMugicTooltip(event)">
                     <div class="mugic-header">
                         <div class="mugic-name">${mugic.name}</div>
                         <div class="mugic-cost">${mugic.cost} ♪</div>
@@ -112,10 +117,10 @@ Object.assign(GameEngine.prototype, {
     },
 
     handleCardClick(player, r, c) {
-        // Em multiplayer, verifica se é o turno deste jogador
-        if (!this.isMyTurn()) return;
         const myPlayer = this.multiplayerMode ? this.myPlayerNumber : 1;
 
+        // SELECT_MUGIC_CASTER precisa ser tratado ANTES da guarda de turno:
+        // o jogador pode selecionar o caster durante o burst no turno do oponente.
         if (this.gameState === 'SELECT_MUGIC_CASTER') {
             if (player === myPlayer && (myPlayer === 1 ? this.boardP1[r][c] : this.boardP2[r][c])) {
                 this.resolveMugicCaster(r, c);
@@ -124,6 +129,9 @@ Object.assign(GameEngine.prototype, {
             }
             return;
         }
+
+        // Para qualquer outra ação, verifica se é o turno deste jogador
+        if (!this.isMyTurn()) return;
 
         if (this.gameState === 'SELECT_MUGIC_TARGET') {
             this.resolveMugic(player, r, c);
@@ -300,7 +308,11 @@ Object.assign(GameEngine.prototype, {
             let html = `<div class="board-columns" style="background: ${tex.bg}; background-size: ${tex.size}; border: ${tex.border}; border-radius: 12px; padding: 15px; box-shadow: inset 0 0 30px rgba(0,0,0,0.7); flex: 1;">`;
             // Para P1 (Esquerda), as linhas (agora colunas verticais) da esq para dir são: Trás(2), Meio(1), Frente(0)
             // Para P2 (Direita), as linhas da esq para dir são: Frente(0), Meio(1), Trás(2)
-            const rows = player === 1 ? [2, 1, 0] : [0, 1, 2];
+            // Rows dinâmico — funciona para qualquer tamanho de tabuleiro (3v3 ou 6v6)
+            const numRows = board.length;
+            const rows = player === 1
+                ? Array.from({length: numRows}, (_, i) => numRows - 1 - i)
+                : Array.from({length: numRows}, (_, i) => i);
 
             rows.forEach(r => {
                 html += `<div class="board-col">`;
