@@ -91,8 +91,15 @@ Object.assign(GameEngine.prototype, {
 
         if (!this.activeLocation) {
             container.innerHTML = '';
+            document.body.style.background = '';
             return;
         }
+
+        const locImgName = this.activeLocation.image || `src/assets/locations/${this.activeLocation.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}.jpg`;
+        document.body.style.backgroundImage = `linear-gradient(rgba(15, 23, 42, 0.7), rgba(15, 23, 42, 0.85)), url('${locImgName}')`;
+        document.body.style.backgroundSize = 'cover';
+        document.body.style.backgroundPosition = 'center';
+        document.body.style.backgroundAttachment = 'fixed';
 
         container.innerHTML = `
             <div style="display: inline-block; background: #34495e; padding: 10px 20px; border-radius: 8px; border: 2px solid #3498db; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-top: 10px; min-width: 300px;">
@@ -230,13 +237,67 @@ Object.assign(GameEngine.prototype, {
         if (this.gameState === 'SELECT_TARGET') msgEstado = 'ESCOLHA O ALVO INIMIGO!';
         if (this.gameState === 'SELECT_MUGIC_CASTER') msgEstado = 'QUEM VAI PAGAR O CUSTO DA MÁGICA? CLIQUE EM UMA DE SUAS CRIATURAS. <button onclick="game.cancelMugicCaster()" style="margin-left: 10px; padding: 5px 10px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-family: Inter, sans-serif;">Cancelar Escolha</button>';
 
+        const getMajorityTribe = (board) => {
+            const counts = {};
+            for (let r=0; r<board.length; r++) {
+                for (let c=0; c<board[r].length; c++) {
+                    const card = board[r][c];
+                    if (card && card.tribe) {
+                        counts[card.tribe] = (counts[card.tribe] || 0) + 1;
+                    }
+                }
+            }
+            let maxCount = 0;
+            let majorityTribe = 'Generic';
+            for (const t in counts) {
+                if (counts[t] > maxCount) { maxCount = counts[t]; majorityTribe = t; }
+            }
+            return majorityTribe;
+        };
+
+        const getTribeTexture = (tribe) => {
+            const formatName = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const imgPath = `src/assets/tribes/${formatName(tribe)}.jpg`;
+            
+            const textures = {
+                'OverWorld': {
+                    bg: `linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.4)), url('${imgPath}') center/cover no-repeat, radial-gradient(circle at 50% 50%, rgba(52, 152, 219, 0.25) 0%, transparent 60%), repeating-radial-gradient(circle, rgba(52,152,219,0.1) 0px, rgba(52,152,219,0.1) 20px, transparent 20px, transparent 40px), rgba(15, 23, 42, 0.6)`,
+                    size: 'auto', border: '1px solid rgba(52, 152, 219, 0.4)'
+                },
+                'UnderWorld': {
+                    bg: `linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.4)), url('${imgPath}') center/cover no-repeat, linear-gradient(to top, rgba(231, 76, 60, 0.3) 0%, transparent 80%), repeating-linear-gradient(45deg, rgba(231,76,60,0.15) 0, rgba(231,76,60,0.15) 15px, transparent 15px, transparent 30px), rgba(15, 23, 42, 0.6)`,
+                    size: 'auto', border: '1px solid rgba(231, 76, 60, 0.4)'
+                },
+                'Mipedian': {
+                    bg: `linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.4)), url('${imgPath}') center/cover no-repeat, radial-gradient(circle, rgba(243, 156, 18, 0.3) 2px, transparent 3px), rgba(15, 23, 42, 0.6)`,
+                    size: 'auto, auto, 20px 20px, auto', border: '1px solid rgba(243, 156, 18, 0.4)'
+                },
+                'Danian': {
+                    bg: `linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.4)), url('${imgPath}') center/cover no-repeat, repeating-linear-gradient(60deg, rgba(39,174,96,0.15) 0, rgba(39,174,96,0.15) 2px, transparent 2px, transparent 30px), repeating-linear-gradient(-60deg, rgba(39,174,96,0.15) 0, rgba(39,174,96,0.15) 2px, transparent 2px, transparent 30px), rgba(15, 23, 42, 0.6)`,
+                    size: 'auto', border: '1px solid rgba(39, 174, 96, 0.4)'
+                },
+                "M'arrillian": {
+                    bg: `linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.4)), url('${imgPath}') center/cover no-repeat, repeating-radial-gradient(circle at 50% 100%, rgba(142, 68, 173, 0.25) 0, transparent 20px, rgba(142, 68, 173, 0.15) 40px), rgba(15, 23, 42, 0.6)`,
+                    size: 'auto', border: '1px solid rgba(142, 68, 173, 0.4)'
+                },
+                'Generic': {
+                    bg: `linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.4)), url('${imgPath}') center/cover no-repeat, repeating-linear-gradient(0deg, rgba(189,195,199,0.08) 0px, rgba(189,195,199,0.08) 2px, transparent 2px, transparent 30px), repeating-linear-gradient(90deg, rgba(189,195,199,0.08) 0px, rgba(189,195,199,0.08) 2px, transparent 2px, transparent 30px), rgba(15, 23, 42, 0.6)`,
+                    size: 'auto', border: '1px solid rgba(189, 195, 199, 0.3)'
+                }
+            };
+            return textures[tribe] || textures['Generic'];
+        };
+
         this.boardElement.innerHTML = `<div class="board-header">
             <h3 style="color: var(--accent); margin-bottom: 5px;">Turno Atual: Jogador ${this.turn}</h3>
             <p style="color: ${this.gameState === 'SELECT_TARGET' || this.gameState === 'SELECT_MUGIC_CASTER' ? 'var(--danger)' : 'var(--text-muted)'}; font-weight: bold; font-size: 1.1em;">${msgEstado}</p>
         </div>`;
 
         const renderPlayerBoard = (board, player) => {
-            let html = `<div class="board-columns">`;
+            const tribe = getMajorityTribe(board);
+            const tex = getTribeTexture(tribe);
+            
+            let html = `<div class="board-columns" style="background: ${tex.bg}; background-size: ${tex.size}; border: ${tex.border}; border-radius: 12px; padding: 15px; box-shadow: inset 0 0 30px rgba(0,0,0,0.7); flex: 1;">`;
             // Para P1 (Esquerda), as linhas (agora colunas verticais) da esq para dir são: Trás(2), Meio(1), Frente(0)
             // Para P2 (Direita), as linhas da esq para dir são: Frente(0), Meio(1), Trás(2)
             const rows = player === 1 ? [2, 1, 0] : [0, 1, 2];
@@ -408,8 +469,8 @@ Object.assign(GameEngine.prototype, {
                     } else {
                         // Slot vazio
                         let emptyCursor = '';
-                        let emptyBorder = 'border: 2px dashed #bdc3c7;';
-                        let emptyBg = '';
+                        let emptyBorder = 'border: 2px dashed rgba(255, 255, 255, 0.3);';
+                        let emptyBg = 'background-color: rgba(0, 0, 0, 0.4);';
 
                         // Destacar slot vazio se puder mover para ele
                         const myPl = this.multiplayerMode ? this.myPlayerNumber : 1;
@@ -417,7 +478,7 @@ Object.assign(GameEngine.prototype, {
                             if (this.isValidMove(this.selectedAttacker.r, this.selectedAttacker.c, r, c)) {
                                 emptyCursor = 'cursor: pointer;';
                                 emptyBorder = 'border: 2px dashed #2ecc71;'; // Verde para movimento
-                                emptyBg = 'background-color: rgba(46, 204, 113, 0.15);';
+                                emptyBg = 'background-color: rgba(46, 204, 113, 0.25);';
                             }
                         }
 
@@ -430,12 +491,11 @@ Object.assign(GameEngine.prototype, {
             return html;
         };
 
-        let boardsHtml = '<div class="boards-wrapper">';
+        let boardsHtml = `<div class="boards-wrapper" style="background: transparent; align-items: stretch; gap: 20px;">`;
         boardsHtml += renderPlayerBoard(this.boardP1, 1);
         boardsHtml += '<div class="board-divider"></div>'; // Divisória vertical
         boardsHtml += renderPlayerBoard(this.boardP2, 2);
         boardsHtml += '</div>';
-
         this.boardElement.innerHTML += boardsHtml;
 
         // Dispara gotículas de sangue se houver uma criatura marcada como destruída
