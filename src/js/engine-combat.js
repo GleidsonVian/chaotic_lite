@@ -1250,6 +1250,33 @@ Object.assign(GameEngine.prototype, {
             healHistory:   [...this.activeCombat.healHistory],
         });
 
+        // ── Empate simultâneo: ambas as criaturas chegaram a 0 ao mesmo tempo ──
+        // (acontece com Reckless: atacante se fere e mata o defensor no mesmo turno)
+        if (p1Card.energy <= 0 && p2Card.energy <= 0) {
+            const combatSnapshot = _snapshot();
+            this._discardCreature(p1Card);
+            this._discardCreature(p2Card);
+            this.boardP1[p1R][p1C] = null;
+            this.boardP2[p2R][p2C] = null;
+            this.activeCombat = null;
+            this.selectedAttacker = null;
+
+            if (this.locationDeck.length > 0) {
+                this.activeLocation = this.locationDeck.pop();
+                this.log(`📍 Novo Local Revelado para a próxima batalha: ${this.activeLocation.name}!`);
+                this.renderLocation();
+                this.showLocationToast(this.activeLocation, true);
+            }
+
+            this.renderBoard();
+            this.log("💥 Empate no combate! Ambas as criaturas foram destruídas simultaneamente!");
+            // Registra como empate (sem vencedor claro — usa p1 como "sobrevivente" por convenção)
+            this._recordMatchHistory(combatSnapshot, combatSnapshot.p1Card, combatSnapshot.p2Card);
+            if (this.checkWinCondition()) return;
+            setTimeout(() => this.nextTurn(), 1500);
+            return;
+        }
+
         if (p1Card.energy <= 0) {
             const combatSnapshot = _snapshot();
             this._discardCreature(p1Card);
