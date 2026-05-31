@@ -11,6 +11,58 @@
     <link rel="stylesheet" href="src/css/style.css">
 </head>
 <body>
+    <!-- ── Tela de Setup (Dificuldade) ── -->
+    <div id="setup-screen" class="setup-screen">
+        <div class="setup-logo">⚔️ Chaotic Lite</div>
+
+        <div class="setup-card">
+            <div class="setup-section-label">Modo de Jogo</div>
+
+            <!-- Dificuldade -->
+            <div class="setup-diff-row">
+                <button class="diff-btn setup-diff-btn" id="diff-easy"
+                    onclick="game.setDifficulty('easy')">
+                    <span class="setup-diff-emoji">😴</span>
+                    <span class="setup-diff-name">Fácil</span>
+                    <span class="setup-diff-sub">IA aleatória</span>
+                </button>
+                <button class="diff-btn setup-diff-btn" id="diff-medium"
+                    onclick="game.setDifficulty('medium')">
+                    <span class="setup-diff-emoji">🧠</span>
+                    <span class="setup-diff-name">Médio</span>
+                    <span class="setup-diff-sub">IA estratégica</span>
+                </button>
+                <button class="diff-btn setup-diff-btn" id="diff-hard"
+                    onclick="game.setDifficulty('hard')">
+                    <span class="setup-diff-emoji">💀</span>
+                    <span class="setup-diff-name">Difícil</span>
+                    <span class="setup-diff-sub">IA counter-pick</span>
+                </button>
+            </div>
+            <div id="diff-desc" class="setup-desc">IA escolhe ataques e alvos aleatoriamente.</div>
+
+            <div class="setup-divider"></div>
+
+            <!-- Tribo da IA -->
+            <div class="setup-section-label">Tribo da IA</div>
+            <div class="setup-tribe-row">
+                <button class="tribe-btn setup-tribe-btn" id="ai-tribe-auto"       onclick="game.setAiTribe('auto')">🎲 Auto</button>
+                <button class="tribe-btn setup-tribe-btn" id="ai-tribe-OverWorld"  onclick="game.setAiTribe('OverWorld')">🔵 OverWorld</button>
+                <button class="tribe-btn setup-tribe-btn" id="ai-tribe-UnderWorld" onclick="game.setAiTribe('UnderWorld')">🔴 UnderWorld</button>
+                <button class="tribe-btn setup-tribe-btn" id="ai-tribe-Mipedian"   onclick="game.setAiTribe('Mipedian')">🟠 Mipedian</button>
+                <button class="tribe-btn setup-tribe-btn" id="ai-tribe-Danian"     onclick="game.setAiTribe('Danian')">🟣 Danian</button>
+            </div>
+            <div id="ai-tribe-desc" class="setup-desc">IA escolhe a tribo conforme a dificuldade.</div>
+
+            <div class="setup-divider"></div>
+
+            <!-- Botões de ação -->
+            <button onclick="game.startDraft()" class="btn btn-primary" style="width:100%;font-size:16px;padding:14px;border-radius:12px;margin-top:4px;">
+                ⚔️ Iniciar Draft →
+            </button>
+        </div>
+    </div>
+
     <!-- Tela de Lobby Multiplayer -->
     <div id="lobby-screen" style="display:none; position:fixed; inset:0; background:linear-gradient(-45deg,#0f172a,#1e1b4b,#020617,#172554); background-size:400% 400%; animation:gradientBG 15s ease infinite; z-index:50000; display:none; flex-direction:column; align-items:center; justify-content:center; gap:28px; padding:24px;">
 
@@ -82,6 +134,11 @@
             <div class="draft-header">
                 <h2 id="draft-title" class="text-accent mb-medium">Fase de Escolha (Draft)</h2>
                 <p id="draft-instructions" class="text-muted mb-large">Selecione exatamente 6 criaturas para formar o seu exército!</p>
+
+                <!-- Botão Times Sugeridos -->
+                <button onclick="game.openTeamSuggestions()" class="btn" style="background:rgba(139,92,246,0.15);border:1px solid #8b5cf6;color:#c4b5fd;margin-bottom:14px;font-size:13px;padding:8px 20px;border-radius:10px;letter-spacing:.03em;">
+                    ✨ Ver Times Sugeridos
+                </button>
                 
                 <div style="margin-bottom: 15px;">
                     <button onclick="game.filterTribe('All')" style="padding: 5px 10px; cursor: pointer; background: #34495e; color: white; border: 1px solid #7f8c8d; border-radius: 4px;">Todas</button>
@@ -136,33 +193,6 @@
                     Nenhuma sinergia ativa ainda.
                 </div>
                 
-                <!-- Seletor de dificuldade da IA -->
-                <div id="difficulty-selector" class="hidden" style="margin:14px auto;max-width:480px;display:flex;flex-direction:column;align-items:center;gap:12px;">
-
-                    <!-- Dificuldade -->
-                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#64748b;">Dificuldade da IA</div>
-                    <div style="display:flex;gap:10px;">
-                        <button class="diff-btn" id="diff-easy"   onclick="game.setDifficulty('easy')"   style="background:rgba(16,185,129,0.15);border:2px solid #10b981;color:#10b981;border-radius:10px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;">😴 Fácil</button>
-                        <button class="diff-btn" id="diff-medium" onclick="game.setDifficulty('medium')" style="background:rgba(245,158,11,0.15);border:2px solid #475569;color:#94a3b8;border-radius:10px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;">🧠 Médio</button>
-                        <button class="diff-btn" id="diff-hard"   onclick="game.setDifficulty('hard')"   style="background:rgba(239,68,68,0.15);border:2px solid #475569;color:#94a3b8;border-radius:10px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;">💀 Difícil</button>
-                    </div>
-                    <div id="diff-desc" style="font-size:12px;color:#64748b;text-align:center;min-height:18px;">IA escolhe ataques e alvos aleatoriamente.</div>
-
-                    <!-- Separador -->
-                    <div style="width:100%;height:1px;background:#1e293b;"></div>
-
-                    <!-- Tribo da IA -->
-                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#64748b;">Tribo da IA</div>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
-                        <button class="tribe-btn" id="ai-tribe-auto"       onclick="game.setAiTribe('auto')"       style="border:2px solid #3b82f6;color:#3b82f6;background:rgba(59,130,246,0.15);">🎲 Automático</button>
-                        <button class="tribe-btn" id="ai-tribe-OverWorld"  onclick="game.setAiTribe('OverWorld')"  style="border:2px solid #475569;color:#94a3b8;background:transparent;">🔵 OverWorld</button>
-                        <button class="tribe-btn" id="ai-tribe-UnderWorld" onclick="game.setAiTribe('UnderWorld')" style="border:2px solid #475569;color:#94a3b8;background:transparent;">🔴 UnderWorld</button>
-                        <button class="tribe-btn" id="ai-tribe-Mipedian"   onclick="game.setAiTribe('Mipedian')"   style="border:2px solid #475569;color:#94a3b8;background:transparent;">🟠 Mipedian</button>
-                        <button class="tribe-btn" id="ai-tribe-Danian"     onclick="game.setAiTribe('Danian')"     style="border:2px solid #475569;color:#94a3b8;background:transparent;">🟣 Danian</button>
-                    </div>
-                    <div id="ai-tribe-desc" style="font-size:12px;color:#64748b;text-align:center;min-height:18px;">IA escolhe a tribo conforme a dificuldade.</div>
-                </div>
-
                 <button id="btn-start-battle" class="btn btn-primary btn-large hidden" onclick="game.advanceDraft()">
                     Equipar Battlegears
                 </button>
@@ -388,6 +418,9 @@
                     <!-- Ações na pilha aparecem aqui -->
                 </div>
                 
+                <!-- Preview de dano do ataque inimigo -->
+                <div id="burst-damage-preview" style="display:none; margin-bottom:14px;"></div>
+
                 <h3 id="burst-prompt" style="color: #3498db; margin-bottom: 15px;">Jogador X, deseja responder?</h3>
                 
                 <div style="display: flex; gap: 20px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
@@ -472,6 +505,7 @@
     <script src="src/js/data/battlegear.js"></script>
     <script src="src/js/data/locations.js"></script>
     <script src="src/js/data/passives.js"></script>
+    <script src="src/js/data/teams.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="src/js/engine-core.js"></script>
     <script src="src/js/engine-helpers.js"></script>
@@ -498,6 +532,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     <!-- Feed de batalha animado -->
     <div id="battle-feed"></div>
+
+    <!-- Modal: Times Sugeridos -->
+    <div id="teams-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this)game.closeTeamSuggestions()">
+        <div style="background:#0f172a;border:1px solid #334155;border-radius:20px;max-width:860px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,0.9);">
+            <div style="padding:22px 28px 14px;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:#0f172a;z-index:1;">
+                <div>
+                    <div style="font-size:18px;font-weight:800;color:#f1f5f9;">✨ Times Sugeridos</div>
+                    <div style="font-size:12px;color:#64748b;margin-top:2px;">Clique em um time para pré-selecionar as criaturas</div>
+                </div>
+                <button onclick="game.closeTeamSuggestions()" style="background:transparent;border:none;color:#64748b;font-size:22px;cursor:pointer;padding:4px 8px;border-radius:6px;font-family:inherit;">✕</button>
+            </div>
+            <div id="teams-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:14px;padding:20px 24px;">
+                <!-- preenchido por JS -->
+            </div>
+        </div>
+    </div>
 
     <!-- Container de modais minimizados -->
     <div id="minimized-modals" style="

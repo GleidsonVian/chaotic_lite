@@ -1,6 +1,163 @@
 // engine-draft.js
 Object.assign(GameEngine.prototype, {
 
+    // ─── Times Sugeridos ─────────────────────────────────────────────────────────
+
+    openTeamSuggestions() {
+        const modal = document.getElementById('teams-modal');
+        const grid  = document.getElementById('teams-grid');
+        if (!modal || !grid) return;
+
+        const teams = window.teamsDatabase || [];
+        const tribeColors = {
+            OverWorld: '#0ea5e9', UnderWorld: '#dc2626',
+            Mipedian: '#d97706', Danian: '#9333ea', Misto: '#64748b'
+        };
+
+        grid.innerHTML = teams.map(team => {
+            // Monta prévia das criaturas: busca no banco e mostra imagem ou placeholder
+            const creatureCards = team.creatures.map(name => {
+                const card = this.cards.find(c => c.name === name);
+                if (!card) return '';
+                return `<div title="${card.name}" style="
+                    width:44px;height:44px;border-radius:6px;overflow:hidden;
+                    border:1px solid ${team.color}44;flex-shrink:0;
+                ">
+                    ${card.image && !card.image.includes('placeholder')
+                        ? `<img src="${card.image}" style="width:100%;height:100%;object-fit:cover;">`
+                        : `<div style="width:100%;height:100%;background:${team.color}22;display:flex;align-items:center;justify-content:center;font-size:10px;color:${team.color};">${card.name.slice(0,3)}</div>`
+                    }
+                </div>`;
+            }).join('');
+
+            // Conta quantas criaturas do time existem no banco
+            const available = team.creatures.filter(n => this.cards.find(c => c.name === n)).length;
+            const incomplete = available < team.creatures.length;
+
+            const strengthsHtml = team.strengths.map(s =>
+                `<span style="background:rgba(34,197,94,0.1);border:1px solid #22c55e44;color:#4ade80;border-radius:4px;padding:1px 6px;font-size:10px;">✅ ${s}</span>`
+            ).join('');
+            const weaknessesHtml = team.weaknesses.map(w =>
+                `<span style="background:rgba(239,68,68,0.1);border:1px solid #ef444444;color:#f87171;border-radius:4px;padding:1px 6px;font-size:10px;">⚠️ ${w}</span>`
+            ).join('');
+
+            return `
+            <div onclick="game.applyTeamSuggestion('${team.id}')" style="
+                background:rgba(255,255,255,0.03);border:1px solid ${team.color}44;
+                border-radius:14px;padding:16px;cursor:pointer;
+                transition:all 0.2s;position:relative;overflow:hidden;
+            " onmouseover="this.style.background='rgba(255,255,255,0.07)';this.style.borderColor='${team.color}aa'"
+               onmouseout="this.style.background='rgba(255,255,255,0.03)';this.style.borderColor='${team.color}44'">
+
+                <!-- Header -->
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                    <span style="font-size:26px;">${team.emoji}</span>
+                    <div>
+                        <div style="font-weight:800;font-size:14px;color:#f1f5f9;">${team.name}</div>
+                        <div style="font-size:11px;color:${team.color};font-weight:600;">${team.tribe} · ${team.style}</div>
+                    </div>
+                    ${incomplete ? `<span style="margin-left:auto;font-size:10px;color:#64748b;background:#1e293b;border-radius:4px;padding:2px 6px;">${available}/6 disponíveis</span>` : ''}
+                </div>
+
+                <!-- Descrição -->
+                <p style="font-size:12px;color:#94a3b8;line-height:1.5;margin-bottom:10px;">${team.description}</p>
+
+                <!-- Criaturas -->
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${creatureCards}</div>
+
+                <!-- Forças e fraquezas -->
+                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">${strengthsHtml}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;">${weaknessesHtml}</div>
+
+                <!-- Barra de cor decorativa -->
+                <div style="position:absolute;top:0;left:0;width:3px;height:100%;background:${team.color};border-radius:14px 0 0 14px;"></div>
+            </div>`;
+        }).join('');
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex-modal');
+    },
+
+    closeTeamSuggestions() {
+        const modal = document.getElementById('teams-modal');
+        if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex-modal'); }
+    },
+
+    applyTeamSuggestion(teamId) {
+        const team = (window.teamsDatabase || []).find(t => t.id === teamId);
+        if (!team) return;
+
+        // Limpa seleção atual
+        this.draftedCards = [];
+
+        // Adiciona as criaturas do time (máximo 6, só as que existem no banco)
+        let added = 0;
+        for (const name of team.creatures) {
+            if (added >= 6) break;
+            const card = this.cards.find(c => c.name === name);
+            if (card) { this.draftedCards.push(card); added++; }
+        }
+
+        this.closeTeamSuggestions();
+        this._syncDraftControls();
+        this.renderDraft();
+        this.log(`✨ Time "${team.name}" pré-selecionado! Você pode trocar criaturas antes de continuar.`);
+    },
+
+    // ─── Score de Afinidade Dinâmica ─────────────────────────────────────────────
+
+    /**
+     * Calcula o score de afinidade (0–100) de uma carta candidata
+     * com o time atual (this.draftedCards).
+     */
+    _calcCardAffinity(card) {
+        if (this.draftedCards.length === 0) return 50; // neutro sem time
+
+        let score = 0;
+        const team = this.draftedCards;
+        const n    = team.length;
+
+        // ── 1. Sinergia tribal (até 30 pts) ──────────────────────────────────
+        const tribeCounts = {};
+        team.forEach(c => { tribeCounts[c.tribe] = (tribeCounts[c.tribe] || 0) + 1; });
+        const dominantCount = tribeCounts[card.tribe] || 0;
+        score += Math.min(30, dominantCount * 10); // +10 por aliado da mesma tribo
+
+        // ── 2. Cobertura de stats fraco (até 20 pts) ─────────────────────────
+        const stats = ['courage','power','wisdom','speed','energy'];
+        const avgStats = {};
+        stats.forEach(s => { avgStats[s] = team.reduce((a,c) => a+(c[s]||0), 0) / n; });
+        // Pontos por cobrir o stat mais fraco do time
+        const weakestStat = stats.reduce((a,b) => avgStats[a] < avgStats[b] ? a : b);
+        const cardWeakest = card[weakestStat] || 0;
+        if (cardWeakest > avgStats[weakestStat]) score += Math.min(20, (cardWeakest - avgStats[weakestStat]) / 5);
+
+        // ── 3. Cobertura de elementos (até 20 pts) ────────────────────────────
+        const teamElements = new Set(team.flatMap(c => c.elements || []));
+        const newElements  = (card.elements || []).filter(e => !teamElements.has(e));
+        score += Math.min(20, newElements.length * 10); // +10 por elemento novo
+
+        // ── 4. Passivas complementares (até 20 pts) ───────────────────────────
+        const teamPassives = new Set(team.flatMap(c => (c.passives||[]).map(p => typeof p==='string'?p:p.id)));
+        const cardPassives = (card.passives || []).map(p => typeof p==='string'?p:p.id);
+        const valuablePassives = ['intimidate','swift','strike','tough','berserk'];
+        const usefulNew = cardPassives.filter(p => valuablePassives.includes(p) && !teamPassives.has(p));
+        score += Math.min(20, usefulNew.length * 10);
+
+        // ── 5. Diversidade de vida (até 10 pts) ──────────────────────────────
+        const avgEnergy = avgStats.energy;
+        if (Math.abs((card.energy||0) - avgEnergy) > 10) score += 10; // diversidade é boa
+
+        return Math.round(Math.max(0, Math.min(100, score)));
+    },
+
+    /** Cor da barra de afinidade baseada no score */
+    _affinityColor(score) {
+        if (score >= 70) return '#22c55e';
+        if (score >= 40) return '#f59e0b';
+        return '#ef4444';
+    },
+
     // ─── Filtro de tribo (botões antigos de tribo, mantido por compatibilidade) ─
     filterTribe(tribe) {
         this.currentTribeFilter = tribe;
@@ -513,6 +670,94 @@ Object.assign(GameEngine.prototype, {
         this.renderBattlegearDraft();
     },
 
+    // ── Score de afinidade de Mugic ───────────────────────────────────────────
+
+    /** Pontua 0–100 o quanto uma mugic sinergiza com o time atual */
+    _calcMugicAffinity(mg) {
+        let score = 0;
+        const armyTribes = new Set(this.draftedCards.map(c => c.tribe));
+
+        // Tribo compatível sem penalidade (+30)
+        if (mg.tribe === 'Generic' || armyTribes.has(mg.tribe)) score += 30;
+
+        // Efeito de cura — bom se o time tem pouca vida média (+20)
+        const avgEnergy = this.draftedCards.reduce((s,c)=>s+(c.energy||0),0) / (this.draftedCards.length||1);
+        if (['heal','conditional_heal','heal_and_grant_element','heal_and_reduce_fire','energy_steal','energy_transfer'].includes(mg.effectType)) {
+            score += avgEnergy < 50 ? 25 : 15;
+        }
+
+        // Dano — bom sempre (+15)
+        if (mg.effectType === 'damage') score += 15;
+
+        // Buff de stats — bom se o time tem stats baixos (+15)
+        const avgPower = this.draftedCards.reduce((s,c)=>s+(c.power||0),0) / (this.draftedCards.length||1);
+        if (['buff_all_stats','buff_combat_stats','damage_reduction_aura'].includes(mg.effectType) && avgPower < 60) score += 15;
+
+        // Custo baixo — mais fácil de usar (+10 se custo ≤ 1)
+        if ((mg.cost||0) <= 1) score += 10;
+        else if ((mg.cost||0) >= 3) score -= 10;
+
+        // Diversidade — não repetir o mesmo tipo na mão já escolhida (+10)
+        const alreadyHasType = this.draftedMugics.some(m => m.effectType === mg.effectType);
+        if (!alreadyHasType) score += 10;
+
+        return Math.max(0, Math.min(100, Math.round(score)));
+    },
+
+    /** Retorna as 6 mugics mais recomendadas para o time atual */
+    _recommendMugics() {
+        return [...this.mugics]
+            .map((mg, idx) => ({ mg, idx, score: this._calcMugicAffinity(mg) }))
+            .sort((a, b) => b.score - a.score);
+    },
+
+    /** Pré-seleciona automaticamente as 6 mugics mais sinérgicas */
+    autoSelectMugics() {
+        this.draftedMugics = [];
+        const recs = this._recommendMugics();
+        // Pega as top 6, priorizando variedade de effectType
+        const seenTypes = new Set();
+        for (const { mg } of recs) {
+            if (this.draftedMugics.length >= 6) break;
+            // Evita 3+ do mesmo tipo
+            const typeCount = this.draftedMugics.filter(m => m.effectType === mg.effectType).length;
+            if (typeCount < 2) {
+                this.draftedMugics.push(mg);
+                seenTypes.add(mg.effectType);
+            }
+        }
+        // Completa se ainda faltou (caso raro)
+        for (const { mg } of recs) {
+            if (this.draftedMugics.length >= 6) break;
+            if (!this.draftedMugics.includes(mg)) this.draftedMugics.push(mg);
+        }
+        this.renderMugicDraft();
+        this.log('🎶 Mugics recomendadas pré-selecionadas!');
+    },
+
+    /** Randomiza entre as mugics de boa afinidade (≥ 50%) */
+    randomizeMugics() {
+        this.draftedMugics = [];
+        const recs   = this._recommendMugics();
+        const topScore = recs[0]?.score || 1;
+        const pool   = recs.filter(r => r.score >= topScore * 0.5).slice(0, 12);
+        const picked = [];
+        while (picked.length < 6 && pool.length > 0) {
+            const i   = Math.floor(Math.random() * pool.length);
+            const { mg } = pool.splice(i, 1)[0];
+            const typeCount = picked.filter(m => m.effectType === mg.effectType).length;
+            if (typeCount < 2) picked.push(mg);
+        }
+        // Completa se necessário
+        for (const { mg } of recs) {
+            if (picked.length >= 6) break;
+            if (!picked.includes(mg)) picked.push(mg);
+        }
+        this.draftedMugics = picked;
+        this.renderMugicDraft();
+        this.log('🎲 Mugics randomizadas entre as mais sinérgicas!');
+    },
+
     advanceToMugicDraft() {
         this.draftState = 'MUGICS';
         document.getElementById("battlegear-draft-screen").style.display = "none";
@@ -528,6 +773,34 @@ Object.assign(GameEngine.prototype, {
             backBtn.onclick = () => this.backToBattlegearDraft();
             mgScreen.insertBefore(backBtn, mgScreen.firstChild);
         }
+
+        // Injeta botões de Recomendar e Randomizar (só uma vez)
+        if (!mgScreen.querySelector('#btn-recommend-mg')) {
+            const bar = document.createElement('div');
+            bar.style.cssText = 'display:flex;gap:10px;justify-content:center;margin:0 0 14px;';
+
+            const recBtn = document.createElement('button');
+            recBtn.id = 'btn-recommend-mg';
+            recBtn.className = 'btn';
+            recBtn.innerHTML = '⭐ Recomendar Mugics';
+            recBtn.style.cssText = 'background:rgba(245,158,11,0.15);border:1px solid #f59e0b;color:#fcd34d;font-size:13px;padding:7px 16px;border-radius:8px;cursor:pointer;';
+            recBtn.onclick = () => this.autoSelectMugics();
+
+            const rndBtn = document.createElement('button');
+            rndBtn.id = 'btn-randomize-mg';
+            rndBtn.className = 'btn';
+            rndBtn.innerHTML = '🎲 Randomizar';
+            rndBtn.style.cssText = 'background:rgba(99,102,241,0.15);border:1px solid #6366f1;color:#a5b4fc;font-size:13px;padding:7px 16px;border-radius:8px;cursor:pointer;';
+            rndBtn.onclick = () => this.randomizeMugics();
+
+            bar.appendChild(recBtn);
+            bar.appendChild(rndBtn);
+
+            const backBtn = mgScreen.querySelector('.back-btn');
+            if (backBtn) backBtn.insertAdjacentElement('afterend', bar);
+            else mgScreen.insertBefore(bar, mgScreen.firstChild);
+        }
+
         this.currentMugicTribeFilter = 'All';
         this.currentMugicTypeFilter = 'All';
 
@@ -536,7 +809,9 @@ Object.assign(GameEngine.prototype, {
         if(tribeSelect) tribeSelect.value = 'All';
         if(typeSelect) typeSelect.value = 'All';
 
-        this.renderMugicDraft();
+        // Pré-seleciona automaticamente se a mão ainda está vazia
+        if (this.draftedMugics.length === 0) this.autoSelectMugics();
+        else this.renderMugicDraft();
     },
 
     filterMugicDraft() {
@@ -584,18 +859,26 @@ Object.assign(GameEngine.prototype, {
 
             const rarityIcon  = mg.rarity === 'Ultra Rare' ? '💎' : mg.rarity === 'Super Rare' ? '🔷' : mg.rarity === 'Rare' ? '🔶' : mg.rarity === 'Uncommon' ? '🔹' : '⚪';
             const tribeColor  = mg.tribe === 'OverWorld' ? '#3498db' : mg.tribe === 'UnderWorld' ? '#e74c3c' : mg.tribe === 'Mipedian' ? '#f39c12' : mg.tribe === 'Danian' ? '#27ae60' : '#9b59b6';
+
+            // Score de afinidade
+            const afScore     = this._calcMugicAffinity(mg);
+            const afColor     = afScore >= 70 ? '#22c55e' : afScore >= 40 ? '#f59e0b' : '#ef4444';
+            const afLabel     = afScore >= 70 ? '⭐ Muito indicada' : afScore >= 40 ? '👍 Indicada' : '○ Baixa sinergia';
+            const alreadyDrafted = this.draftedMugics.some(m => m.name === mg.name);
+
             mgHtml += `
                 <div onclick="game.draftMugic(${index})"
                      style="background: linear-gradient(160deg, #1a1a2e 60%, rgba(0,0,0,0.85));
-                            border: 2px solid ${isAffiliated ? '#2ecc71' : '#e74c3c'};
+                            border: 2px solid ${alreadyDrafted ? '#6366f1' : isAffiliated ? afColor+'88' : '#e74c3c'};
                             border-radius: 10px; padding: 12px; cursor: pointer;
                             display: flex; flex-direction: column; gap: 7px;
-                            transition: transform 0.15s, box-shadow 0.15s;"
+                            transition: transform 0.15s, box-shadow 0.15s;
+                            ${alreadyDrafted ? 'opacity:0.5;filter:grayscale(40%);' : ''}"
                      onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 6px 20px rgba(0,0,0,0.6)'"
                      onmouseout="this.style.transform='';this.style.boxShadow=''">
 
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:4px;">
-                        <div style="font-weight:bold; color:#f1c40f; font-size:13px; line-height:1.3;">${mg.name}</div>
+                        <div style="font-weight:bold; color:#f1c40f; font-size:13px; line-height:1.3;">${mg.name}${alreadyDrafted ? ' ✓' : ''}</div>
                         <div style="font-size:14px; flex-shrink:0;" title="${mg.rarity || 'Common'}">${rarityIcon}</div>
                     </div>
 
@@ -604,10 +887,19 @@ Object.assign(GameEngine.prototype, {
                         <span style="font-size:11px; color:#ecf0f1;">Custo: <b style="color:#9b59b6;">${mg.cost} ♪</b></span>
                     </div>
 
+                    <!-- Barra de afinidade -->
+                    <div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+                            <span style="font-size:9px;color:${afColor};">${afLabel}</span>
+                            <span style="font-size:9px;font-weight:700;color:${afColor};">${afScore}%</span>
+                        </div>
+                        <div style="height:4px;background:#1e293b;border-radius:2px;overflow:hidden;">
+                            <div style="width:${afScore}%;height:100%;background:${afColor};border-radius:2px;transition:width 0.4s;"></div>
+                        </div>
+                    </div>
+
                     <div style="border-top:1px solid rgba(255,255,255,0.1);"></div>
-
                     <div style="font-size:11px; color:#bdc3c7; line-height:1.5; text-align:left;">${mg.description}</div>
-
                     ${warningHtml}
                 </div>
             `;
@@ -860,6 +1152,7 @@ Object.assign(GameEngine.prototype, {
             this.showLocationToast(this.activeLocation, false);
         }
 
+        this._boardEntryPending = true; // sinaliza para o renderBoard disparar a entrada
         this.renderBoard();
         this.renderMugics();
         this.renderLocation();

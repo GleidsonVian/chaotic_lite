@@ -56,6 +56,14 @@ Object.assign(GameEngine.prototype, {
             }
         }
 
+        // Bônus de energia dos modifiers (ex: Stone Mail +50, Aqua Shield +5, Nexus Fuse +5)
+        // Aplicado permanentemente para que attack modal, combate e tabuleiro mostrem o mesmo valor
+        if (bg.modifiers && bg.modifiers.energy) {
+            card.energy    += bg.modifiers.energy;
+            card.maxEnergy += bg.modifiers.energy;
+            this.log(`❤️ ${card.name} [${bg.name}]: +${bg.modifiers.energy} Energia máxima!`);
+        }
+
         // specialFlags: Stone Mail
         if (bg.specialFlags) {
             if (bg.specialFlags.cannotMove)  card._cannotMove   = true;
@@ -149,6 +157,26 @@ Object.assign(GameEngine.prototype, {
         const borderStyle  = count > 0 ? 'border:3px solid #2ecc71;box-shadow:0 0 15px #2ecc71;' : 'border:2px solid #7f8c8d;';
         const opacityStyle = disabled ? 'opacity:0.5;filter:grayscale(80%);cursor:not-allowed;' : 'cursor:pointer;';
         const rarity = card.rarity || 'Common';
+
+        // Barra de afinidade — só mostra quando há pelo menos 1 carta no time
+        let affinityHtml = '';
+        if (this.draftedCards.length > 0 && count === 0) {
+            const score = this._calcCardAffinity(card);
+            const color = this._affinityColor(score);
+            const label = score >= 70 ? 'Ótima sinergia' : score >= 40 ? 'Boa sinergia' : 'Sinergia baixa';
+            affinityHtml = `
+                <div style="padding:4px 8px 6px;border-top:1px solid #1e293b;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+                        <span style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">Afinidade</span>
+                        <span style="font-size:10px;font-weight:700;color:${color};">${score}%</span>
+                    </div>
+                    <div style="height:4px;background:#1e293b;border-radius:2px;overflow:hidden;">
+                        <div style="width:${score}%;height:100%;background:${color};border-radius:2px;transition:width 0.4s ease;"></div>
+                    </div>
+                    <div style="font-size:9px;color:${color};margin-top:2px;">${label}</div>
+                </div>`;
+        }
+
         return `
             <div class="card" onclick="game.addDraftCard(${index})" title="${this.getPassiveDescription(card).replace(/"/g, '&quot;')}" style="${borderStyle}${opacityStyle}">
                 <div class="card-header">
@@ -171,6 +199,7 @@ Object.assign(GameEngine.prototype, {
                     ❤️ ${card.energy}
                     ${this._mugicCountersHtml(card)}
                 </div>
+                ${affinityHtml}
             </div>`;
     },
 
@@ -191,12 +220,6 @@ Object.assign(GameEngine.prototype, {
         if (btnStart) {
             btnStart.classList.toggle('hidden', !full);
             btnStart.style.display = full ? 'block' : 'none';
-        }
-        // Mostrar/esconder seletor de dificuldade junto com o botão
-        const diffSel = document.getElementById('difficulty-selector');
-        if (diffSel) {
-            diffSel.classList.toggle('hidden', !full);
-            diffSel.style.display = full ? 'flex' : 'none';
         }
         this.updateSynergyPreview();
         this.updateDeckStats();

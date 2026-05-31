@@ -3,6 +3,11 @@ Object.assign(GameEngine.prototype, {
 
     initMultiplayer() {
         if (typeof io === 'undefined') return;
+        // Modo multiplayer: pula a tela de setup e vai direto pro lobby
+        const setup = document.getElementById('setup-screen');
+        const game  = document.getElementById('game-container');
+        if (setup) setup.style.display = 'none';
+        if (game)  game.style.display  = '';
         this._showLobby('connecting');
         this._connectSocket();
     },
@@ -119,8 +124,9 @@ Object.assign(GameEngine.prototype, {
     },
 
     _lobbyAction() {
-        // Fecha o lobby e vai para o draft
+        // Fecha o lobby e renderiza o draft (que ainda não foi chamado em multiplayer)
         this._hideLobby();
+        if (this.draftedCards.length === 0) this.renderDraft();
     },
 
     _exitLobbyToSolo() {
@@ -129,6 +135,7 @@ Object.assign(GameEngine.prototype, {
         if (this.socket) { this.socket.disconnect(); this.socket = null; }
         this._hideLobby();
         this.log('🎮 Modo solo ativado.');
+        if (this.draftedCards.length === 0) this.renderDraft();
     },
 
     _connectSocket() {
@@ -211,6 +218,16 @@ Object.assign(GameEngine.prototype, {
             this.log('📡 Estado de jogo restaurado!');
             this._applyResyncState(data);
             this._hideReconnectOverlay();
+        });
+
+        // Recebe URL pública do ngrok quando ela fica disponível (pode chegar depois da conexão)
+        this.socket.on('public_url', ({ publicUrl }) => {
+            if (!publicUrl) return;
+            this._lobbyPublicUrl = publicUrl;
+            // Atualiza o campo do lobby se ainda estiver visível
+            const input = document.getElementById('lobby-link-input');
+            if (input) input.value = publicUrl;
+            this.log(`🌐 Link público: ${publicUrl}`);
         });
     },
 
@@ -480,6 +497,7 @@ Object.assign(GameEngine.prototype, {
     },
 
     _finishStartBattle() {
+        this._boardEntryPending = true;
         this.renderBoard();
         this.renderMugics();
         this.renderLocation();

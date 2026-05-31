@@ -1,6 +1,167 @@
 // engine-ui.js
 Object.assign(GameEngine.prototype, {
 
+    // ── Animação de Ataque (salto do atacante) ───────────────────────────────
+
+    /**
+     * O atacante "salta" na direção do defensor e volta.
+     * Retorna uma Promise que resolve após a animação terminar.
+     */
+    _playAttackAnimation(attackerCard, attackingPlayer) {
+        return new Promise(resolve => {
+            // Aguarda 2 frames para garantir que o modal fechou e o board está visível
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+
+                const board = document.getElementById('board');
+                if (!board) { resolve(); return; }
+
+                // Encontra o elemento do atacante pelo nome
+                const allCards = board.querySelectorAll('.card');
+                let atkEl = null;
+                for (const el of allCards) {
+                    const nameEl = el.querySelector('.card-name');
+                    if (nameEl && nameEl.textContent.trim().startsWith(attackerCard.name)) {
+                        atkEl = el; break;
+                    }
+                }
+                if (!atkEl) { resolve(); return; }
+
+                // Direção: P1 (esquerda) → direita; P2 (direita) → esquerda
+                const jumpX = attackingPlayer === 1 ? 42 : -42;
+
+                // Libera overflow de todos os pais para o salto não ser cortado
+                const parents = [];
+                let node = atkEl.parentElement;
+                while (node && node !== document.body) {
+                    const ov = getComputedStyle(node).overflow;
+                    if (ov !== 'visible') {
+                        parents.push({ el: node, ov: node.style.overflow });
+                        node.style.overflow = 'visible';
+                    }
+                    node = node.parentElement;
+                }
+                atkEl.style.position = 'relative';
+                atkEl.style.zIndex   = '9999';
+
+                // ── Fase 1: salto para frente ────────────────────────────────
+                atkEl.style.transition = 'transform 0.18s cubic-bezier(0.55,0,1,0.45)';
+                atkEl.style.transform  = `translateX(${jumpX}px) scale(1.1) rotate(${attackingPlayer === 1 ? 3 : -3}deg)`;
+
+                setTimeout(() => {
+                    // ── Fase 2: volta com mola ───────────────────────────────
+                    atkEl.style.transition = 'transform 0.28s cubic-bezier(0.34,1.56,0.64,1)';
+                    atkEl.style.transform  = 'translateX(0) scale(1) rotate(0deg)';
+
+                    // Flash dourado de impacto
+                    const flash = document.createElement('div');
+                    flash.style.cssText = `
+                        position:absolute; inset:0; border-radius:14px; pointer-events:none; z-index:100;
+                        background: radial-gradient(circle at 60%, rgba(251,191,36,0.7) 0%, rgba(251,191,36,0) 65%);
+                        animation: attackFlash 0.45s ease-out forwards;
+                    `;
+                    atkEl.appendChild(flash);
+                    setTimeout(() => flash.remove(), 460);
+
+                    // ── Restaura tudo e resolve ──────────────────────────────
+                    setTimeout(() => {
+                        atkEl.style.transition = '';
+                        atkEl.style.transform  = '';
+                        atkEl.style.zIndex     = '';
+                        parents.forEach(({ el, ov }) => el.style.overflow = ov || '');
+                        resolve();
+                    }, 300);
+                }, 190);
+
+            })); // double rAF
+        });
+    },
+
+    // ── Animação de entrada das cartas no tabuleiro ──────────────────────────
+
+    /**
+     * Quando o tabuleiro é renderizado pela primeira vez, anima cada carta
+     * "caindo" em posição com delay escalonado (stagger).
+     */
+    _playBoardEntryAnimation() {
+        requestAnimationFrame(() => {
+            const board = document.getElementById('board');
+            if (!board) return;
+            const cards = board.querySelectorAll('.card');
+            cards.forEach((card, i) => {
+                card.style.opacity    = '0';
+                card.style.transform  = 'translateY(-30px) scale(0.9)';
+                card.style.transition = 'none';
+                setTimeout(() => {
+                    card.style.transition = 'opacity 0.35s ease-out, transform 0.35s cubic-bezier(0.34,1.56,0.64,1)';
+                    card.style.opacity    = '';
+                    card.style.transform  = '';
+                }, 60 + i * 80); // 80ms de stagger entre cada carta
+            });
+        });
+    },
+
+    // ── Floating Damage Numbers ───────────────────────────────────────────────
+
+    /**
+     * Exibe número flutuante (+20 verde / -35 vermelho) sobre uma carta no tabuleiro.
+     * @param {object} card   - objeto da carta (precisa de card.name e card.player)
+     * @param {number} value  - valor do dano (positivo) ou cura (positivo também)
+     * @param {'damage'|'heal'|'reckless'} type
+     */
+    _spawnFloatingNumber(card, value, type) {
+        if (!card || value === 0) return;
+
+        // Encontra o elemento da carta no DOM pelo nome
+        const board = document.getElementById('board');
+        if (!board) return;
+
+        // Procura o card pelo data-card-name ou pelo texto do nome
+        const allCards = board.querySelectorAll('.card');
+        let cardEl = null;
+        for (const el of allCards) {
+            const nameEl = el.querySelector('.card-name');
+            if (nameEl && nameEl.textContent.trim().startsWith(card.name)) {
+                cardEl = el;
+                break;
+            }
+        }
+        if (!cardEl) return;
+
+        const configs = {
+            damage:   { color: '#ef4444', bg: 'rgba(239,68,68,0.15)',   prefix: '-', icon: '💥' },
+            heal:     { color: '#22c55e', bg: 'rgba(34,197,94,0.15)',   prefix: '+', icon: '💚' },
+            reckless: { color: '#f97316', bg: 'rgba(249,115,22,0.15)', prefix: '-', icon: '💢' },
+        };
+        const cfg = configs[type] || configs.damage;
+
+        const el = document.createElement('div');
+        el.className = 'floating-number';
+        el.innerHTML = `${cfg.icon} <span>${cfg.prefix}${value}</span>`;
+        el.style.cssText = `
+            position: absolute;
+            top: 30%;
+            left: 50%;
+            transform: translateX(-50%);
+            color: ${cfg.color};
+            background: ${cfg.bg};
+            border: 1px solid ${cfg.color}60;
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 18px;
+            font-weight: 900;
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 9999;
+            animation: floatUp 1.4s ease-out forwards;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+        `;
+
+        // O card precisa de position:relative (já tem)
+        cardEl.style.overflow = 'visible';
+        cardEl.appendChild(el);
+        setTimeout(() => el.remove(), 1400);
+    },
+
     // ── Minimizar / Restaurar Modais ─────────────────────────────────────────
 
     /**

@@ -370,20 +370,24 @@ Object.assign(GameEngine.prototype, {
             return;
         }
 
-        const atkSyn = this.getSynergyBonus(attackingPlayer, atkR, atkC);
-        const defSyn = this.getSynergyBonus(attackingPlayer === 1 ? 2 : 1, defR, defC);
+        const atkSyn    = this.getSynergyBonus(attackingPlayer, atkR, atkC) || {};
+        const defSyn    = this.getSynergyBonus(attackingPlayer === 1 ? 2 : 1, defR, defC) || {};
+        const modalLocMod  = (this.activeLocation && this.activeLocation.modifiers) || {};
+        const atkBgMod  = (attacker.bgRevealed && attacker.battlegear && attacker.battlegear.modifiers) || {};
+        const defBgMod  = (defender.bgRevealed && defender.battlegear && defender.battlegear.modifiers) || {};
 
+        // Inclui synergy + battlegear + local — mesmo cálculo usado em executeAttack
         const effAtk = {
-            courage: attacker.courage + (atkSyn ? atkSyn.courage : 0),
-            power: attacker.power + (atkSyn ? atkSyn.power : 0),
-            wisdom: attacker.wisdom + (atkSyn ? atkSyn.wisdom : 0),
-            speed: attacker.speed + (atkSyn ? atkSyn.speed : 0)
+            courage: attacker.courage + (atkSyn.courage||0) + (modalLocMod.courage||0) + (atkBgMod.courage||0),
+            power:   attacker.power   + (atkSyn.power  ||0) + (modalLocMod.power  ||0) + (atkBgMod.power  ||0),
+            wisdom:  attacker.wisdom  + (atkSyn.wisdom ||0) + (modalLocMod.wisdom ||0) + (atkBgMod.wisdom ||0),
+            speed:   attacker.speed   + (atkSyn.speed  ||0) + (modalLocMod.speed  ||0) + (atkBgMod.speed  ||0),
         };
         const effDef = {
-            courage: defender.courage + (defSyn ? defSyn.courage : 0),
-            power: defender.power + (defSyn ? defSyn.power : 0),
-            wisdom: defender.wisdom + (defSyn ? defSyn.wisdom : 0),
-            speed: defender.speed + (defSyn ? defSyn.speed : 0)
+            courage: defender.courage + (defSyn.courage||0) + (modalLocMod.courage||0) + (defBgMod.courage||0),
+            power:   defender.power   + (defSyn.power  ||0) + (modalLocMod.power  ||0) + (defBgMod.power  ||0),
+            wisdom:  defender.wisdom  + (defSyn.wisdom ||0) + (modalLocMod.wisdom ||0) + (defBgMod.wisdom ||0),
+            speed:   defender.speed   + (defSyn.speed  ||0) + (modalLocMod.speed  ||0) + (defBgMod.speed  ||0),
         };
 
         const renderCard = (card, effStats, label) => {
@@ -400,7 +404,7 @@ Object.assign(GameEngine.prototype, {
             let elementsHtml = '';
             if (card.elements && card.elements.length > 0) {
                 const iconMap = { "Fire": "🔥", "Water": "💧", "Earth": "🪨", "Air": "🌪️" };
-                elementsHtml = `<div style="display: flex; gap: 5px; justify-content: center; margin-top: -10px; z-index: 2; position: relative;">`;
+                elementsHtml = `<div class="card-elements-row">`;
                 card.elements.forEach(el => {
                     elementsHtml += `<div title="${el}" style="background: rgba(0,0,0,0.8); border: 1px solid #7f8c8d; border-radius: 50%; width: 25px; height: 25px; display: flex; align-items: center; justify-content: center; font-size: 14px;">${iconMap[el] || '✨'}</div>`;
                 });
@@ -408,15 +412,15 @@ Object.assign(GameEngine.prototype, {
             }
 
             return `
-            <div style="background: #2c3e50; padding: 15px; border-radius: 10px; border: 3px solid ${label === 'Atacante' ? '#f1c40f' : '#e74c3c'}; width: 250px; text-align: center;">
-                <h3 style="color: ${label === 'Atacante' ? '#f1c40f' : '#e74c3c'}; margin-bottom: 10px;">${label}</h3>
+            <div class="combat-card ${label === 'Atacante' ? 'combat-card--attacker' : 'combat-card--defender'}">
+                <h3 class="${label === 'Atacante' ? 'attacker-label' : 'defender-label'}">${label}</h3>
                 <div class="card-rarity-icon rarity-${(card.rarity || 'Common').toLowerCase().replace(/\s+/g, '-')}" title="${card.rarity || 'Common'}">${card.rarity === 'Ultra Rare' ? '💎' : card.rarity === 'Super Rare' ? '🔷' : card.rarity === 'Rare' ? '🔶' : card.rarity === 'Legendary' ? '🌟' : '⚪'}</div>
                 <div class="card-tribe">${card.tribe}</div>
-                <div class="card-name" style="font-size: 1.2em;">${card.name}</div>
-                <div class="card-image-container" style="margin: 10px auto;">
+                <div class="card-name combat-card-name">${card.name}</div>
+                <div class="card-image-container combat-card-image">
                     ${card.image ? `<img src="${card.image}" style="width: 100%; height: 100%; object-fit: cover;" alt="${card.name}">` : `<div class="card-image-placeholder">Sem Imagem</div>`}
                 </div>
-                ${card.battlegear && card.bgRevealed ? `<div style="text-align: center; font-size: 11px; color: #f1c40f; background: rgba(0,0,0,0.8); margin: 5px auto; padding: 4px; border-radius: 4px; border: 1px solid #f1c40f; width: 90%;" title="${card.battlegear.description || 'Equipamento'}">🗡️ ${card.battlegear.name}</div>` : ''}
+                ${card.battlegear && card.bgRevealed ? `<div class="combat-card-battlegear" title="${card.battlegear.description || 'Equipamento'}">🗡️ ${card.battlegear.name}</div>` : ''}
                 ${elementsHtml}
 
                 <div class="card-stats" style="grid-template-columns: 1fr 1fr;">
@@ -425,17 +429,17 @@ Object.assign(GameEngine.prototype, {
                     <div class="stat-box" data-tip="Sabedoria — usado em ataques mágicos de Sabedoria. Também define quem pode conjurar Mugics mais caras."><span class="stat-icon">🧠</span><span class="stat-label">SAB</span><span class="stat-value">${effStats.wisdom}</span></div>
                     <div class="stat-box" data-tip="Velocidade — usado em ataques de Speed e na disputa de iniciativa. Swift aumenta este valor."><span class="stat-icon">⚡</span><span class="stat-label">VEL</span><span class="stat-value">${effStats.speed}</span></div>
                 </div>
-                <div style="color: #bdc3c7; font-size: 12px; margin-top: 5px;">❤️ ${effEnergy} / ${maxEnergy}</div>
-                <div style="font-size: 12px; font-weight: bold; margin-top: 5px;">${mugicHtml}</div>
+                <div class="combat-card-hp">❤️ ${effEnergy} / ${maxEnergy}</div>
+                <div class="combat-card-mugics">${mugicHtml}</div>
             </div>
             `;
         };
 
         const hand = attackingPlayer === 1 ? this.p1AttackHand : this.p2AttackHand;
-        let handHtml = `<div style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px; justify-content: center; align-items: center; width: 100%;">
-            <div style="font-size: 40px; color: #e74c3c;">VS</div>
-            <div style="color: #f1c40f; margin-bottom: 5px; font-weight: bold;">Selecione sua Carta de Ataque:</div>
-            <div style="display: flex; gap: 15px;">`;
+        let handHtml = `<div class="combat-hand-col">
+            <div class="combat-vs">VS</div>
+            <div class="combat-select-label">Selecione sua Carta de Ataque:</div>
+            <div class="combat-attack-row">`;
 
         const statNames   = { courage:'Coragem', power:'Poder', wisdom:'Sabedoria', speed:'Velocidade' };
         const statIcons   = { courage:'⚔️', power:'💪', wisdom:'🧠', speed:'⚡' };
@@ -550,8 +554,39 @@ Object.assign(GameEngine.prototype, {
 
             // Efeito especial (independente)
             if (atkCard.specialEffect) {
-                const efDesc = describeSpecial(atkCard.specialEffect);
-                if (efDesc) rows.push({ ok: 'special', text: efDesc });
+                const sp = atkCard.specialEffect;
+
+                // ── Calcula dano estimado para cada tipo de specialEffect ────────
+                if (sp.type === 'megaroar') {
+                    // +value dano para cada stat do atacante ≥ threshold
+                    let megaroarDmg = 0;
+                    const statIcons2 = { courage:'⚔️', power:'💪', wisdom:'🧠', speed:'⚡' };
+                    ['courage','power','wisdom','speed'].forEach(s => {
+                        const av = effAtk[s] || 0;
+                        const passes = av >= sp.threshold;
+                        if (passes) megaroarDmg += sp.value;
+                        rows.push({
+                            ok: passes,
+                            text: `${statIcons2[s]} ${s.charAt(0).toUpperCase()+s.slice(1)} ${av} ${passes ? `≥` : `<`} ${sp.threshold} → ${passes ? `+${sp.value} dano` : '0'}`
+                        });
+                    });
+                    expectedDamage += megaroarDmg;
+                } else if (sp.type === 'double_challenge') {
+                    // dois challenges — bônus se ambos passarem
+                    let allPass = true;
+                    (sp.checks || []).forEach(ck => {
+                        const av = effAtk[ck.stat] || 0;
+                        const dv = effDef[ck.stat] || 0;
+                        const passes = av > dv + ck.threshold;
+                        if (!passes) allPass = false;
+                        rows.push({ ok: passes, text: `${ck.stat.toUpperCase()} challenge ${ck.threshold} (você ${av} vs ${dv}+${ck.threshold})` });
+                    });
+                    if (allPass) expectedDamage += sp.bonusDamage || 0;
+                } else {
+                    // outros: só descrição
+                    const efDesc = describeSpecial(sp);
+                    if (efDesc) rows.push({ ok: 'special', text: efDesc });
+                }
             }
 
             // Se não tem dano nenhum e nenhuma linha, mostra aviso
@@ -736,7 +771,11 @@ Object.assign(GameEngine.prototype, {
         });
 
         this.log(`🔔 BURST ABERTO: ${attackingPlayer === 1 ? 'Jogador 1' : p2Label} atacou com ${atkCard.name}`);
-        this.openBurstModal();
+
+        // Animação de salto — abre o burst só depois que terminar
+        this._playAttackAnimation(attacker, attackingPlayer).then(() => {
+            this.openBurstModal();
+        });
     },
 
     executeAttack(item) {
@@ -1109,6 +1148,11 @@ Object.assign(GameEngine.prototype, {
         }
 
         this.renderBoard();
+
+        // Floating numbers — aparecem APÓS renderBoard para o DOM estar atualizado
+        if (totalDamage > 0) this._spawnFloatingNumber(defender, totalDamage, 'damage');
+        if (totalHeal    > 0) this._spawnFloatingNumber(attacker, totalHeal,   'heal');
+        if (attacker._recklessPenalty < 0) this._spawnFloatingNumber(attacker, Math.abs(attacker._recklessPenalty || 0), 'reckless');
 
         if (defender.energy <= 0) {
             this.log(`💀 ${defender.name} foi derrotado!`);

@@ -79,9 +79,33 @@ class GameEngine {
             this.nextTurnBtn.addEventListener("click", () => this.nextTurn());
         }
 
-        this.renderDraft();
-        this.setDifficulty('easy');  // marca botão Fácil como ativo por padrão
-        this.setAiTribe('auto');     // marca Automático como ativo por padrão
+        // Mostra a tela de setup (dificuldade) antes do draft
+        // O draft só é renderizado quando o jogador clica em "Iniciar Draft"
+        this.setDifficulty('easy');
+        this.setAiTribe('auto');
+        this._showSetupScreen();
         this.initMultiplayer();
+    }
+
+    _showSetupScreen() {
+        const setup = document.getElementById('setup-screen');
+        const game  = document.getElementById('game-container');
+        if (setup) setup.style.display = 'flex';
+        if (game)  game.style.display  = 'none';
+    }
+
+    startDraft() {
+        // Esconde setup, mostra o draft
+        const setup = document.getElementById('setup-screen');
+        const game  = document.getElementById('game-container');
+        if (setup) setup.style.display = 'none';
+        if (game)  game.style.display  = '';
+
+        this.renderDraft();
+
+        // Mostra dificuldade escolhida no header do draft
+        const diff = this.aiDifficulty;
+        const labels = { easy: '😴 Fácil', medium: '🧠 Médio', hard: '💀 Difícil' };
+        this.log(`⚙️ Dificuldade: ${labels[diff] || diff}`);
     }
 }

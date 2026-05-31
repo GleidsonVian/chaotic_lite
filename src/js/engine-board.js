@@ -37,7 +37,7 @@ Object.assign(GameEngine.prototype, {
         });
 
         if (this.playerMugics.length === 0) {
-            html = '<div style="color: #7f8c8d; padding-top: 50px;">Sem Mugics na mão.</div>';
+            html = '<div class="hand-empty">Sem Mugics na mão.</div>';
         }
 
         container.innerHTML = html;
@@ -230,19 +230,19 @@ Object.assign(GameEngine.prototype, {
         if (this.gameState === 'SELECT_TARGET') msgEstado = 'ESCOLHA O ALVO INIMIGO!';
         if (this.gameState === 'SELECT_MUGIC_CASTER') msgEstado = 'QUEM VAI PAGAR O CUSTO DA MÁGICA? CLIQUE EM UMA DE SUAS CRIATURAS. <button onclick="game.cancelMugicCaster()" style="margin-left: 10px; padding: 5px 10px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-family: Inter, sans-serif;">Cancelar Escolha</button>';
 
-        this.boardElement.innerHTML = `<div style="width: 100%; text-align: center; margin-bottom: 20px;">
+        this.boardElement.innerHTML = `<div class="board-header">
             <h3 style="color: var(--accent); margin-bottom: 5px;">Turno Atual: Jogador ${this.turn}</h3>
             <p style="color: ${this.gameState === 'SELECT_TARGET' || this.gameState === 'SELECT_MUGIC_CASTER' ? 'var(--danger)' : 'var(--text-muted)'}; font-weight: bold; font-size: 1.1em;">${msgEstado}</p>
         </div>`;
 
         const renderPlayerBoard = (board, player) => {
-            let html = `<div style="display: flex; flex-direction: row; gap: 10px; align-items: center; justify-content: center;">`;
+            let html = `<div class="board-columns">`;
             // Para P1 (Esquerda), as linhas (agora colunas verticais) da esq para dir são: Trás(2), Meio(1), Frente(0)
             // Para P2 (Direita), as linhas da esq para dir são: Frente(0), Meio(1), Trás(2)
             const rows = player === 1 ? [2, 1, 0] : [0, 1, 2];
 
             rows.forEach(r => {
-                html += `<div style="display: flex; flex-direction: column; gap: 20px; justify-content: center; height: 100%;">`;
+                html += `<div class="board-col">`;
                 for(let c = 0; c < board[r].length; c++) {
                     const card = board[r][c];
                     const isSelected = this.selectedAttacker && this.selectedAttacker.player === player && this.selectedAttacker.r === r && this.selectedAttacker.c === c;
@@ -284,13 +284,8 @@ Object.assign(GameEngine.prototype, {
                                     card, r, c
                                 );
                                 previewHtml = `
-                                    <div style="
-                                        position:absolute; inset:0; border-radius:8px; z-index:5;
-                                        background: linear-gradient(to bottom, transparent 30%, rgba(0,0,0,0.88) 70%);
-                                        display:flex; flex-direction:column; justify-content:flex-end;
-                                        padding:6px; pointer-events:none;
-                                    ">
-                                        <div style="text-align:center; line-height:1.3;">
+                                    <div class="board-preview-overlay">
+                                        <div class="board-preview-text">
                                             <div style="font-size:16px;">${prev.emoji}</div>
                                             <div style="font-size:10px; font-weight:800; color:${prev.color}; letter-spacing:0.5px;">${prev.verdict}</div>
                                             <div style="font-size:9px; color:#cbd5e1; margin-top:2px;">${prev.initLabel}</div>
@@ -312,8 +307,8 @@ Object.assign(GameEngine.prototype, {
                         let displaySpeed = card.speed;
 
                         if (syn) {
-                            displayMaxEnergy += syn.energy;
-                            displayEnergy += syn.energy;
+                            // Energia NÃO é somada no display: sinergia de energia não afeta o combate real
+                            // (card.energy é o valor real usado em executeAttack)
                             displayCourage += syn.courage;
                             displayPower += syn.power;
                             displayWisdom += syn.wisdom;
@@ -323,18 +318,18 @@ Object.assign(GameEngine.prototype, {
                         let bgDisplayHtml = '';
                         if (card.bgRevealed && card.battlegear) {
                             const mod = card.battlegear.modifiers || {};
-                            displayMaxEnergy += mod.energy || 0;
-                            displayEnergy += mod.energy || 0;
+                            // Energia NÃO é adicionada aqui — já foi aplicada permanentemente em _revealBattlegear
+                            // (evita double-count: Stone Mail +50 seria somado duas vezes)
                             displayCourage += mod.courage || 0;
                             displayPower += mod.power || 0;
                             displayWisdom += mod.wisdom || 0;
                             displaySpeed += mod.speed || 0;
-                            bgDisplayHtml = `<div style="text-align: center; font-size: 10px; color: #f1c40f; background: rgba(0,0,0,0.8); margin: 2px 0; padding: 2px; border-radius: 3px;">Equipado: ${card.battlegear.name}</div>`;
+                            bgDisplayHtml = `<div class="board-bg-revealed">Equipado: ${card.battlegear.name}</div>`;
                         } else if (card.battlegear && !card.bgRevealed) {
                             if (player === 1) {
-                                bgDisplayHtml = `<div style="text-align: center; font-size: 10px; color: #bdc3c7; background: rgba(0,0,0,0.8); margin: 2px 0; padding: 2px; border-radius: 3px; border: 1px dashed #7f8c8d;" title="Oculto para o oponente">[Escondido] ${card.battlegear.name}</div>`;
+                                bgDisplayHtml = `<div class="board-bg-hidden" title="Oculto para o oponente">[Escondido] ${card.battlegear.name}</div>`;
                             } else {
-                                bgDisplayHtml = `<div style="text-align: center; font-size: 10px; color: #7f8c8d; background: rgba(0,0,0,0.8); margin: 2px 0; padding: 2px; border-radius: 3px;">Item: Face Down</div>`;
+                                bgDisplayHtml = `<div class="board-bg-facedown">Item: Face Down</div>`;
                             }
                         }
 
@@ -350,8 +345,12 @@ Object.assign(GameEngine.prototype, {
                             finalShadow = `box-shadow: 0 0 14px ${prev.border}88;`;
                         }
 
+                        // Pulso crítico: HP < 20%
+                        const hpPct = displayEnergy / (displayMaxEnergy || 1);
+                        const critClass = hpPct < 0.2 && displayEnergy > 0 ? 'card-critical' : '';
+
                         html += `
-                            <div class="card ${animClass}" onclick="game.handleCardClick(${player}, ${r}, ${c})" title="${this.getPassiveDescription(card).replace(/"/g, '&quot;')}" style="border: ${finalBorder}; ${finalShadow} ${cursorStyle} ${opacityStyle} transition: all 0.2s; position:relative; overflow:hidden;">
+                            <div class="card ${animClass} ${critClass}" onclick="game.handleCardClick(${player}, ${r}, ${c})" title="${this.getPassiveDescription(card).replace(/"/g, '&quot;')}" style="border: ${finalBorder}; ${finalShadow} ${cursorStyle} ${opacityStyle} transition: border 0.2s, box-shadow 0.2s; position:relative; overflow:hidden;">
                                 ${previewHtml}
                                 <div class="card-header">
                                     <div class="card-rarity-icon rarity-${(card.rarity || 'Common').toLowerCase().replace(/\s+/g, '-')}" title="${card.rarity || 'Common'}">${card.rarity === 'Ultra Rare' ? '💎' : card.rarity === 'Super Rare' ? '🔷' : card.rarity === 'Rare' ? '🔶' : card.rarity === 'Legendary' ? '🌟' : '⚪'}</div>
@@ -366,7 +365,7 @@ Object.assign(GameEngine.prototype, {
                                     let eHtml = '';
                                     if (card.elements && card.elements.length > 0) {
                                         const iconMap = { "Fire": "🔥", "Water": "💧", "Earth": "🪨", "Air": "🌪️" };
-                                        eHtml = `<div style="display: flex; gap: 5px; justify-content: center; margin-top: -10px; z-index: 2; position: relative;">`;
+                                        eHtml = `<div class="card-elements-row">`;
                                         card.elements.forEach(el => {
                                             eHtml += `<div title="${el}" style="background: rgba(0,0,0,0.8); border: 1px solid #7f8c8d; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 12px;">${iconMap[el] || '✨'}</div>`;
                                         });
@@ -381,9 +380,9 @@ Object.assign(GameEngine.prototype, {
                                     if (card._hasRange)      badges += `<span title="Range: pode atacar criaturas protegidas" style="background:#e67e22;color:#fff;font-size:10px;padding:1px 5px;border-radius:3px;margin:0 2px;">🏹 Range</span>`;
                                     if (card._invisibility)  badges += `<span title="Invisível: não pode ser alvo de ataques" style="background:#8e44ad;color:#fff;font-size:10px;padding:1px 5px;border-radius:3px;margin:0 2px;">👻 Invisível</span>`;
                                     if (card._cannotMove)    badges += `<span title="Não pode se mover este turno" style="background:#7f8c8d;color:#fff;font-size:10px;padding:1px 5px;border-radius:3px;margin:0 2px;">🔒 Imóvel</span>`;
-                                    return badges ? `<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:2px;padding:2px 0;">${badges}</div>` : '';
+                                    return badges ? `<div class="card-status-badges">${badges}</div>` : '';
                                 })()}
-                                ${syn ? `<div style="text-align: center; font-size: 10px; background: rgba(52, 152, 219, 0.2); color: #3498db; padding: 2px; border-bottom: 1px solid #3498db; font-weight: bold;">${syn.description}</div>` : ''}
+                                ${syn ? `<div class="board-synergy-banner">${syn.description}</div>` : ''}
                                 <div class="card-stats">
                                     <div class="stat-box" data-tip="Coragem — define quem ataca primeiro na iniciativa. Usada em ataques de Courage e pela passiva Intimidate."><span class="stat-icon">⚔️</span><span class="stat-label">COR</span><span class="stat-value" style="${syn && syn.courage ? 'color:#3498db;font-weight:bold;' : ''}">${displayCourage}</span></div>
                                     <div class="stat-box" data-tip="Poder — usado em ataques físicos de Poder. Quanto maior, mais dano em ataques de Power."><span class="stat-icon">💪</span><span class="stat-label">POD</span><span class="stat-value" style="${syn && syn.power ? 'color:#3498db;font-weight:bold;' : ''}">${displayPower}</span></div>
@@ -391,11 +390,16 @@ Object.assign(GameEngine.prototype, {
                                     <div class="stat-box" data-tip="Velocidade — usado em ataques de Speed e na disputa de iniciativa. Swift aumenta este valor."><span class="stat-icon">⚡</span><span class="stat-label">VEL</span><span class="stat-value" style="${syn && syn.speed ? 'color:#3498db;font-weight:bold;' : ''}">${displaySpeed}</span></div>
                                 </div>
                                 <div class="card-energy-container">
-                                    <div style="background-color:#2c3e50;border-radius:4px;overflow:hidden;width:100%;position:relative;height:22px;border:1px solid #000;">
-                                        <div style="width:${Math.max(0,(displayEnergy/displayMaxEnergy)*100)}%;height:100%;background-color:${(displayEnergy/displayMaxEnergy)>0.5?'#2ecc71':(displayEnergy/displayMaxEnergy)>0.2?'#f1c40f':'#e74c3c'};transition:width 0.4s ease-out,background-color 0.4s ease-out;"></div>
-                                        <div style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;justify-content:center;align-items:center;font-size:0.9em;font-weight:bold;color:white;text-shadow:1px 1px 3px rgba(0,0,0,0.8);">
-                                            ❤️ ${Math.max(0,displayEnergy)} / ${displayMaxEnergy}
-                                        </div>
+                                    <!-- Barra de vida principal -->
+                                    <div class="hp-bar-track">
+                                        <div style="width:${Math.max(0,(displayEnergy/displayMaxEnergy)*100)}%;height:100%;border-radius:6px;
+                                            background:${hpPct>0.5?'linear-gradient(90deg,#16a34a,#22c55e)':hpPct>0.2?'linear-gradient(90deg,#ca8a04,#fbbf24)':'linear-gradient(90deg,#b91c1c,#ef4444)'};
+                                            transition:width 0.5s ease-out,background 0.5s ease-out;
+                                            box-shadow:${hpPct<=0.2?'0 0 6px #ef444488':'none'};"></div>
+                                    </div>
+                                    <!-- Texto de vida -->
+                                    <div class="hp-bar-text">
+                                        ❤️ ${Math.max(0,displayEnergy)} / ${displayMaxEnergy}
                                     </div>
                                     ${this._mugicCountersHtml(card)}
                                 </div>
@@ -417,7 +421,7 @@ Object.assign(GameEngine.prototype, {
                             }
                         }
 
-                        html += `<div style="width: 110px; height: 150px; ${emptyBorder} ${emptyBg} border-radius: 8px; opacity: 0.6; ${emptyCursor} transition: all 0.2s;" onclick="game.handleCardClick(${player}, ${r}, ${c})"></div>`;
+                        html += `<div class="board-slot-empty" style="${emptyBorder}${emptyBg}${emptyCursor}" onclick="game.handleCardClick(${player}, ${r}, ${c})"></div>`;
                     }
                 }
                 html += `</div>`;
@@ -426,9 +430,9 @@ Object.assign(GameEngine.prototype, {
             return html;
         };
 
-        let boardsHtml = '<div style="display: flex; flex-direction: row; width: 100%; justify-content: center; gap: 40px; align-items: center; margin-top: 20px;">';
+        let boardsHtml = '<div class="boards-wrapper">';
         boardsHtml += renderPlayerBoard(this.boardP1, 1);
-        boardsHtml += '<div style="width: 4px; height: 80%; min-height: 400px; background-color: #bdc3c7; border-radius: 2px;"></div>'; // Divisória vertical
+        boardsHtml += '<div class="board-divider"></div>'; // Divisória vertical
         boardsHtml += renderPlayerBoard(this.boardP2, 2);
         boardsHtml += '</div>';
 
@@ -437,11 +441,16 @@ Object.assign(GameEngine.prototype, {
         // Dispara gotículas de sangue se houver uma criatura marcada como destruída
         const animState = this.combatAnimationState;
         if (animState && animState.destroyed) {
-            // Encontra o elemento com defeat-anim recém criado e injeta as gotículas
             requestAnimationFrame(() => {
                 const defeatEl = this.boardElement.querySelector('.card.defeat-anim');
                 if (defeatEl) this._spawnBloodDrops(defeatEl);
             });
+        }
+
+        // Animação de entrada: cartas caem em posição quando o tabuleiro é criado pela 1ª vez
+        if (this._boardEntryPending) {
+            this._boardEntryPending = false;
+            this._playBoardEntryAnimation();
         }
     },
 

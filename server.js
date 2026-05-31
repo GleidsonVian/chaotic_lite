@@ -105,6 +105,8 @@ function detectNgrok() {
                     publicUrl = https.public_url;
                     console.log(`║  Público: ${publicUrl}`);
                     console.log('╚════════════════════════════════════════╝');
+                    // Avisa todos os clientes conectados sobre a URL pública
+                    io.emit('public_url', { publicUrl });
                 }
             } catch(e) {}
         });

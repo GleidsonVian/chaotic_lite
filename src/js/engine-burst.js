@@ -78,6 +78,91 @@ Object.assign(GameEngine.prototype, {
             }
         }
 
+        // ── Preview de dano do ataque inimigo ─────────────────────────────────
+        const previewEl = document.getElementById('burst-damage-preview');
+        if (previewEl) {
+            const topAttack = [...this.burstStack].reverse().find(i => i.type === 'attack' && !i.negated);
+            const myPlayerNum = this.multiplayerMode ? this.myPlayerNumber : 1;
+
+            if (topAttack && topAttack.attackingPlayer !== myPlayerNum && this.activeCombat) {
+                // É um ataque do INIMIGO — calcula quanto vai doer
+                const { attacker, defender, atkR, atkC, defR, defC, attackingPlayer, atkCard } = topAttack;
+
+                const atkSyn   = this.getSynergyBonus(attackingPlayer, atkR, atkC) || {};
+                const defSyn   = this.getSynergyBonus(attackingPlayer === 1 ? 2 : 1, defR, defC) || {};
+                const locMod   = (this.activeLocation && this.activeLocation.modifiers) || {};
+                const atkBgMod = (attacker.bgRevealed && attacker.battlegear && attacker.battlegear.modifiers) || {};
+                const defBgMod = (defender.bgRevealed && defender.battlegear && defender.battlegear.modifiers) || {};
+
+                const effAtk = {
+                    courage: attacker.courage + (atkSyn.courage||0) + (locMod.courage||0) + (atkBgMod.courage||0),
+                    power:   attacker.power   + (atkSyn.power  ||0) + (locMod.power  ||0) + (atkBgMod.power  ||0),
+                    wisdom:  attacker.wisdom  + (atkSyn.wisdom ||0) + (locMod.wisdom ||0) + (atkBgMod.wisdom ||0),
+                    speed:   attacker.speed   + (atkSyn.speed  ||0) + (locMod.speed  ||0) + (atkBgMod.speed  ||0),
+                };
+                const effDef = {
+                    courage: defender.courage + (defSyn.courage||0) + (locMod.courage||0) + (defBgMod.courage||0),
+                    power:   defender.power   + (defSyn.power  ||0) + (locMod.power  ||0) + (defBgMod.power  ||0),
+                    wisdom:  defender.wisdom  + (defSyn.wisdom ||0) + (locMod.wisdom ||0) + (defBgMod.wisdom ||0),
+                    speed:   defender.speed   + (defSyn.speed  ||0) + (locMod.speed  ||0) + (defBgMod.speed  ||0),
+                };
+
+                // Calcula dano estimado
+                let est = atkCard.baseDamage || 0;
+
+                if (atkCard.statRequirement) {
+                    const av = effAtk[atkCard.statRequirement] || 0;
+                    const dv = effDef[atkCard.statRequirement] || 0;
+                    const passed = atkCard.statMode === 'challenge'
+                        ? av > dv + (atkCard.statThreshold || 0)
+                        : av >= (atkCard.statThreshold || 0);
+                    if (passed) est += atkCard.statDamage || 0;
+                }
+                if (atkCard.elementRequirement) {
+                    const hasEl = (attacker.elements || []).includes(atkCard.elementRequirement);
+                    if (hasEl) est += atkCard.elementDamage || 0;
+                }
+
+                // Tough passive reduz dano
+                const tough = (defender.passives || []).find(p => (typeof p==='string'?p:p.id) === 'tough');
+                if (tough) est = Math.max(0, est - (typeof tough === 'object' ? tough.value : 5));
+
+                // Cor e urgência
+                const hpPct   = defender.energy / (defender.maxEnergy || defender.energy);
+                const lethal  = est >= defender.energy;
+                const color   = lethal ? '#ef4444' : est >= defender.energy * 0.4 ? '#f59e0b' : '#94a3b8';
+                const urgency = lethal ? '💀 LETAL — você vai morrer!' : est > 0 ? `⚠️ Você vai tomar dano` : '✅ Ataque inofensivo';
+                const bgColor = lethal ? 'rgba(239,68,68,0.15)' : est > 0 ? 'rgba(245,158,11,0.1)' : 'rgba(34,197,94,0.08)';
+                const borderColor = lethal ? '#ef444466' : est > 0 ? '#f59e0b44' : '#22c55e44';
+
+                previewEl.style.display = 'block';
+                previewEl.innerHTML = `
+                    <div style="
+                        background:${bgColor}; border:1px solid ${borderColor};
+                        border-radius:10px; padding:12px 16px;
+                        display:flex; align-items:center; justify-content:space-between; gap:12px;
+                        flex-wrap:wrap;
+                    ">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div style="font-size:28px;font-weight:900;color:${color};">${est > 0 ? `💥 ${est}` : '0'}</div>
+                            <div>
+                                <div style="font-size:12px;font-weight:700;color:${color};">${urgency}</div>
+                                <div style="font-size:11px;color:#64748b;margin-top:2px;">
+                                    ${atkCard.name} · ${defender.name} ❤️ ${defender.energy}/${defender.maxEnergy}
+                                </div>
+                            </div>
+                        </div>
+                        <div style="font-size:11px;color:#64748b;text-align:right;">
+                            Vida após: <span style="font-weight:700;color:${lethal?'#ef4444':'#f8fafc'};">
+                                ${Math.max(0, defender.energy - est)}
+                            </span>
+                        </div>
+                    </div>`;
+            } else {
+                previewEl.style.display = 'none';
+            }
+        }
+
         modal.classList.remove('hidden');
         modal.classList.add('flex-modal');
 
@@ -430,6 +515,7 @@ Object.assign(GameEngine.prototype, {
                 alertMsg += `Alvo: ${allyCard.name}\nCurou ${mg.effectValue} de Energia! (${oldVal} → ${allyCard.energy})`;
                 this.log(`💚 ${allyCard.name} curou ${mg.effectValue} de Energia!`);
                 if (this.activeCombat) this.activeCombat.healHistory.push({ targetName: allyCard.name, amount: mg.effectValue, source: mg.name });
+                this._spawnFloatingNumber(allyCard, mg.effectValue, 'heal');
                 break;
 
             case "conditional_heal": {
