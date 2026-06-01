@@ -68,11 +68,14 @@ Object.assign(GameEngine.prototype, {
         mugicSel.classList.add('hidden');
 
         // Mostrar botão de sacrifício se o jogador da vez tiver battlegear sacrificável
+        // Iron Pillar (no_battlegear_abilities) desativa completamente o sacrifício
+        const noBgAbilities = this.activeLocation?.effect?.type === 'no_battlegear_abilities';
         if (sacrificeBtn) {
             const myCard = this.activeCombat
                 ? (this.burstPriority === 1 ? this.activeCombat.p1Card : this.activeCombat.p2Card)
                 : null;
-            const hasSacrifice = myCard && myCard.battlegear && myCard.bgRevealed
+            const hasSacrifice = !noBgAbilities
+                && myCard && myCard.battlegear && myCard.bgRevealed
                 && myCard.battlegear.sacrificeEffect;
             sacrificeBtn.style.display = hasSacrifice ? 'inline-block' : 'none';
         }
@@ -461,6 +464,16 @@ Object.assign(GameEngine.prototype, {
                 cost += locEffect.value;
                 this.log(`📍 [${this.activeLocation.name}] Mugic ${mg.tribe} custa +${locEffect.value} contador extra!`);
             }
+            if (locEffect.type === 'mugic_discount_tribe_first' && mg.tribe === locEffect.tribe) {
+                // Desconto só se a criatura ainda não usou a primeira mugic da tribo neste combate
+                const discountKey = `_usedMugicDiscount_${this.activeLocation.id}`;
+                if (!card[discountKey]) {
+                    const discount = locEffect.value || 1;
+                    cost = Math.max(0, cost - discount);
+                    card[discountKey] = true;
+                    this.log(`📍 [${this.activeLocation.name}] ${card.name} (${mg.tribe}): -${discount} ♪ de desconto na primeira Mugic!`);
+                }
+            }
         }
 
         if (card.mugicCounters < cost) {
@@ -530,6 +543,11 @@ Object.assign(GameEngine.prototype, {
 
     sacrificeBattlegear() {
         if (!this.activeCombat) return;
+        // Iron Pillar: battlegears não têm habilidades neste local
+        if (this.activeLocation?.effect?.type === 'no_battlegear_abilities') {
+            this.showAlert('⛔ Iron Pillar', 'Neste local, Battlegears não possuem habilidades e não podem ser sacrificados!');
+            return;
+        }
         const myCard = this.burstPriority === 1 ? this.activeCombat.p1Card : this.activeCombat.p2Card;
         const oppCard = this.burstPriority === 1 ? this.activeCombat.p2Card : this.activeCombat.p1Card;
         if (!myCard || !myCard.battlegear || !myCard.battlegear.sacrificeEffect) return;
@@ -547,13 +565,14 @@ Object.assign(GameEngine.prototype, {
                 }
                 break;
             case 'heal_target':
-                // Cura a própria criatura (simplificado — alvo único em combate)
                 myCard.energy = Math.min(myCard.maxEnergy, myCard.energy + eff.value);
                 this.log(`💚 ${myCard.name} curou ${eff.value} de Energia! (agora ${myCard.energy})`);
+                this._spawnFloatingNumber(myCard, eff.value, 'heal');
                 break;
             case 'damage_target':
                 oppCard.energy = Math.max(0, oppCard.energy - eff.value);
                 this.log(`💥 [${bg.name}] causou ${eff.value} de dano a ${oppCard.name}! (${oppCard.energy} restante)`);
+                this._spawnFloatingNumber(oppCard, eff.value, 'sacrifice');
                 if (oppCard.energy <= 0) {
                     this.log(`💀 ${oppCard.name} foi destruído!`);
                 }
@@ -684,8 +703,13 @@ Object.assign(GameEngine.prototype, {
         // Determina quem é aliado e quem é inimigo baseado no playerNum
         // (não usar item.source pois pode ser nome personalizado como 'sacticio')
         const isPlayer1 = item.playerNum === 1;
-        const allyCard  = isPlayer1 ? p1Card : p2Card;
-        const enemyCard = isPlayer1 ? p2Card : p1Card;
+        // Song of Deflection: se retargeted, inverte aliado/inimigo
+        const allyCard  = item.retargeted
+            ? (isPlayer1 ? p2Card : p1Card)
+            : (isPlayer1 ? p1Card : p2Card);
+        const enemyCard = item.retargeted
+            ? (isPlayer1 ? p1Card : p2Card)
+            : (isPlayer1 ? p2Card : p1Card);
 
         // Log descritivo: quem usou, quem pagou, qual mugic
         const casterLabel = caster ? ` (paga por ${caster.name})` : '';
@@ -719,6 +743,7 @@ Object.assign(GameEngine.prototype, {
                     allyCard.energy = Math.min(allyCard.maxEnergy, allyCard.energy + mg.effectValue);
                     alertMsg += `Alvo: ${allyCard.name}\nTem o elemento necessário! Curou ${mg.effectValue}. (${oldVal} → ${allyCard.energy})`;
                     this.log(`💚 ${allyCard.name} curou ${mg.effectValue} de Energia!`);
+                    this._spawnFloatingNumber(allyCard, mg.effectValue, 'heal');
                 } else {
                     alertMsg += `Alvo: ${allyCard.name}\nNão possui o elemento necessário (${(mg.conditionElements||[]).join('/')}). Mugic sem efeito.`;
                     this.log(`⚠️ ${mg.name} sem efeito: ${allyCard.name} não tem ${(mg.conditionElements||[]).join('/')}.`);
@@ -731,6 +756,7 @@ Object.assign(GameEngine.prototype, {
                 allyCard.energy = Math.min(allyCard.maxEnergy, allyCard.energy + (mg.healValue || 0));
                 alertMsg += `Alvo: ${allyCard.name}\nCurou ${mg.healValue} de Energia. Ganhou elemento ${mg.grantElement}!`;
                 this.log(`💚 ${allyCard.name} curou ${mg.healValue} de Energia!`);
+                this._spawnFloatingNumber(allyCard, mg.healValue, 'heal');
                 if (mg.grantElement && !(allyCard.elements || []).includes(mg.grantElement)) {
                     if (!allyCard.elements) allyCard.elements = [];
                     allyCard.elements.push(mg.grantElement);
@@ -749,6 +775,7 @@ Object.assign(GameEngine.prototype, {
                     target._elementalReductions.push({ elements: ['Fire'], amount: mg.reductionValue || 5, expiresOnTurn: this.turn });
                     alertMsg += `Alvo: ${target.name}\nCurou ${mg.healValue} de Energia. Dano de Fogo reduzido em ${mg.reductionValue} até o fim do turno.`;
                     this.log(`💚 ${target.name} curou ${mg.healValue} e ficou resistente a Fogo!`);
+                    this._spawnFloatingNumber(target, mg.healValue, 'heal');
                 } else {
                     alertMsg += `Alvo deve ser uma criatura OverWorld aliada. Sem efeito.`;
                     this.log(`⚠️ ${mg.name}: nenhuma criatura OverWorld aliada engajada.`);
@@ -762,6 +789,7 @@ Object.assign(GameEngine.prototype, {
                 enemyCard.energy -= mg.effectValue;
                 alertMsg += `🎯 Alvo do dano: ${enemyCard.name}\n-${mg.effectValue} HP (${oldVal} → ${Math.max(0,enemyCard.energy)})`;
                 this.log(`💥 [${mg.name}] causou ${mg.effectValue} de dano a ${enemyCard.name}! (${oldVal} → ${Math.max(0,enemyCard.energy)})`);
+                this._spawnFloatingNumber(enemyCard, mg.effectValue, 'mugic');
                 if (enemyCard.energy <= 0) this.log(`💀 ${enemyCard.name} foi destruído pelo Mugic!`);
                 break;
 
@@ -773,6 +801,7 @@ Object.assign(GameEngine.prototype, {
                     enemyCard.energy -= mg.effectValue;
                     alertMsg += `Alvo: ${enemyCard.name}\nPossui ${req.join('/')} — sofreu ${mg.effectValue} de dano! (${oldVal} → ${Math.max(0,enemyCard.energy)})`;
                     this.log(`💥 ${mg.name} causou ${mg.effectValue} de dano a ${enemyCard.name}!`);
+                    this._spawnFloatingNumber(enemyCard, mg.effectValue, 'mugic');
                 } else {
                     alertMsg += `Alvo: ${enemyCard.name}\nNão possui ${req.join('/')}. Mugic sem efeito.`;
                     this.log(`⚠️ ${mg.name}: ${enemyCard.name} não tem ${req.join('/')}.`);
@@ -786,6 +815,7 @@ Object.assign(GameEngine.prototype, {
                 enemyCard.energy -= mg.effectValue;
                 alertMsg += `Alvo: ${enemyCard.name}\nSofreu ${mg.effectValue} de dano!`;
                 this.log(`💥 ${mg.name} causou ${mg.effectValue} de dano a ${enemyCard.name}!`);
+                this._spawnFloatingNumber(enemyCard, mg.effectValue, 'mugic');
                 if (mg.grantElement && !(allyCard.elements || []).includes(mg.grantElement)) {
                     if (!allyCard.elements) allyCard.elements = [];
                     allyCard.elements.push(mg.grantElement);
@@ -897,6 +927,8 @@ Object.assign(GameEngine.prototype, {
                 enemyCard.energy -= (mg.lossValue||0);
                 alertMsg += `💚 Beneficiada: ${allyCard.name} +${mg.gainValue} HP\n💥 Prejudicada: ${enemyCard.name} -${mg.lossValue} HP`;
                 this.log(`🔄 [${mg.name}]: ${allyCard.name} +${mg.gainValue} HP 💚 / ${enemyCard.name} -${mg.lossValue} HP 💥`);
+                this._spawnFloatingNumber(allyCard, mg.gainValue, 'heal');
+                this._spawnFloatingNumber(enemyCard, mg.lossValue, 'drain');
                 break;
 
             case "energy_transfer":
@@ -905,6 +937,8 @@ Object.assign(GameEngine.prototype, {
                 enemyCard.energy -= (mg.lossValue||0);
                 alertMsg += `💚 Beneficiada: ${allyCard.name} +${mg.gainValue} HP\n💥 Prejudicada: ${enemyCard.name} -${mg.lossValue} HP`;
                 this.log(`🔄 [${mg.name}]: ${allyCard.name} +${mg.gainValue} HP 💚 / ${enemyCard.name} -${mg.lossValue} HP 💥`);
+                this._spawnFloatingNumber(allyCard, mg.gainValue, 'heal');
+                this._spawnFloatingNumber(enemyCard, mg.lossValue, 'drain');
                 break;
 
             // ── REDUÇÃO DE DANO ───────────────────────────────────────────────
@@ -1033,6 +1067,13 @@ Object.assign(GameEngine.prototype, {
             }
 
             case "negate_mugic": {
+                // Lake Ken-I-Po: Mugics são untargetable — não podem ser negadas
+                const locEfNeg = this.activeLocation && this.activeLocation.effect;
+                if (locEfNeg && locEfNeg.type === 'mugic_untargetable') {
+                    alertMsg += `🛡️ [Lake Ken-I-Po] Mugics são Untargetable neste local — negação bloqueada!`;
+                    this.log(`📍 [Lake Ken-I-Po] ${mg.name} não pode negar Mugics aqui!`);
+                    break;
+                }
                 // Procura na pilha (de cima para baixo) a próxima mugic que passa no filtro
                 const filter = mg.negateFilter; // "any" | string | string[]
                 const matchesTribe = (tribe) => {
@@ -1066,10 +1107,39 @@ Object.assign(GameEngine.prototype, {
                 break;
             }
 
-            case "retarget_mugic":
-                alertMsg += `(Song of Deflection: mecânica de redirecionamento de alvo — sem efeito automático neste turno.)`;
-                this.log(`↩️ Song of Deflection: nenhum alvo redirecionado.`);
+            case "retarget_mugic": {
+                // Encontra a mugic de alvo único mais recente não negada na pilha
+                const singleTargetTypes = [
+                    'heal','damage','buff_combat_stats','debuff_all_stats','buff_all_stats',
+                    'grant_element_choice','grant_elements','heal_and_grant_element',
+                    'damage_and_grant_element','energy_steal','grant_invisibility',
+                    'remove_invisibility','remove_abilities','destroy_battlegear',
+                    'grant_range_swift','damage_reduction_aura','buff_per_danian',
+                    'conditional_heal','damage_if_element','prevent_movement'
+                ];
+                let retargetIdx = -1;
+                for (let i = this.burstStack.length - 1; i >= 0; i--) {
+                    const item = this.burstStack[i];
+                    if (item.type === 'mugic' && !item.negated
+                        && singleTargetTypes.includes(item.mugic.effectType)) {
+                        retargetIdx = i;
+                        break;
+                    }
+                }
+                if (retargetIdx === -1) {
+                    alertMsg += `↩️ Nenhuma Mugic de alvo único válida na pilha para redirecionar.`;
+                    this.log(`↩️ Song of Deflection: nenhum alvo válido.`);
+                } else {
+                    const target = this.burstStack[retargetIdx];
+                    // Inverte o alvo: marca o item como "retargeted"
+                    target.retargeted = !target.retargeted;
+                    const newTarget = target.retargeted ? 'criatura inimiga' : 'criatura aliada';
+                    target.description = `[REDIRECIONADA → ${newTarget}] ${target.mugic.name}`;
+                    alertMsg += `↩️ [${target.mugic.name}] foi redirecionada para a ${newTarget}!`;
+                    this.log(`↩️ Song of Deflection: [${target.mugic.name}] agora afeta a ${newTarget}!`);
+                }
                 break;
+            }
 
             case "return_mugic": {
                 // Retorna a última Mugic do discard do lançador para a mão

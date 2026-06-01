@@ -242,11 +242,16 @@ Object.assign(GameEngine.prototype, {
             damage:   { color: '#ef4444', bg: 'rgba(239,68,68,0.15)',   prefix: '-', icon: '💥' },
             heal:     { color: '#22c55e', bg: 'rgba(34,197,94,0.15)',   prefix: '+', icon: '💚' },
             reckless: { color: '#f97316', bg: 'rgba(249,115,22,0.15)', prefix: '-', icon: '💢' },
+            mugic:    { color: '#a855f7', bg: 'rgba(168,85,247,0.15)', prefix: '-', icon: '🎵' },
+            drain:    { color: '#f59e0b', bg: 'rgba(245,158,11,0.15)', prefix: '-', icon: '📉' },
+            buff:     { color: '#38bdf8', bg: 'rgba(56,189,248,0.15)', prefix: '+', icon: '⬆️' },
+            location: { color: '#fb923c', bg: 'rgba(251,146,60,0.15)', prefix: '-', icon: '📍' },
+            sacrifice: { color: '#e879f9', bg: 'rgba(232,121,249,0.15)', prefix: '', icon: '⚔️' },
         };
         const cfg = configs[type] || configs.damage;
 
         const el = document.createElement('div');
-        el.className = 'floating-number';
+        el.className = `floating-number${value >= 30 ? ' big' : ''}`;
         el.innerHTML = `${cfg.icon} <span>${cfg.prefix}${value}</span>`;
         el.style.cssText = `
             position: absolute;

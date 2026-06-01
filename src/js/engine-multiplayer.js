@@ -553,12 +553,7 @@ Object.assign(GameEngine.prototype, {
         const rd = this.remoteDraft;
 
         if (this.myPlayerNumber === 1) {
-            const p2Cards = rd.cards.map(c => {
-                const card = JSON.parse(JSON.stringify(c));
-                card.player = 2; card.maxEnergy = card.energy;
-                if (card.mugicCounters === undefined) card.mugicCounters = 0;
-                return card;
-            });
+            const p2Cards = rd.cards.map(c => this._initCard(c, 2));
             const p2Bg = rd.battlegears;
             this.playerMugics = JSON.parse(JSON.stringify(this.draftedMugics));
             this.p2Mugics     = JSON.parse(JSON.stringify(rd.mugics));
@@ -579,12 +574,7 @@ Object.assign(GameEngine.prototype, {
 
             this._finishStartBattle();
         } else {
-            const p1Cards = rd.cards.map(c => {
-                const card = JSON.parse(JSON.stringify(c));
-                card.player = 1; card.maxEnergy = card.energy;
-                if (card.mugicCounters === undefined) card.mugicCounters = 0;
-                return card;
-            });
+            const p1Cards = rd.cards.map(c => this._initCard(c, 1));
             const p1Bg = rd.battlegears;
 
             // Posiciona cartas de P1 no boardP1 usando a formação enviada por P1

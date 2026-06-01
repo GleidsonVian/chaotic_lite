@@ -621,8 +621,8 @@ document.addEventListener("DOMContentLoaded", () => {
 });
     </script>
 
-    <!-- Feed de batalha animado -->
-    <div id="battle-feed"></div>
+    <!-- Feed de batalha animado (desativado — log estruturado no painel lateral) -->
+    <div id="battle-feed" style="display:none;"></div>
 
     <!-- Modal: Times Sugeridos -->
     <div id="teams-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this)game.closeTeamSuggestions()">

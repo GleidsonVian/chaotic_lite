@@ -1,6 +1,41 @@
 // engine-helpers.js
 Object.assign(GameEngine.prototype, {
 
+    /**
+     * Inicializa um card bruto (vindo de JSON) para uso no tabuleiro.
+     * Define player, maxEnergy, mugicCounters e associa battlegear se fornecido.
+     * @param {object} baseCard  - card original (será copiado via JSON)
+     * @param {number} playerNum - 1 ou 2
+     * @param {object} [bg]      - battlegear a equipar (opcional)
+     * @returns {object} card pronto para o tabuleiro
+     */
+    _initCard(baseCard, playerNum, bg = null) {
+        const card = JSON.parse(JSON.stringify(baseCard));
+        card.player = playerNum;
+        card.maxEnergy = card.energy;
+        if (card.mugicCounters === undefined) card.mugicCounters = 0;
+        if (bg) {
+            card.battlegear = JSON.parse(JSON.stringify(bg));
+            card.bgRevealed = !!card.battlegear.faceUp;
+            if (card.bgRevealed) this._revealBattlegear(card);
+        }
+        return card;
+    },
+
+    /**
+     * Itera sobre todas as criaturas vivas de um tabuleiro.
+     * @param {number} playerNum - 1 ou 2 (ou passa a matriz diretamente)
+     * @param {function} fn - callback(card, r, c, board)
+     */
+    _boardWalk(playerNum, fn) {
+        const board = playerNum === 1 ? this.boardP1 : this.boardP2;
+        for (let r = 0; r < board.length; r++) {
+            for (let c = 0; c < board[r].length; c++) {
+                if (board[r][c]) fn(board[r][c], r, c, board);
+            }
+        }
+    },
+
     /** Remove mugic[index] da mão do player (1 ou 2) e joga no discard pile */
     _discardMugic(playerNum, handArray, index) {
         const mg = handArray.splice(index, 1)[0];
@@ -304,17 +339,8 @@ Object.assign(GameEngine.prototype, {
                 if (cardIdx < 0) return;
                 usedIdx.push(cardIdx);
                 const baseCard = cards[cardIdx];
-                const card = JSON.parse(JSON.stringify(baseCard));
-                card.player = playerNum;
-                card.maxEnergy = card.energy;
-                if (card.mugicCounters === undefined) card.mugicCounters = 0;
-                const bgIdx = battlegears ? cardIdx : -1;
-                if (bgIdx >= 0 && battlegears && battlegears[bgIdx]) {
-                    card.battlegear = JSON.parse(JSON.stringify(battlegears[bgIdx]));
-                    card.bgRevealed = !!card.battlegear.faceUp;
-                    if (card.bgRevealed) this._revealBattlegear(card);
-                }
-                board[pos.r][pos.c] = card;
+                const bgForCard = battlegears && battlegears[cardIdx] ? battlegears[cardIdx] : null;
+                board[pos.r][pos.c] = this._initCard(baseCard, playerNum, bgForCard);
             });
         } else {
             // Sem formação customizada — usa ordem padrão (_getFormation)
@@ -322,16 +348,7 @@ Object.assign(GameEngine.prototype, {
             cards.forEach((baseCard, i) => {
                 if (i >= formation.length) return;
                 const pos  = formation[i];
-                const card = JSON.parse(JSON.stringify(baseCard));
-                card.player = playerNum;
-                card.maxEnergy = card.energy;
-                if (card.mugicCounters === undefined) card.mugicCounters = 0;
-                if (battlegears && battlegears[i]) {
-                    card.battlegear = JSON.parse(JSON.stringify(battlegears[i]));
-                    card.bgRevealed = !!card.battlegear.faceUp;
-                    if (card.bgRevealed) this._revealBattlegear(card);
-                }
-                board[pos.r][pos.c] = card;
+                board[pos.r][pos.c] = this._initCard(baseCard, playerNum, battlegears?.[i] ?? null);
             });
         }
     },
@@ -360,16 +377,8 @@ Object.assign(GameEngine.prototype, {
                 }
                 usedDraftIdx.push(draftIdx);
 
-                const card = JSON.parse(JSON.stringify(baseCard));
-                card.player = 1;
-                card.maxEnergy = card.energy;
-                if (card.mugicCounters === undefined) card.mugicCounters = 0;
-                if (draftIdx >= 0 && this.draftedBattlegears && this.draftedBattlegears[draftIdx]) {
-                    card.battlegear = JSON.parse(JSON.stringify(this.draftedBattlegears[draftIdx]));
-                    card.bgRevealed = !!card.battlegear.faceUp;
-                    if (card.bgRevealed) this._revealBattlegear(card);
-                }
-                this.boardP1[pos.r][pos.c] = card;
+                const bg = draftIdx >= 0 ? (this.draftedBattlegears?.[draftIdx] ?? null) : null;
+                this.boardP1[pos.r][pos.c] = this._initCard(baseCard, 1, bg);
             });
         } else {
             // Formação padrão (sem tela de formação customizada)
@@ -377,16 +386,8 @@ Object.assign(GameEngine.prototype, {
             let p1Index = 0;
             p1Formation.forEach(pos => {
                 if (p1Index < this.draftedCards.length) {
-                    const card = JSON.parse(JSON.stringify(this.draftedCards[p1Index]));
-                    card.player = 1;
-                    card.maxEnergy = card.energy;
-                    if (card.mugicCounters === undefined) card.mugicCounters = 0;
-                    if (this.draftedBattlegears && this.draftedBattlegears[p1Index]) {
-                        card.battlegear = JSON.parse(JSON.stringify(this.draftedBattlegears[p1Index]));
-                        card.bgRevealed = !!card.battlegear.faceUp;
-                        if (card.bgRevealed) this._revealBattlegear(card);
-                    }
-                    this.boardP1[pos.r][pos.c] = card;
+                    const bg = this.draftedBattlegears?.[p1Index] ?? null;
+                    this.boardP1[pos.r][pos.c] = this._initCard(this.draftedCards[p1Index], 1, bg);
                     p1Index++;
                 }
             });
@@ -398,20 +399,96 @@ Object.assign(GameEngine.prototype, {
 
     log(message) {
         console.log(message);
+        this._appendStructuredLog(message);
+    },
 
-        // ── Log box (histórico lateral) ──────────────────────────────────────
-        if (this.logElement) {
-            this.logElement.innerHTML = `<div>${message}</div>` + this.logElement.innerHTML;
+    _appendStructuredLog(message) {
+        if (!this.logElement) return;
+
+        // ── Mensagens filtradas (ruído técnico) ──────────────────────────────
+        const noise = [
+            /^Chaotic Lite Engine/,
+            /^Jogador \d passou a prioridade/,
+            /^IA passou a prioridade/,
+            /^📤 Seu draft/,
+            /^📦 Draft do oponente/,
+            /^Modo Multiplayer/,
+            /^⏳ Aguardando/,
+            /^🟢 Oponente conectado/,
+            /^---------- Turno do Jogador/,
+            /Executando: Ataque Declarado/,
+            /Executando: Mugic Cast/,
+            /^🔔 BURST (ABERTO|FECHADO)/,
+        ];
+        if (noise.some(r => r.test(message))) return;
+
+        // ── Detectores de estrutura ──────────────────────────────────────────
+        const isCombatStart = /⚔️ COMBATE INICIADO/.test(message);
+        const isNewRound    = /Próximo turno \(Strike\): Jogador/.test(message);
+        const isNewTurn     = /📍.*Novo Local Revelado|Fim do Combate/.test(message);
+
+        // ── Novo combate → header de combate ────────────────────────────────
+        if (isCombatStart) {
+            this._logRound = 0;
+            const header = document.createElement('div');
+            header.className = 'log-combat-header';
+            // Extrai "Jogador X ataca primeiro (STAT)"
+            const m = message.match(/Jogador (\d) ataca primeiro \((\w+)\)/);
+            header.innerHTML = m
+                ? `<span>⚔️ Novo Combate</span><span class="log-combat-init">⚡ J${m[1]} inicia · ${m[2].toUpperCase()}</span>`
+                : `<span>⚔️ Novo Combate</span>`;
+            this.logElement.appendChild(header);
+            // Não exibe a mensagem crua, só o header
+            this.logElement.scrollTop = this.logElement.scrollHeight;
+            return;
         }
 
-        // ── Battle Feed animado ──────────────────────────────────────────────
-        // Classifica a mensagem por categoria para colorir
-        const cat = this._feedCategory(message);
-        if (cat) {
-            this._feedQueue = this._feedQueue || [];
-            this._feedQueue.push({ message, cat });
-            if (!this._feedBusy) this._processFeedQueue();
+        // ── Novo round → header de round ────────────────────────────────────
+        if (isNewRound) {
+            this._logRound = (this._logRound || 0) + 1;
+            const m = message.match(/Jogador (\d) ataca/);
+            const striker = m ? (m[1] === '1' ? 'Você' : 'Oponente') : '';
+            const div = document.createElement('div');
+            div.className = 'log-round-header';
+            div.innerHTML = `Round ${this._logRound} <span class="log-round-striker">${striker} ataca</span>`;
+            this.logElement.appendChild(div);
+            this.logElement.scrollTop = this.logElement.scrollHeight;
+            return;
         }
+
+        // ── Fim de combate → separador ────────────────────────────────────
+        if (isNewTurn) {
+            const sep = document.createElement('div');
+            sep.className = 'log-turn-sep';
+            sep.textContent = message.replace(/^Fim do Combate! /, '');
+            this.logElement.appendChild(sep);
+            this.logElement.scrollTop = this.logElement.scrollHeight;
+            return;
+        }
+
+        // ── Entrada normal colorida por tipo ─────────────────────────────────
+        const type = this._logEntryType(message);
+        if (!type) return; // filtra mensagens sem categoria
+
+        const entry = document.createElement('div');
+        entry.className = `log-entry log-entry-${type}`;
+        entry.textContent = message.replace(/^[💥💚🎶🪄🎵🔮✨📍📊⚡🛡️💢💪😰🔄⚔️💀📉🌋❄️🧯⬆️↩️♪🗑️🔭👁️💫🔰]/u, '').trim();
+        this.logElement.appendChild(entry);
+        this.logElement.scrollTop = this.logElement.scrollHeight;
+    },
+
+    _logEntryType(msg) {
+        if (/💀/.test(msg))                                    return 'death';
+        if (/💥/.test(msg))                                    return 'damage';
+        if (/💚|curou|Curou|\+\d+ de Energia/.test(msg))       return 'heal';
+        if (/🎶|🪄|✨ Efeito Mágico|conjurou/.test(msg))       return 'mugic';
+        if (/📍/.test(msg))                                    return 'location';
+        if (/📊 Challenge/.test(msg))                          return 'stat';
+        if (/🔮.*revelou|ganhou.*elemento|Battlegear/.test(msg)) return 'info';
+        if (/🛡️|💢|⚡.*Strike|💨.*Swift|😰.*Intimidate/.test(msg)) return 'passive';
+        if (/reciclado|🔄/.test(msg))                          return 'info';
+        if (/Iniciativa|inicia/.test(msg))                     return 'initiative';
+        return null; // ignora o resto
     },
 
     _feedCategory(msg) {

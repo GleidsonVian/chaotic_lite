@@ -239,11 +239,7 @@ Object.assign(GameEngine.prototype, {
 
         // Casters disponíveis
         const aiCasters = [];
-        for (const row of this.boardP2) {
-            for (const card of row) {
-                if (card && card.mugicCounters > 0) aiCasters.push(card);
-            }
-        }
+        this._boardWalk(2, card => { if (card.mugicCounters > 0) aiCasters.push(card); });
 
         const affordable = (this.p2Mugics || [])
             .map((mg, idx) => {
@@ -348,26 +344,16 @@ Object.assign(GameEngine.prototype, {
         const diff = this.aiDifficulty || 'easy';
 
         // Candidatos atacantes expostos
-        let p2Alive = [];
-        for (let r = 0; r < this.boardP2.length; r++) {
-            for (let c = 0; c < this.boardP2[r].length; c++) {
-                const card = this.boardP2[r][c];
-                if (card && this.isExposed(2, r, c)) {
-                    p2Alive.push({ card, r, c });
-                }
-            }
-        }
+        const p2Alive = [];
+        this._boardWalk(2, (card, r, c) => {
+            if (this.isExposed(2, r, c)) p2Alive.push({ card, r, c });
+        });
 
         // Candidatos alvo
-        let p1All = [];
-        for (let r = 0; r < this.boardP1.length; r++) {
-            for (let c = 0; c < this.boardP1[r].length; c++) {
-                const card = this.boardP1[r][c];
-                if (card && !card._invisibility) {
-                    p1All.push({ card, r, c, exposed: this.isExposed(1, r, c) });
-                }
-            }
-        }
+        const p1All = [];
+        this._boardWalk(1, (card, r, c) => {
+            if (!card._invisibility) p1All.push({ card, r, c, exposed: this.isExposed(1, r, c) });
+        });
 
         if (p2Alive.length === 0 || p1All.length === 0) {
             this.checkWinCondition();

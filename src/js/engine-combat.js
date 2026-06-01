@@ -1,4 +1,13 @@
 // engine-combat.js
+
+/** Delays (ms) usados no fluxo de combate — altere aqui para ajustar o ritmo do jogo. */
+const COMBAT_DELAY = {
+    NEXT_TURN:      1500,   // após fim de combate → próximo turno
+    NEXT_STRIKE:    1000,   // entre strikes dentro de um combate
+    COMBAT_START:   2600,   // banner de iniciativa antes do 1º strike
+    ANIMATION:       800,   // animação de ataque / morte
+};
+
 Object.assign(GameEngine.prototype, {
 
     startCombat(attacker, defender, atkR, atkC, defR, defC, initiatingPlayer, fromRemote = false) {
@@ -65,7 +74,7 @@ Object.assign(GameEngine.prototype, {
         this.log(`⚔️ COMBATE INICIADO! Iniciativa: Jogador ${firstStriker} ataca primeiro (${initStat.toUpperCase()}).`);
         this.renderBoard();
         this._showInitiativeBanner(firstStriker, initStat);
-        setTimeout(() => this.processCombatTurn(), 2600);
+        setTimeout(() => this.processCombatTurn(), COMBAT_DELAY.COMBAT_START);
     },
 
     _applyLocationCombatStartEffect() {
@@ -85,7 +94,10 @@ Object.assign(GameEngine.prototype, {
                 break;
 
             case "combat_start_damage":
-                [c1, c2].forEach(c => { c.energy -= ef.value; });
+                [c1, c2].forEach(c => {
+                    c.energy -= ef.value;
+                    this._spawnFloatingNumber(c, ef.value, 'location');
+                });
                 this.log(`📍 [${loc}] Ambas as criaturas sofreram ${ef.value} de dano!`);
                 break;
 
@@ -103,6 +115,7 @@ Object.assign(GameEngine.prototype, {
                     const opp = i === 0 ? c2 : c1;
                     if (c.courage < opp.courage) {
                         c.energy -= ef.value;
+                        this._spawnFloatingNumber(c, ef.value, 'location');
                         this.log(`📍 [${loc}] ${c.name} tem menos Courage — perdeu ${ef.value} de Energia!`);
                     }
                 });
@@ -206,37 +219,75 @@ Object.assign(GameEngine.prototype, {
             case "heal_on_water_attack":
             case "no_mugic":
             case "no_tribal_mugic":
-            case "no_battlegear_abilities":
             case "extra_mugic_cost_tribe":
+                this.log(`📍 [${loc}] Efeito ativo: ${this.activeLocation.description}`);
+                break;
+
+            case "no_battlegear_abilities":
+                this.log(`📍 [${loc}] ⛔ Battlegears não têm habilidades neste local!`);
+                break;
+
             case "mugic_discount_tribe_first":
             case "mugic_untargetable":
             case "underworld_city_bonus":
-            case "combat_start_return_mugic":
-                // Esses são passivos — logados ao iniciar o combate
+                // Passivos aplicados durante o combate — apenas informa
                 this.log(`📍 [${loc}] Efeito ativo: ${this.activeLocation.description}`);
                 break;
+
+            case "combat_start_return_mugic": {
+                // Castle Bodhran: cada jogador pode retornar uma Mugic do descarte para a mão
+                let returned = false;
+                if (this.p1MugicDiscard && this.p1MugicDiscard.length > 0) {
+                    const mg = this.p1MugicDiscard.pop();
+                    this.playerMugics.push(mg);
+                    this.log(`📍 [${loc}] Jogador 1 retornou [${mg.name}] do descarte para a mão!`);
+                    returned = true;
+                }
+                if (this.p2MugicDiscard && this.p2MugicDiscard.length > 0) {
+                    const mg = this.p2MugicDiscard.pop();
+                    this.p2Mugics.push(mg);
+                    this.log(`📍 [${loc}] Jogador 2 retornou [${mg.name}] do descarte para a mão!`);
+                    returned = true;
+                }
+                if (!returned) {
+                    this.log(`📍 [${loc}] Nenhuma Mugic no descarte para retornar.`);
+                }
+                this.renderMugics();
+                break;
+            }
         }
+    },
+
+    /** Retorna { hand, deck, discard } do deck de ataque do player indicado. */
+    _getAttackAssets(player) {
+        const p = player === 1 ? 'p1' : 'p2';
+        return {
+            hand:    this[`${p}AttackHand`],
+            deck:    this[`${p}AttackDeck`],
+            discard: this[`${p}AttackDiscard`],
+        };
+    },
+
+    // ── Stats efetivos de uma criatura (base + sinergia + local + battlegear) ──
+    // Usado em executeAttack, showAttackModal, _getCombatPreview e resolveAttack.
+    _effectiveStats(card, player, r, c) {
+        const syn   = this.getSynergyBonus(player, r, c) || {};
+        const loc   = (this.activeLocation && this.activeLocation.modifiers) || {};
+        const bg    = (card.bgRevealed && card.battlegear && card.battlegear.modifiers) || {};
+        return {
+            courage: card.courage + (syn.courage||0) + (loc.courage||0) + (bg.courage||0),
+            power:   card.power   + (syn.power  ||0) + (loc.power  ||0) + (bg.power  ||0),
+            wisdom:  card.wisdom  + (syn.wisdom ||0) + (loc.wisdom ||0) + (bg.wisdom ||0),
+            speed:   card.speed   + (syn.speed  ||0) + (loc.speed  ||0) + (bg.speed  ||0),
+        };
     },
 
     // ── Prévia de combate ao selecionar atacante ─────────────────────────────
     // Retorna { verdict, label, initiative, myDmg, theirDmg, color, border }
     _getCombatPreview(attacker, atkR, atkC, atkPlayer, defender, defR, defC) {
         const defPlayer = atkPlayer === 1 ? 2 : 1;
-        const atkSyn  = this.getSynergyBonus(atkPlayer, atkR, atkC)  || {};
-        const defSyn  = this.getSynergyBonus(defPlayer, defR, defC)  || {};
-        const locMod  = (this.activeLocation && this.activeLocation.modifiers) || {};
-        const atkBgM  = (attacker.bgRevealed && attacker.battlegear && attacker.battlegear.modifiers) || {};
-        const defBgM  = (defender.bgRevealed && defender.battlegear && defender.battlegear.modifiers) || {};
-
-        const eff = (c, syn, bgM) => ({
-            courage: c.courage + (syn.courage||0) + (locMod.courage||0) + (bgM.courage||0),
-            power:   c.power   + (syn.power  ||0) + (locMod.power  ||0) + (bgM.power  ||0),
-            wisdom:  c.wisdom  + (syn.wisdom ||0) + (locMod.wisdom ||0) + (bgM.wisdom ||0),
-            speed:   c.speed   + (syn.speed  ||0) + (locMod.speed  ||0) + (bgM.speed  ||0),
-        });
-
-        const ea = eff(attacker, atkSyn, atkBgM);
-        const ed = eff(defender, defSyn, defBgM);
+        const ea = this._effectiveStats(attacker, atkPlayer, atkR, atkC);
+        const ed = this._effectiveStats(defender, defPlayer, defR, defC);
 
         // Swift bonus na iniciativa
         const atkSwift = (attacker.passives||[]).reduce((s,p) => p.id==='swift' ? s+(p.value||10) : s, 0);
@@ -369,25 +420,9 @@ Object.assign(GameEngine.prototype, {
             return;
         }
 
-        const atkSyn    = this.getSynergyBonus(attackingPlayer, atkR, atkC) || {};
-        const defSyn    = this.getSynergyBonus(attackingPlayer === 1 ? 2 : 1, defR, defC) || {};
-        const modalLocMod  = (this.activeLocation && this.activeLocation.modifiers) || {};
-        const atkBgMod  = (attacker.bgRevealed && attacker.battlegear && attacker.battlegear.modifiers) || {};
-        const defBgMod  = (defender.bgRevealed && defender.battlegear && defender.battlegear.modifiers) || {};
-
-        // Inclui synergy + battlegear + local — mesmo cálculo usado em executeAttack
-        const effAtk = {
-            courage: attacker.courage + (atkSyn.courage||0) + (modalLocMod.courage||0) + (atkBgMod.courage||0),
-            power:   attacker.power   + (atkSyn.power  ||0) + (modalLocMod.power  ||0) + (atkBgMod.power  ||0),
-            wisdom:  attacker.wisdom  + (atkSyn.wisdom ||0) + (modalLocMod.wisdom ||0) + (atkBgMod.wisdom ||0),
-            speed:   attacker.speed   + (atkSyn.speed  ||0) + (modalLocMod.speed  ||0) + (atkBgMod.speed  ||0),
-        };
-        const effDef = {
-            courage: defender.courage + (defSyn.courage||0) + (modalLocMod.courage||0) + (defBgMod.courage||0),
-            power:   defender.power   + (defSyn.power  ||0) + (modalLocMod.power  ||0) + (defBgMod.power  ||0),
-            wisdom:  defender.wisdom  + (defSyn.wisdom ||0) + (modalLocMod.wisdom ||0) + (defBgMod.wisdom ||0),
-            speed:   defender.speed   + (defSyn.speed  ||0) + (modalLocMod.speed  ||0) + (defBgMod.speed  ||0),
-        };
+        const defPlayer = attackingPlayer === 1 ? 2 : 1;
+        const effAtk = this._effectiveStats(attacker, attackingPlayer, atkR, atkC);
+        const effDef = this._effectiveStats(defender, defPlayer, defR, defC);
 
         const renderCard = (card, effStats, label) => {
             const effEnergy = card.energy;
@@ -737,7 +772,7 @@ Object.assign(GameEngine.prototype, {
         if (!this.pendingCombat) return;
         if (!this.activeCombat) return; // Combate já terminou (desync multiplayer)
         const { attacker, defender, atkR, atkC, defR, defC, attackingPlayer } = this.pendingCombat;
-        const hand = attackingPlayer === 1 ? this.p1AttackHand : this.p2AttackHand;
+        const { hand } = this._getAttackAssets(attackingPlayer);
         const atkCard = hand[cardIndex];
 
         // Revelar battlegears no momento em que o ataque é confirmado (1ª vez apenas)
@@ -750,8 +785,7 @@ Object.assign(GameEngine.prototype, {
         }
 
         const usedCard = hand.splice(cardIndex, 1)[0];
-        const discard = attackingPlayer === 1 ? this.p1AttackDiscard : this.p2AttackDiscard;
-        discard.push(usedCard);
+        this._getAttackAssets(attackingPlayer).discard.push(usedCard);
         // draw já foi feito em processCombatTurn antes de abrir o modal
         // (jogador sempre escolhe entre 3 cartas, conforme regras do Chaotic TCG)
 
@@ -779,24 +813,9 @@ Object.assign(GameEngine.prototype, {
     executeAttack(item) {
         const { attacker, defender, atkR, atkC, defR, defC, attackingPlayer, atkCard } = item;
 
-        const atkSyn = this.getSynergyBonus(attackingPlayer, atkR, atkC) || {};
-        const defSyn = this.getSynergyBonus(attackingPlayer === 1 ? 2 : 1, defR, defC) || {};
-        const locMod = (this.activeLocation && this.activeLocation.modifiers) || {};
-        const atkBgMod = (attacker.bgRevealed && attacker.battlegear && attacker.battlegear.modifiers) || {};
-        const defBgMod = (defender.bgRevealed && defender.battlegear && defender.battlegear.modifiers) || {};
-
-        const effAtk = {
-            courage: attacker.courage + (atkSyn.courage||0) + (locMod.courage||0) + (atkBgMod.courage||0),
-            power:   attacker.power   + (atkSyn.power  ||0) + (locMod.power  ||0) + (atkBgMod.power  ||0),
-            wisdom:  attacker.wisdom  + (atkSyn.wisdom ||0) + (locMod.wisdom ||0) + (atkBgMod.wisdom ||0),
-            speed:   attacker.speed   + (atkSyn.speed  ||0) + (locMod.speed  ||0) + (atkBgMod.speed  ||0)
-        };
-        const effDef = {
-            courage: defender.courage + (defSyn.courage||0) + (locMod.courage||0) + (defBgMod.courage||0),
-            power:   defender.power   + (defSyn.power  ||0) + (locMod.power  ||0) + (defBgMod.power  ||0),
-            wisdom:  defender.wisdom  + (defSyn.wisdom ||0) + (locMod.wisdom ||0) + (defBgMod.wisdom ||0),
-            speed:   defender.speed   + (defSyn.speed  ||0) + (locMod.speed  ||0) + (defBgMod.speed  ||0)
-        };
+        const defPlayer = attackingPlayer === 1 ? 2 : 1;
+        const effAtk = this._effectiveStats(attacker, attackingPlayer, atkR, atkC);
+        const effDef = this._effectiveStats(defender, defPlayer, defR, defC);
 
         // ─── Helpers ─────────────────────────────────────────────────────────
         const checkStat = (stat, mode, threshold) => {
@@ -1270,19 +1289,14 @@ Object.assign(GameEngine.prototype, {
             this.activeCombat = null;
             this.selectedAttacker = null;
 
-            if (this.locationDeck.length > 0) {
-                this.activeLocation = this.locationDeck.pop();
-                this.log(`📍 Novo Local Revelado para a próxima batalha: ${this.activeLocation.name}!`);
-                this.renderLocation();
-                this.showLocationToast(this.activeLocation, true);
-            }
+            this._revealNextLocation();
             _syncBoard(); // ← após revelar novo local
 
             this.renderBoard();
             this.log("💥 Empate no combate! Ambas as criaturas foram destruídas simultaneamente!");
             this._recordMatchHistory(combatSnapshot, combatSnapshot.p1Card, combatSnapshot.p2Card);
             if (this.checkWinCondition()) return;
-            setTimeout(() => this.nextTurn(), 1500);
+            setTimeout(() => this.nextTurn(), COMBAT_DELAY.NEXT_TURN);
             return;
         }
 
@@ -1293,12 +1307,7 @@ Object.assign(GameEngine.prototype, {
             this.activeCombat = null;
             this.selectedAttacker = null;
 
-            if (this.locationDeck.length > 0) {
-                this.activeLocation = this.locationDeck.pop();
-                this.log(`📍 Novo Local Revelado para a próxima batalha: ${this.activeLocation.name}!`);
-                this.renderLocation();
-                this.showLocationToast(this.activeLocation, true);
-            }
+            this._revealNextLocation();
             _syncBoard(); // ← após revelar novo local
 
             this.renderBoard();
@@ -1306,7 +1315,7 @@ Object.assign(GameEngine.prototype, {
             this._recordMatchHistory(combatSnapshot, combatSnapshot.p1Card, combatSnapshot.p2Card);
             this._showCombatSummary(combatSnapshot, combatSnapshot.p1Card, combatSnapshot.p2Card);
             if (this.checkWinCondition()) return;
-            setTimeout(() => this.nextTurn(), 1500);
+            setTimeout(() => this.nextTurn(), COMBAT_DELAY.NEXT_TURN);
             return;
         }
         if (p2Card.energy <= 0) {
@@ -1316,12 +1325,7 @@ Object.assign(GameEngine.prototype, {
             this.activeCombat = null;
             this.selectedAttacker = null;
 
-            if (this.locationDeck.length > 0) {
-                this.activeLocation = this.locationDeck.pop();
-                this.log(`📍 Novo Local Revelado para a próxima batalha: ${this.activeLocation.name}!`);
-                this.renderLocation();
-                this.showLocationToast(this.activeLocation, true);
-            }
+            this._revealNextLocation();
             _syncBoard(); // ← após revelar novo local
 
             this.renderBoard();
@@ -1329,7 +1333,7 @@ Object.assign(GameEngine.prototype, {
             this._recordMatchHistory(combatSnapshot, combatSnapshot.p2Card, combatSnapshot.p1Card);
             this._showCombatSummary(combatSnapshot, combatSnapshot.p2Card, combatSnapshot.p1Card);
             if (this.checkWinCondition()) return;
-            setTimeout(() => this.nextTurn(), 1500);
+            setTimeout(() => this.nextTurn(), COMBAT_DELAY.NEXT_TURN);
             return;
         }
 
@@ -1340,6 +1344,15 @@ Object.assign(GameEngine.prototype, {
         setTimeout(() => {
             this.processCombatTurn();
         }, 1000);
+    },
+
+    // ── Revela o próximo local do deck (chamado ao fim de cada combate) ──────
+    _revealNextLocation() {
+        if (this.locationDeck.length === 0) return;
+        this.activeLocation = this.locationDeck.pop();
+        this.log(`📍 Novo Local Revelado para a próxima batalha: ${this.activeLocation.name}!`);
+        this.renderLocation();
+        this.showLocationToast(this.activeLocation, true);
     },
 
     cancelAttackModal() {
@@ -1359,31 +1372,16 @@ Object.assign(GameEngine.prototype, {
         this.log("Ataque cancelado.");
     },
 
+    /** @deprecated — substituído pelo fluxo Burst + executeAttack. Mantido apenas como fallback do showAttackModal sem DOM. */
     resolveAttack(attacker, defender, atkR, atkC, defR, defC, attackingPlayer, attackCardIndex) {
         if (this.activeCombat) {
             this.activeCombat.isFirstAttack = false;
         }
-        const atkSyn = this.getSynergyBonus(attackingPlayer, atkR, atkC);
-        const defSyn = this.getSynergyBonus(attackingPlayer === 1 ? 2 : 1, defR, defC);
-        const locMod = this.activeLocation && this.activeLocation.modifiers ? this.activeLocation.modifiers : { courage: 0, power: 0, wisdom: 0, speed: 0 };
-        const atkBgMod = attacker.bgRevealed && attacker.battlegear && attacker.battlegear.modifiers ? attacker.battlegear.modifiers : { courage: 0, power: 0, wisdom: 0, speed: 0 };
-        const defBgMod = defender.bgRevealed && defender.battlegear && defender.battlegear.modifiers ? defender.battlegear.modifiers : { courage: 0, power: 0, wisdom: 0, speed: 0 };
+        const defPlayer = attackingPlayer === 1 ? 2 : 1;
+        const effAtk = this._effectiveStats(attacker, attackingPlayer, atkR, atkC);
+        const effDef = this._effectiveStats(defender, defPlayer, defR, defC);
 
-        const effAtk = {
-            courage: attacker.courage + (atkSyn ? atkSyn.courage : 0) + (locMod.courage || 0) + (atkBgMod.courage || 0),
-            power: attacker.power + (atkSyn ? atkSyn.power : 0) + (locMod.power || 0) + (atkBgMod.power || 0),
-            wisdom: attacker.wisdom + (atkSyn ? atkSyn.wisdom : 0) + (locMod.wisdom || 0) + (atkBgMod.wisdom || 0),
-            speed: attacker.speed + (atkSyn ? atkSyn.speed : 0) + (locMod.speed || 0) + (atkBgMod.speed || 0)
-        };
-        const effDef = {
-            courage: defender.courage + (defSyn ? defSyn.courage : 0) + (locMod.courage || 0) + (defBgMod.courage || 0),
-            power: defender.power + (defSyn ? defSyn.power : 0) + (locMod.power || 0) + (defBgMod.power || 0),
-            wisdom: defender.wisdom + (defSyn ? defSyn.wisdom : 0) + (locMod.wisdom || 0) + (defBgMod.wisdom || 0),
-            speed: defender.speed + (defSyn ? defSyn.speed : 0) + (locMod.speed || 0) + (defBgMod.speed || 0)
-        };
-
-        const atkHand = attackingPlayer === 1 ? this.p1AttackHand : this.p2AttackHand;
-        const atkDeck = attackingPlayer === 1 ? this.p1AttackDeck : this.p2AttackDeck;
+        const { hand: atkHand, deck: atkDeck } = this._getAttackAssets(attackingPlayer);
 
         let attackCard = null;
         if (atkHand.length > 0 && attackCardIndex !== undefined) {
@@ -1477,11 +1475,7 @@ Object.assign(GameEngine.prototype, {
                 this.renderBoard();
             }, 800);
 
-            if (this.turn === 1) {
-                setTimeout(() => this.nextTurn(), 1500);
-            } else {
-                setTimeout(() => this.nextTurn(), 1500); // P2 encerrou turno com abate
-            }
+            setTimeout(() => this.nextTurn(), COMBAT_DELAY.NEXT_TURN);
         } else {
             // Combate continua, troca o turno do striker
             if (this.activeCombat) {
@@ -1491,7 +1485,7 @@ Object.assign(GameEngine.prototype, {
                     this.combatAnimationState = null;
                     this.renderBoard();
                 }, 800);
-                setTimeout(() => this.processCombatTurn(), 1000);
+                setTimeout(() => this.processCombatTurn(), COMBAT_DELAY.NEXT_STRIKE);
             }
         }
     },

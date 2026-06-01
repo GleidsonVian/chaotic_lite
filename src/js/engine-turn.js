@@ -7,23 +7,16 @@ Object.assign(GameEngine.prototype, {
         setTimeout(() => { this._nextTurnLock = false; }, 500);
 
         // Expira flags temporárias de turno em todas as criaturas
-        const expireFlags = (board) => {
-            for (const row of board) for (const card of row) {
-                if (!card) continue;
-                // Invisibility dura apenas 1 turno completo
-                if (card._invisibility) {
-                    if (card._invisibilityTurn !== undefined && card._invisibilityTurn < this.turn) {
-                        delete card._invisibility;
-                        delete card._invisibilityTurn;
-                        this.log(`👁️ ${card.name} não está mais invisível.`);
-                    }
-                }
-                // _cannotMove expira a cada virada de turno
-                delete card._cannotMove;
+        const expireCard = (card) => {
+            if (card._invisibility && card._invisibilityTurn !== undefined && card._invisibilityTurn < this.turn) {
+                delete card._invisibility;
+                delete card._invisibilityTurn;
+                this.log(`👁️ ${card.name} não está mais invisível.`);
             }
+            delete card._cannotMove;
         };
-        expireFlags(this.boardP1);
-        expireFlags(this.boardP2);
+        this._boardWalk(1, expireCard);
+        this._boardWalk(2, expireCard);
 
         this.selectedAttacker = null;
         this.gameState = 'IDLE';

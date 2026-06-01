@@ -1388,6 +1388,9 @@ Object.assign(GameEngine.prototype, {
         }
 
         this._boardEntryPending = true; // sinaliza para o renderBoard disparar a entrada
+        // Limpa e reseta o log estruturado para nova batalha
+        if (this.logElement) this.logElement.innerHTML = '';
+        this._logRound = 0;
         this.renderBoard();
         this.renderMugics();
         this.renderLocation();
