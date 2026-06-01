@@ -322,8 +322,10 @@ Object.assign(GameEngine.prototype, {
                 atkR: p1R, atkC: p1C, defR: p2R, defC: p2C,
                 attackingPlayer: 1
             };
+            // ── Draw ANTES de mostrar o modal (P1 escolhe entre 3) ──────────
+            this.drawAttackCard(1);
+
             if (this.multiplayerMode && this.myPlayerNumber === 2) {
-                // Sou o P2 — aguardo P1 escolher o ataque via socket
                 this.log('⏳ Aguardando Jogador 1 escolher o ataque...');
             } else {
                 this.showAttackModal(p1Card, p2Card, p1R, p1C, p2R, p2C, 1);
@@ -335,15 +337,15 @@ Object.assign(GameEngine.prototype, {
                 attackingPlayer: 2
             };
 
+            // ── Draw ANTES de mostrar o modal (P2 escolhe entre 3) ──────────
+            this.drawAttackCard(2);
+
             if (this.multiplayerMode) {
-                // Em multiplayer: P2 humano escolhe o ataque pelo modal
                 if (this.myPlayerNumber === 2) {
-                    // Sou o P2 — mostro meu modal de ataque
                     this.showAttackModal(p2Card, p1Card, p2R, p2C, p1R, p1C, 2);
                 }
-                // Se sou o P1, apenas aguardo o P2 enviar confirmAttack via socket
             } else {
-                // Single-player: IA escolhe automaticamente
+                // Single-player: IA escolhe automaticamente entre 3 cartas
                 setTimeout(() => {
                     const hand = this.p2AttackHand;
                     const { attacker: aiAttacker, defender: aiDefender } = this.pendingCombat;
@@ -750,17 +752,18 @@ Object.assign(GameEngine.prototype, {
         const usedCard = hand.splice(cardIndex, 1)[0];
         const discard = attackingPlayer === 1 ? this.p1AttackDiscard : this.p2AttackDiscard;
         discard.push(usedCard);
-        this.drawAttackCard(attackingPlayer);
+        // draw já foi feito em processCombatTurn antes de abrir o modal
+        // (jogador sempre escolhe entre 3 cartas, conforme regras do Chaotic TCG)
 
         // Inicializar a Pilha (Burst)
         this.burstStack = [];
         this.burstPasses = 0;
         this.burstPriority = attackingPlayer; // Atacante tem a 1ª resposta
 
-        const p2Label = this.multiplayerMode ? 'Jogador 2' : 'IA (Oponente)';
+        const p2Label = this.multiplayerMode ? (this.p2Name||'Jogador 2') : 'IA (Oponente)';
         this.burstStack.push({
             type: 'attack',
-            source: attackingPlayer === 1 ? 'Jogador 1' : p2Label,
+            source: attackingPlayer === 1 ? (this.p1Name||'Jogador 1') : p2Label,
             attacker, defender, atkR, atkC, defR, defC, attackingPlayer, atkCard,
             description: `Ataque Declarado: ${atkCard.name}`
         });
@@ -1172,8 +1175,8 @@ Object.assign(GameEngine.prototype, {
         const totalDmgOnP2 = dmgBy[p2.name] || 0;
 
         const isP1Winner = winnerCard === p1;
-        const winnerLabel = isP1Winner ? 'Jogador 1' : 'Jogador 2';
-        const loserLabel  = isP1Winner ? 'Jogador 2' : 'Jogador 1';
+        const winnerLabel = isP1Winner ? (this.p1Name||'Jogador 1') : (this.p2Name||'Jogador 2');
+        const loserLabel  = isP1Winner ? (this.p2Name||'Jogador 2') : (this.p1Name||'Jogador 1');
 
         // Header
         document.getElementById('cs-winner-name').textContent = winnerCard.name;
@@ -1247,6 +1250,17 @@ Object.assign(GameEngine.prototype, {
 
         // ── Empate simultâneo: ambas as criaturas chegaram a 0 ao mesmo tempo ──
         // (acontece com Reckless: atacante se fere e mata o defensor no mesmo turno)
+        // Helper: envia estado autoritativo ao oponente — fecha burst e sincroniza tabuleiro
+        const _syncBoard = () => {
+            if (this.multiplayerMode) {
+                this.sendAction('sync_board_state', {
+                    boardP1:       JSON.parse(JSON.stringify(this.boardP1)),
+                    boardP2:       JSON.parse(JSON.stringify(this.boardP2)),
+                    activeLocation: this.activeLocation ? JSON.parse(JSON.stringify(this.activeLocation)) : null
+                });
+            }
+        };
+
         if (p1Card.energy <= 0 && p2Card.energy <= 0) {
             const combatSnapshot = _snapshot();
             this._discardCreature(p1Card);
@@ -1262,10 +1276,10 @@ Object.assign(GameEngine.prototype, {
                 this.renderLocation();
                 this.showLocationToast(this.activeLocation, true);
             }
+            _syncBoard(); // ← após revelar novo local
 
             this.renderBoard();
             this.log("💥 Empate no combate! Ambas as criaturas foram destruídas simultaneamente!");
-            // Registra como empate (sem vencedor claro — usa p1 como "sobrevivente" por convenção)
             this._recordMatchHistory(combatSnapshot, combatSnapshot.p1Card, combatSnapshot.p2Card);
             if (this.checkWinCondition()) return;
             setTimeout(() => this.nextTurn(), 1500);
@@ -1285,6 +1299,7 @@ Object.assign(GameEngine.prototype, {
                 this.renderLocation();
                 this.showLocationToast(this.activeLocation, true);
             }
+            _syncBoard(); // ← após revelar novo local
 
             this.renderBoard();
             this.log("Fim do Combate! A carta do Jogador 1 foi destruída.");
@@ -1307,6 +1322,7 @@ Object.assign(GameEngine.prototype, {
                 this.renderLocation();
                 this.showLocationToast(this.activeLocation, true);
             }
+            _syncBoard(); // ← após revelar novo local
 
             this.renderBoard();
             this.log("Fim do Combate! A carta do Jogador 2 foi destruída.");

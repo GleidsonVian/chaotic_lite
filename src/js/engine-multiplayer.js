@@ -110,6 +110,27 @@ Object.assign(GameEngine.prototype, {
         }
     },
 
+    // ─── Nomes dos jogadores ─────────────────────────────────────────────────
+
+    _onLobbyNameChange(value) {
+        const name = value.trim() || (this.myPlayerNumber === 1 ? 'Jogador 1' : 'Jogador 2');
+        // Atualiza nome próprio
+        if (this.myPlayerNumber === 1) {
+            this.p1Name = name;
+            const el = document.getElementById('lobby-slot-1-name');
+            if (el) el.textContent = name;
+        } else {
+            this.p2Name = name;
+            const el = document.getElementById('lobby-slot-2-name');
+            if (el) el.textContent = name;
+        }
+        // Envia ao oponente (com debounce simples)
+        clearTimeout(this._nameDebounce);
+        this._nameDebounce = setTimeout(() => {
+            this.sendAction('player_name', { name });
+        }, 400);
+    },
+
     // ─── Sistema de votação de modo ──────────────────────────────────────────
 
     _voteMode(mode) {
@@ -230,17 +251,30 @@ Object.assign(GameEngine.prototype, {
                 this.sendAction('request_resync');
             }
             this._reconnecting = false;
-            this._showLobby('waiting', playerNumber);
-        });
 
-        this.socket.on('waiting', () => {
-            this.log('⏳ Aguardando segundo jogador conectar...');
-            this._showLobby('waiting', this.myPlayerNumber);
+            // Pré-preenche o slot com o nome atual (ou padrão)
+            const defaultName = `Jogador ${playerNumber}`;
+            const myName = playerNumber === 1 ? this.p1Name : this.p2Name;
+            const input = document.getElementById('lobby-name-input');
+            if (input && myName === defaultName) input.placeholder = defaultName;
+
+            this._showLobby('waiting', playerNumber);
         });
 
         this.socket.on('room_ready', () => {
             this.log('🟢 Oponente conectado! Façam o Draft e cliquem em Iniciar Batalha.');
             this._showLobby('ready', this.myPlayerNumber);
+            // Envia meu nome ao oponente assim que a sala ficar completa
+            const input = document.getElementById('lobby-name-input');
+            const myName = (input && input.value.trim()) || (this.myPlayerNumber === 1 ? 'Jogador 1' : 'Jogador 2');
+            if (this.myPlayerNumber === 1) this.p1Name = myName;
+            else this.p2Name = myName;
+            this.sendAction('player_name', { name: myName });
+        });
+
+        this.socket.on('waiting', () => {
+            this.log('⏳ Aguardando segundo jogador conectar...');
+            this._showLobby('waiting', this.myPlayerNumber);
         });
 
         this.socket.on('action', (data) => {
@@ -402,9 +436,46 @@ Object.assign(GameEngine.prototype, {
 
     executeRemoteAction(data) {
         switch (data.type) {
+            case 'sync_board_state':
+                // Corrige desync: aceita o tabuleiro autoritativo do oponente após morte de criatura
+                if (data.boardP1) this.boardP1 = data.boardP1;
+                if (data.boardP2) this.boardP2 = data.boardP2;
+                if (data.activeLocation !== undefined) this.activeLocation = data.activeLocation;
+                // Fecha burst modal e limpa estado de combate para sincronizar com o resultado
+                this.closeBurstModal && this.closeBurstModal();
+                // Fecha modal de ataque se estiver aberto
+                const atkModal = document.getElementById('attack-modal');
+                if (atkModal) { atkModal.classList.add('hidden'); atkModal.classList.remove('flex-modal','modal-minimized'); }
+                this.activeCombat     = null;
+                this.selectedAttacker = null;
+                this.gameState        = 'IDLE';
+                this.burstStack       = [];
+                this.burstPasses      = 0;
+                this.pendingCombat    = null;
+                this.renderBoard();
+                this.renderLocation && this.renderLocation();
+                this.log('🔄 Combate resolvido — tabuleiro sincronizado.');
+                break;
+
+            case 'player_name': {
+                const oppName = data.name || (this.myPlayerNumber === 1 ? 'Jogador 2' : 'Jogador 1');
+                // Salva nome do oponente
+                if (this.myPlayerNumber === 1) {
+                    this.p2Name = oppName;
+                    const el = document.getElementById('lobby-slot-2-name');
+                    if (el) el.textContent = oppName;
+                } else {
+                    this.p1Name = oppName;
+                    const el = document.getElementById('lobby-slot-1-name');
+                    if (el) el.textContent = oppName;
+                }
+                break;
+            }
+
             case 'vote_mode':
+                // Ignora durante batalha — setGameMode reseta os tabuleiros!
+                if (this.appState === 'BATTLE') break;
                 this._oppVote = data.mode;
-                // Se oponente votou no mesmo modo que eu, aplica
                 if (this._myVote && this._oppVote === this._myVote) {
                     this.setGameMode(data.mode);
                 }
@@ -412,6 +483,8 @@ Object.assign(GameEngine.prototype, {
                 break;
 
             case 'opponent_draft':
+                // NÃO ignorar durante BATTLE — pode chegar depois de startBattle() que
+                // já seta appState='BATTLE' antes de receber o draft do oponente
                 this.remoteDraft = data.draft;
                 this.log('📦 Draft do oponente recebido!');
                 if (this.myDraftReady) this._startBattleMultiplayer();
@@ -438,9 +511,13 @@ Object.assign(GameEngine.prototype, {
                 if (this.activeCombat) this.passBurst(true);
                 break;
             case 'selectMugic':
+                // Guarda os dados da mugic para usar quando resolveMugicCaster chegar
+                if (data.mugicData) this._pendingRemoteMugicData = data.mugicData;
                 this.selectMugicToPlay(data.index, true);
                 break;
             case 'resolveMugicCaster':
+                // Guarda qual jogador era o caster para usar o board correto
+                this._pendingRemoteCasterPlayerNum = data.casterPlayerNum || 2;
                 this.resolveMugicCaster(data.r, data.c, true);
                 break;
             case 'cancelMugicCaster':
@@ -485,7 +562,9 @@ Object.assign(GameEngine.prototype, {
             const p2Bg = rd.battlegears;
             this.playerMugics = JSON.parse(JSON.stringify(this.draftedMugics));
             this.p2Mugics     = JSON.parse(JSON.stringify(rd.mugics));
-            this.setupBoard(p2Cards, p2Bg);
+            // P1 chama setupBoard normalmente para posicionar as próprias cartas (P1)
+            // usando _customFormation; as cartas de P2 são posicionadas com a formação enviada por P2
+            this.setupBoard(p2Cards, p2Bg, rd.formationOrder);
 
             this._generateSharedState();
             this.sendAction('sync_initial_state', {
@@ -508,30 +587,16 @@ Object.assign(GameEngine.prototype, {
             });
             const p1Bg = rd.battlegears;
 
-            const p1Formation = this._getFormation();
-            p1Cards.forEach((card, i) => {
-                if (i < p1Formation.length) {
-                    const pos = p1Formation[i];
-                    if (p1Bg && p1Bg[i]) { card.battlegear = JSON.parse(JSON.stringify(p1Bg[i])); card.bgRevealed = false; }
-                    this.boardP1[pos.r][pos.c] = card;
-                }
-            });
+            // Posiciona cartas de P1 no boardP1 usando a formação enviada por P1
+            this._placeCardsOnBoard(p1Cards, p1Bg, this.boardP1, 1, rd.formationOrder);
             this.playerMugics = JSON.parse(JSON.stringify(this.draftedMugics));
 
-            const p2Formation = this._getFormation();
-            this.draftedCards.forEach((baseCard, i) => {
-                if (i < p2Formation.length) {
-                    const pos = p2Formation[i];
-                    const card = JSON.parse(JSON.stringify(baseCard));
-                    card.player = 2; card.maxEnergy = card.energy;
-                    if (card.mugicCounters === undefined) card.mugicCounters = 0;
-                    if (this.draftedBattlegears && this.draftedBattlegears[i]) {
-                        card.battlegear = JSON.parse(JSON.stringify(this.draftedBattlegears[i]));
-                        card.bgRevealed = false;
-                    }
-                    this.boardP2[pos.r][pos.c] = card;
-                }
-            });
+            // Posiciona as próprias cartas (P2) no boardP2 usando _customFormation
+            this._placeCardsOnBoard(
+                this.draftedCards, this.draftedBattlegears,
+                this.boardP2, 2,
+                this._customFormation ? this._customFormation.map(c => c ? c.name : null) : null
+            );
             this.p2Mugics = JSON.parse(JSON.stringify(this.draftedMugics));
 
             this._finishStartBattle();

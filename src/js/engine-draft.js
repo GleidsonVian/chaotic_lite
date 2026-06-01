@@ -964,6 +964,237 @@ Object.assign(GameEngine.prototype, {
         this.renderMugicDraft();
     },
 
+    // ─── Tela de Formação ────────────────────────────────────────────────────
+
+    openFormationScreen() {
+        // Esconde draft, mostra tela de formação
+        const draftScreen = document.getElementById('draft-screen');
+        if (draftScreen) draftScreen.classList.add('hidden');
+        const formScreen = document.getElementById('formation-screen');
+        if (formScreen) formScreen.style.display = 'block';
+
+        // Inicializa o estado de formação: todas as criaturas no banco
+        const limit = this._getDraftLimit();
+        this._formationSlots = Array(limit).fill(null); // posição → criatura (ou null)
+        this._formationSelected = null;                 // índice da carta selecionada no banco
+
+        this._renderFormationScreen();
+    },
+
+    _getFormationGrid() {
+        // Retorna o layout visual do tabuleiro como array de {r, c, label}
+        if (this.gameMode === '1v1') return [{r:0,c:0}];
+        if (this.gameMode === '3v3') return [
+            {r:0,c:0,label:'Frente E'}, {r:0,c:1,label:'Frente D'},
+            {r:1,c:0,label:'Trás'},
+        ];
+        // 6v6 padrão
+        return [
+            {r:0,c:0,label:'Frente E'}, {r:0,c:1,label:'Frente C'}, {r:0,c:2,label:'Frente D'},
+            {r:1,c:0,label:'Meio E'},   {r:1,c:1,label:'Meio D'},
+            {r:2,c:0,label:'Trás'},
+        ];
+    },
+
+    _renderFormationScreen() {
+        const boardEl = document.getElementById('formation-board');
+        const benchEl = document.getElementById('formation-bench');
+        const confirmBtn = document.getElementById('btn-confirm-formation');
+        if (!boardEl || !benchEl) return;
+
+        const grid    = this._getFormationGrid();
+        const slots   = this._formationSlots;
+        const sel     = this._formationSelected;
+        const tribeColors = {
+            OverWorld:'#0ea5e9', UnderWorld:'#dc2626',
+            Mipedian:'#d97706', Danian:'#9333ea', "M'arrillian":'#0f766e'
+        };
+
+        // ── Renderiza o tabuleiro ─────────────────────────────────────────
+        // Agrupa slots por linha para montar o grid visual
+        const rows = {};
+        grid.forEach((pos, si) => {
+            if (!rows[pos.r]) rows[pos.r] = [];
+            rows[pos.r].push({ ...pos, slotIndex: si });
+        });
+
+        let boardHtml = `<div style="display:flex;flex-direction:column;gap:8px;align-items:center;">`;
+        Object.keys(rows).sort((a,b) => b-a).forEach(rowKey => { // trás→frente (de cima pra baixo)
+            boardHtml += `<div style="display:flex;gap:8px;justify-content:center;">`;
+            rows[rowKey].forEach(({ slotIndex, label }) => {
+                const card     = slots[slotIndex];
+                const isTarget = sel !== null && !card; // slot vazio e tem carta selecionada
+                const color    = card ? (tribeColors[card.tribe] || '#64748b') : '#334155';
+                const border   = isTarget ? '2px dashed #22c55e' : `2px solid ${color}`;
+                const bg       = isTarget ? 'rgba(34,197,94,0.1)' : card ? `${color}18` : 'rgba(255,255,255,0.03)';
+                const cursor   = (isTarget || card) ? 'pointer' : 'default';
+
+                boardHtml += `
+                <div onclick="game._formationClickSlot(${slotIndex})"
+                     style="width:110px;height:130px;border-radius:10px;border:${border};
+                            background:${bg};display:flex;flex-direction:column;
+                            align-items:center;justify-content:center;gap:4px;
+                            cursor:${cursor};transition:all 0.15s;position:relative;"
+                     ${isTarget ? 'onmouseover="this.style.background=\'rgba(34,197,94,0.2)\'"  onmouseout="this.style.background=\'rgba(34,197,94,0.1)\'"' : ''}>
+                    ${card ? `
+                        <img src="${card.image || ''}" onerror="this.style.display='none'"
+                             style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:1px solid ${color}66;">
+                        <div style="font-size:11px;font-weight:700;color:#f1f5f9;text-align:center;line-height:1.2;">${card.name}</div>
+                        <div style="font-size:9px;color:${color};">${card.tribe}</div>
+                        <div style="font-size:9px;color:#64748b;">❤️${card.energy}</div>
+                        <div style="position:absolute;top:4px;right:4px;font-size:10px;cursor:pointer;color:#ef4444;"
+                             onclick="event.stopPropagation();game._formationRemoveCard(${slotIndex})">✕</div>
+                    ` : `
+                        <div style="font-size:22px;opacity:0.3;">${isTarget ? '✅' : '+'}</div>
+                        <div style="font-size:10px;color:#475569;">${label}</div>
+                    `}
+                </div>`;
+            });
+            boardHtml += `</div>`;
+        });
+        boardHtml += `</div>`;
+        boardEl.innerHTML = boardHtml;
+
+        // ── Renderiza o banco (criaturas não posicionadas) ─────────────────
+        const placed  = new Set(slots.filter(Boolean).map(c => c.name));
+        const bench   = this.draftedCards.filter(c => {
+            const count = slots.filter(s => s && s.name === c.name).length;
+            const total = this.draftedCards.filter(d => d.name === c.name).length;
+            return count < total; // ainda tem cópias no banco
+        });
+
+        // Conta cópias não posicionadas por criatura
+        const benchMap = {};
+        this.draftedCards.forEach(c => {
+            if (!benchMap[c.name]) benchMap[c.name] = { card: c, total: 0, placed: 0 };
+            benchMap[c.name].total++;
+        });
+        slots.filter(Boolean).forEach(c => { if (benchMap[c.name]) benchMap[c.name].placed++; });
+
+        let benchHtml = '';
+        Object.values(benchMap).forEach(({ card, total, placed: p }, i) => {
+            const remaining = total - p;
+            if (remaining <= 0) return;
+            const color   = tribeColors[card.tribe] || '#64748b';
+            const isSel   = sel === i;
+            benchHtml += `
+            <div onclick="game._formationSelectCard(${i})"
+                 style="display:flex;align-items:center;gap:10px;
+                        padding:8px 12px;border-radius:10px;cursor:pointer;
+                        border:2px solid ${isSel ? '#22c55e' : color+'44'};
+                        background:${isSel ? 'rgba(34,197,94,0.15)' : color+'0d'};
+                        transition:all 0.15s;"
+                 onmouseover="this.style.borderColor='${color}88'"
+                 onmouseout="this.style.borderColor='${isSel ? '#22c55e' : color+'44'}'">
+                <img src="${card.image || ''}" onerror="this.style.display='none'"
+                     style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0;">
+                <div style="min-width:0;">
+                    <div style="font-size:12px;font-weight:700;color:#f1f5f9;">${card.name}</div>
+                    <div style="font-size:10px;color:${color};">${card.tribe}</div>
+                    <div style="font-size:10px;color:#64748b;">❤️${card.energy} · ${remaining}× disponível</div>
+                </div>
+                ${isSel ? '<span style="margin-left:auto;color:#22c55e;font-size:14px;">✓</span>' : ''}
+            </div>`;
+        });
+        benchEl.innerHTML = benchHtml || '<div style="color:#475569;font-size:12px;">Todas posicionadas!</div>';
+
+        // Botão de confirmar só ativa quando todos os slots estão preenchidos
+        const limit  = this._getDraftLimit();
+        const allFilled = slots.filter(Boolean).length === limit;
+        if (confirmBtn) {
+            confirmBtn.disabled      = !allFilled;
+            confirmBtn.style.opacity = allFilled ? '1' : '0.5';
+            confirmBtn.style.cursor  = allFilled ? 'pointer' : 'not-allowed';
+            confirmBtn.style.background = allFilled ? 'linear-gradient(135deg,#1e40af,#3b82f6)' : 'rgba(30,64,175,0.3)';
+            confirmBtn.style.color      = allFilled ? 'white' : '#93c5fd';
+        }
+    },
+
+    _formationSelectCard(benchIndex) {
+        // Seleciona (ou deseleciona) uma carta do banco
+        this._formationSelected = this._formationSelected === benchIndex ? null : benchIndex;
+        this._renderFormationScreen();
+    },
+
+    _formationClickSlot(slotIndex) {
+        const sel = this._formationSelected;
+
+        if (sel !== null) {
+            // Tem carta selecionada → posiciona no slot
+            const benchMap = {};
+            this.draftedCards.forEach(c => {
+                if (!benchMap[c.name]) benchMap[c.name] = { card: c, total: 0 };
+                benchMap[c.name].total++;
+            });
+            this._formationSlots.filter(Boolean).forEach(c => {
+                if (benchMap[c.name]) benchMap[c.name].placed = (benchMap[c.name].placed || 0) + 1;
+            });
+
+            const benchEntries = Object.values(benchMap);
+            const entry = benchEntries[sel];
+            if (!entry) return;
+
+            const placed = this._formationSlots.filter(s => s && s.name === entry.card.name).length;
+            if (placed >= entry.total) return; // sem cópias sobrando
+
+            // Se o slot já tem uma carta, devolve ao banco
+            if (this._formationSlots[slotIndex]) {
+                // swap: só reposiciona — será renderizado limpo
+                this._formationSlots[slotIndex] = null;
+            }
+            this._formationSlots[slotIndex] = entry.card;
+            this._formationSelected = null;
+
+        } else if (this._formationSlots[slotIndex]) {
+            // Sem seleção ativa → seleciona a carta do slot para mover
+            // Remove do slot e coloca de volta no banco como "selecionada"
+            const card = this._formationSlots[slotIndex];
+            this._formationSlots[slotIndex] = null;
+
+            // Encontra índice no benchMap
+            const benchMap = {};
+            this.draftedCards.forEach((c, idx) => {
+                const key = c.name;
+                if (!benchMap[key]) benchMap[key] = idx;
+            });
+            this._formationSelected = Object.keys(benchMap).indexOf(card.name);
+        }
+
+        this._renderFormationScreen();
+    },
+
+    _formationRemoveCard(slotIndex) {
+        this._formationSlots[slotIndex] = null;
+        this._formationSelected = null;
+        this._renderFormationScreen();
+    },
+
+    resetFormation() {
+        const limit = this._getDraftLimit();
+        this._formationSlots = Array(limit).fill(null);
+        this._formationSelected = null;
+        this._renderFormationScreen();
+    },
+
+    randomizeFormation() {
+        const limit = this._getDraftLimit();
+        const shuffled = [...this.draftedCards].sort(() => Math.random() - 0.5);
+        this._formationSlots = shuffled.slice(0, limit).map(c => c);
+        this._formationSelected = null;
+        this._renderFormationScreen();
+    },
+
+    confirmFormation() {
+        const limit = this._getDraftLimit();
+        if (this._formationSlots.filter(Boolean).length < limit) return;
+        // Salva a formação escolhida — será usada em setupBoard
+        this._customFormation = [...this._formationSlots];
+        // Esconde tela de formação e inicia batalha
+        const formScreen = document.getElementById('formation-screen');
+        if (formScreen) formScreen.style.display = 'none';
+        this.startBattle();
+    },
+
     startBattle() {
         this.appState = 'BATTLE';
 
@@ -974,11 +1205,17 @@ Object.assign(GameEngine.prototype, {
             document.getElementById("battle-screen").classList.remove('hidden');
 
             this.myDraftReady = true;
+            // Envia a ordem da formação customizada para o oponente poder posicionar
+            // as cartas da mesma forma que o jogador configurou
+            const formationOrder = this._customFormation
+                ? this._customFormation.map(c => c ? c.name : null)
+                : null;
             this.sendAction('opponent_draft', {
                 draft: {
-                    cards: this.draftedCards,
-                    battlegears: this.draftedBattlegears,
-                    mugics: this.draftedMugics
+                    cards:          this.draftedCards,
+                    battlegears:    this.draftedBattlegears,
+                    mugics:         this.draftedMugics,
+                    formationOrder  // array de nomes na ordem da tela de formação
                 }
             });
             this.log('📤 Seu draft foi enviado. Aguardando draft do oponente...');

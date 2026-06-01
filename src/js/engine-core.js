@@ -57,8 +57,10 @@ class GameEngine {
         this.matchHistory = []; // array de combates encerrados
 
         // Multiplayer
-        this._myVote  = null; // voto de modo no lobby ('6v6','3v3','1v1')
-        this._oppVote = null;
+        this._myVote    = null;
+        this._oppVote   = null;
+        this.p1Name     = 'Jogador 1'; // nome exibido de P1
+        this.p2Name     = 'Jogador 2'; // nome exibido de P2
         this.multiplayerMode = false;
         this.myPlayerNumber = 1;
         this.socket = null;

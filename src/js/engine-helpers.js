@@ -282,44 +282,118 @@ Object.assign(GameEngine.prototype, {
         return cloned;
     },
 
-    setupBoard(aiCards, aiBg) {
-        // Posicionamento: [[2,0], [1,0], [1,1], [0,0], [0,1], [0,2]] (Retaguarda, Meio, Frente)
-        const p1Formation = this._getFormation();
+    /**
+     * Posiciona um array de cartas no tabuleiro respeitando a formationOrder se disponível.
+     * @param {Array} cards        - cartas a posicionar
+     * @param {Array} battlegears  - battlegears correspondentes (mesmo índice)
+     * @param {Array} board        - boardP1 ou boardP2
+     * @param {number} playerNum   - 1 ou 2
+     * @param {Array|null} formationOrder - array de nomes de cartas na ordem da tela de formação (opcional)
+     */
+    _placeCardsOnBoard(cards, battlegears, board, playerNum, formationOrder) {
+        const grid = this._getFormationGrid(); // ordem da tela de formação
+
+        if (formationOrder && formationOrder.length > 0) {
+            // Usa a formação enviada — mapeia nome → card
+            const usedIdx = [];
+            grid.forEach((pos, i) => {
+                const name = formationOrder[i];
+                if (!name) return;
+                // Encontra o card com esse nome (sem reutilizar o mesmo índice)
+                const cardIdx = cards.findIndex((c, j) => c.name === name && !usedIdx.includes(j));
+                if (cardIdx < 0) return;
+                usedIdx.push(cardIdx);
+                const baseCard = cards[cardIdx];
+                const card = JSON.parse(JSON.stringify(baseCard));
+                card.player = playerNum;
+                card.maxEnergy = card.energy;
+                if (card.mugicCounters === undefined) card.mugicCounters = 0;
+                const bgIdx = battlegears ? cardIdx : -1;
+                if (bgIdx >= 0 && battlegears && battlegears[bgIdx]) {
+                    card.battlegear = JSON.parse(JSON.stringify(battlegears[bgIdx]));
+                    card.bgRevealed = !!card.battlegear.faceUp;
+                    if (card.bgRevealed) this._revealBattlegear(card);
+                }
+                board[pos.r][pos.c] = card;
+            });
+        } else {
+            // Sem formação customizada — usa ordem padrão (_getFormation)
+            const formation = this._getFormation();
+            cards.forEach((baseCard, i) => {
+                if (i >= formation.length) return;
+                const pos  = formation[i];
+                const card = JSON.parse(JSON.stringify(baseCard));
+                card.player = playerNum;
+                card.maxEnergy = card.energy;
+                if (card.mugicCounters === undefined) card.mugicCounters = 0;
+                if (battlegears && battlegears[i]) {
+                    card.battlegear = JSON.parse(JSON.stringify(battlegears[i]));
+                    card.bgRevealed = !!card.battlegear.faceUp;
+                    if (card.bgRevealed) this._revealBattlegear(card);
+                }
+                board[pos.r][pos.c] = card;
+            });
+        }
+    },
+
+    setupBoard(aiCards, aiBg, opponentFormationOrder = null) {
         const p2Formation = this._getFormation();
 
-        let p1Index = 0;
-        p1Formation.forEach(pos => {
-            if (p1Index < this.draftedCards.length) {
-                const card = JSON.parse(JSON.stringify(this.draftedCards[p1Index]));
+        // P1: usa formação personalizada se disponível, senão usa a padrão
+        if (this._customFormation && this._customFormation.length > 0) {
+            // IMPORTANTE: usa _getFormationGrid() (mesma ordem da tela de formação)
+            // não _getFormation() que usa ordem inversa (Trás→Frente)
+            const grid        = this._getFormationGrid();
+            const usedDraftIdx = []; // rastreia quais índices do draft já foram usados (evita duplicatas)
+
+            grid.forEach((pos, i) => {
+                const baseCard = this._customFormation[i];
+                if (!baseCard) return;
+
+                // Acha o próximo índice não-usado no draft para essa criatura
+                let draftIdx = -1;
+                for (let j = 0; j < this.draftedCards.length; j++) {
+                    if (this.draftedCards[j].name === baseCard.name && !usedDraftIdx.includes(j)) {
+                        draftIdx = j;
+                        break;
+                    }
+                }
+                usedDraftIdx.push(draftIdx);
+
+                const card = JSON.parse(JSON.stringify(baseCard));
                 card.player = 1;
                 card.maxEnergy = card.energy;
                 if (card.mugicCounters === undefined) card.mugicCounters = 0;
-                if (this.draftedBattlegears && this.draftedBattlegears[p1Index]) {
-                    card.battlegear = JSON.parse(JSON.stringify(this.draftedBattlegears[p1Index]));
+                if (draftIdx >= 0 && this.draftedBattlegears && this.draftedBattlegears[draftIdx]) {
+                    card.battlegear = JSON.parse(JSON.stringify(this.draftedBattlegears[draftIdx]));
                     card.bgRevealed = !!card.battlegear.faceUp;
                     if (card.bgRevealed) this._revealBattlegear(card);
                 }
                 this.boardP1[pos.r][pos.c] = card;
-                p1Index++;
-            }
-        });
-
-        let p2Index = 0;
-        p2Formation.forEach(pos => {
-            if (p2Index < aiCards.length) {
-                const card = JSON.parse(JSON.stringify(aiCards[p2Index]));
-                card.player = 2;
-                card.maxEnergy = card.energy;
-                if (card.mugicCounters === undefined) card.mugicCounters = 0;
-                if (aiBg && aiBg[p2Index]) {
-                    card.battlegear = JSON.parse(JSON.stringify(aiBg[p2Index]));
-                    card.bgRevealed = !!card.battlegear.faceUp;
-                    if (card.bgRevealed) this._revealBattlegear(card);
+            });
+        } else {
+            // Formação padrão (sem tela de formação customizada)
+            const p1Formation = this._getFormation();
+            let p1Index = 0;
+            p1Formation.forEach(pos => {
+                if (p1Index < this.draftedCards.length) {
+                    const card = JSON.parse(JSON.stringify(this.draftedCards[p1Index]));
+                    card.player = 1;
+                    card.maxEnergy = card.energy;
+                    if (card.mugicCounters === undefined) card.mugicCounters = 0;
+                    if (this.draftedBattlegears && this.draftedBattlegears[p1Index]) {
+                        card.battlegear = JSON.parse(JSON.stringify(this.draftedBattlegears[p1Index]));
+                        card.bgRevealed = !!card.battlegear.faceUp;
+                        if (card.bgRevealed) this._revealBattlegear(card);
+                    }
+                    this.boardP1[pos.r][pos.c] = card;
+                    p1Index++;
                 }
-                this.boardP2[pos.r][pos.c] = card;
-                p2Index++;
-            }
-        });
+            });
+        }
+
+        // Posiciona cartas do oponente (P2/IA) respeitando formação customizada se disponível
+        this._placeCardsOnBoard(aiCards, aiBg, this.boardP2, 2, opponentFormationOrder);
     },
 
     log(message) {

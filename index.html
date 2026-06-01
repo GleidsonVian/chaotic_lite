@@ -101,17 +101,29 @@
             <!-- Subtítulo -->
             <div id="lobby-sub" style="font-size:13px; color:#64748b; margin-bottom:24px; line-height:1.6;">Aguarde um momento.</div>
 
+            <!-- Campo de nome do jogador -->
+            <div style="margin-bottom:20px;">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:6px;">Seu nome</div>
+                <input id="lobby-name-input" maxlength="20" placeholder="Ex: Gleidson"
+                    oninput="game._onLobbyNameChange(this.value)"
+                    style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #334155;border-radius:8px;
+                           color:#f1f5f9;font-size:15px;font-weight:700;padding:10px 14px;outline:none;
+                           font-family:inherit;text-align:center;transition:border-color 0.15s;"
+                    onfocus="this.style.borderColor='#3b82f6'"
+                    onblur="this.style.borderColor='#334155'">
+            </div>
+
             <!-- Slots dos jogadores -->
             <div style="display:flex; gap:16px; justify-content:center; margin-bottom:24px;">
                 <div class="lobby-slot" id="lobby-slot-1">
                     <div class="lobby-slot-icon" id="lobby-slot-1-icon">👤</div>
-                    <div class="lobby-slot-label">Jogador 1</div>
+                    <div class="lobby-slot-label" id="lobby-slot-1-name">Jogador 1</div>
                     <div class="lobby-slot-status" id="lobby-slot-1-status">—</div>
                 </div>
                 <div style="font-size:22px; color:#334155; align-self:center;">VS</div>
                 <div class="lobby-slot" id="lobby-slot-2">
                     <div class="lobby-slot-icon" id="lobby-slot-2-icon">❓</div>
-                    <div class="lobby-slot-label">Jogador 2</div>
+                    <div class="lobby-slot-label" id="lobby-slot-2-name">Jogador 2</div>
                     <div class="lobby-slot-status" id="lobby-slot-2-status">Aguardando...</div>
                 </div>
             </div>
@@ -362,11 +374,46 @@
                     </div>
                 </div>
 
-                <button id="btn-finish-mg-draft" class="btn btn-primary btn-large hidden" onclick="game.startBattle()">
-                    Iniciar Partida
+                <button id="btn-finish-mg-draft" class="btn btn-primary btn-large hidden" onclick="game.openFormationScreen()">
+                    Posicionar Criaturas →
                 </button>
             </div>
             
+        </div>
+
+        <!-- Tela de Formação -->
+        <div id="formation-screen" style="display:none; text-align:center; padding:20px;">
+            <h2 class="text-accent mb-medium">⚔️ Posicione suas Criaturas</h2>
+            <p class="text-muted mb-small">Clique em uma criatura, depois clique em um espaço do campo para posicioná-la.</p>
+            <p class="text-muted mb-large" style="font-size:12px;">Você pode reorganizar a qualquer momento antes de confirmar.</p>
+
+            <div style="display:flex; gap:24px; justify-content:center; align-items:flex-start; flex-wrap:wrap;">
+
+                <!-- Campo (slots do tabuleiro) -->
+                <div>
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:10px;">Campo de Batalha</div>
+                    <div id="formation-board" style="display:inline-block;"></div>
+                </div>
+
+                <!-- Lista de criaturas não posicionadas -->
+                <div style="min-width:180px;">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:10px;">Banco</div>
+                    <div id="formation-bench" style="display:flex;flex-direction:column;gap:8px;"></div>
+                </div>
+            </div>
+
+            <div style="margin-top:24px;display:flex;gap:12px;justify-content:center;align-items:center;">
+                <button onclick="game.resetFormation()" class="btn" style="background:rgba(239,68,68,0.15);border:1px solid #ef4444;color:#f87171;font-size:13px;padding:8px 20px;border-radius:8px;cursor:pointer;">
+                    🔄 Resetar
+                </button>
+                <button onclick="game.randomizeFormation()" class="btn" style="background:rgba(99,102,241,0.15);border:1px solid #6366f1;color:#a5b4fc;font-size:13px;padding:8px 20px;border-radius:8px;cursor:pointer;">
+                    🎲 Aleatório
+                </button>
+                <button id="btn-confirm-formation" onclick="game.confirmFormation()" disabled
+                    style="background:rgba(30,64,175,0.3);border:1px solid #3b82f6;color:#93c5fd;font-size:14px;font-weight:700;padding:10px 28px;border-radius:10px;cursor:not-allowed;opacity:0.5;transition:all 0.2s;">
+                    Iniciar Batalha →
+                </button>
+            </div>
         </div>
 
         <div id="battle-screen" class="hidden">

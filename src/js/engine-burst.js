@@ -8,17 +8,54 @@ Object.assign(GameEngine.prototype, {
             return;
         }
 
-        // Render Stack
+        // Render Stack — com descrição rica para mugics
         const container = document.getElementById('burst-stack-container');
+        const ac = this.activeCombat;
         let html = '';
-        // Inverter para mostrar LIFO visualmente (último no topo)
         [...this.burstStack].reverse().forEach((item, i) => {
             const negStyle = item.negated
-                ? 'text-decoration: line-through; opacity: 0.45; color: #e74c3c;'
-                : 'color: #ecf0f1;';
+                ? 'text-decoration:line-through;opacity:0.45;color:#e74c3c;'
+                : 'color:#ecf0f1;';
             const negTag = item.negated ? ' <span style="color:#e74c3c;font-size:10px;">🚫 NEGADA</span>' : '';
-            html += `<div style="padding: 8px; border-bottom: 1px solid #7f8c8d; text-align: left; ${negStyle}">
-                <span style="color: #f1c40f;">${this.burstStack.length - i}.</span> [${item.source}] ${item.description}${negTag}
+
+            let extraHtml = '';
+            if (item.type === 'mugic' && item.mugic && !item.negated) {
+                const mg   = item.mugic;
+                const caster = item.caster ? item.caster.name : '?';
+                const ally  = ac ? (item.playerNum === 1 ? ac.p1Card : ac.p2Card) : null;
+                const enemy = ac ? (item.playerNum === 1 ? ac.p2Card : ac.p1Card) : null;
+
+                // Determina quem serão alvo/beneficiário baseado no efeito
+                let targetDesc = '';
+                if (['heal','conditional_heal','heal_and_grant_element','heal_and_reduce_fire'].includes(mg.effectType)) {
+                    targetDesc = ally ? `→ cura <b style="color:#4ade80">${ally.name}</b>` : '';
+                } else if (mg.effectType === 'damage') {
+                    targetDesc = enemy ? `→ dano em <b style="color:#f87171">${enemy.name}</b>` : '';
+                } else if (mg.effectType === 'energy_steal') {
+                    targetDesc = enemy && ally ? `→ rouba vida de <b style="color:#f87171">${enemy.name}</b> para <b style="color:#4ade80">${ally.name}</b>` : '';
+                } else if (mg.effectType === 'energy_transfer') {
+                    targetDesc = ally && enemy ? `→ transfere energia entre <b style="color:#4ade80">${ally.name}</b> e <b style="color:#f87171">${enemy.name}</b>` : '';
+                } else if (['buff_all_stats','buff_combat_stats'].includes(mg.effectType)) {
+                    targetDesc = ally ? `→ booste <b style="color:#60a5fa">${ally.name}</b>` : '';
+                } else if (['debuff_all_stats','destroy_battlegear'].includes(mg.effectType)) {
+                    targetDesc = enemy ? `→ enfraquece <b style="color:#f87171">${enemy.name}</b>` : '';
+                }
+
+                extraHtml = `
+                    <div style="margin-top:4px;padding:6px 8px;background:rgba(0,0,0,0.3);border-radius:6px;border-left:3px solid #8b5cf6;">
+                        <div style="font-size:11px;color:#c4b5fd;font-weight:700;margin-bottom:2px;">🎶 ${mg.name} — por ${caster}</div>
+                        <div style="font-size:10px;color:#94a3b8;margin-bottom:2px;">${mg.description || ''}</div>
+                        ${targetDesc ? `<div style="font-size:11px;margin-top:3px;">${targetDesc}</div>` : ''}
+                    </div>`;
+            }
+
+            html += `<div style="padding:8px;border-bottom:1px solid #2d3748;text-align:left;${negStyle}">
+                <span style="color:#f1c40f;">${this.burstStack.length - i}.</span>
+                ${item.type === 'attack'
+                    ? `<span style="color:#fbbf24;">⚔️ Ataque:</span> <b>${item.atkCard ? item.atkCard.name : item.description}</b> por <span style="color:#94a3b8">${item.source}</span>`
+                    : `[${item.source}] ${item.description}`
+                }${negTag}
+                ${extraHtml}
             </div>`;
         });
         container.innerHTML = html;
@@ -61,7 +98,7 @@ Object.assign(GameEngine.prototype, {
             } else if (this.burstPriority === 2 && this.burstPasses === 1) {
                 promptText = `Jogador 1 passou. A IA está pensando...`;
             } else {
-                promptText = `Turno de Resposta: ${this.burstPriority === 1 ? 'Jogador 1' : 'IA (Oponente)'}`;
+                promptText = `Turno de Resposta: ${this.burstPriority === 1 ? (this.p1Name||'Jogador 1') : 'IA (Oponente)'}`;
             }
         }
         document.getElementById('burst-prompt').innerText = promptText;
@@ -180,29 +217,118 @@ Object.assign(GameEngine.prototype, {
         // Limpar
         handContainer.innerHTML = '';
 
-        // Puxar a mão do jogador atual
         const playerMugics = this.burstPriority === 1 ? this.playerMugics : this.p2Mugics;
 
         if (!playerMugics || playerMugics.length === 0) {
             handContainer.innerHTML = '<span style="color:#e74c3c;">Nenhuma Mugic na mão!</span>';
         } else {
-            const tribeColors = {
-                OverWorld: '#2980b9', UnderWorld: '#8e44ad',
-                Mipedian: '#e67e22', Danian: '#27ae60', Generic: '#7f8c8d'
+            const tribeColors = { OverWorld:'#2980b9', UnderWorld:'#8e44ad', Mipedian:'#e67e22', Danian:'#27ae60', Generic:'#7f8c8d' };
+            const ac = this.activeCombat;
+            const isP1 = this.burstPriority === 1;
+            const myCard    = ac ? (isP1 ? ac.p1Card : ac.p2Card) : null;
+            const enemyCard = ac ? (isP1 ? ac.p2Card : ac.p1Card) : null;
+
+            // Gera texto de impacto contextual para cada mugic
+            const impactText = (mg) => {
+                const healTypes = ['heal','conditional_heal','heal_and_grant_element','heal_and_reduce_fire'];
+                const et = mg.effectType;
+                if (healTypes.includes(et)) {
+                    const v = mg.effectValue || mg.healValue || '?';
+                    return { icon:'💚', text: `Cura +${v} HP em ${myCard ? myCard.name : 'aliada'}`, color:'#4ade80' };
+                }
+                if (et === 'damage') {
+                    const v = mg.effectValue || '?';
+                    return { icon:'💥', text: `Causa ${v} de dano em ${enemyCard ? enemyCard.name : 'inimiga'}`, color:'#f87171' };
+                }
+                if (et === 'energy_steal') {
+                    return { icon:'🔄', text: `+${mg.gainValue||'?'} para ${myCard?.name||'aliada'}, -${mg.lossValue||'?'} para ${enemyCard?.name||'inimiga'}`, color:'#c4b5fd' };
+                }
+                if (et === 'energy_transfer') {
+                    return { icon:'🔄', text: `Transfere vida entre ${myCard?.name||'aliada'} e ${enemyCard?.name||'inimiga'}`, color:'#c4b5fd' };
+                }
+                if (['buff_all_stats','buff_combat_stats'].includes(et)) {
+                    return { icon:'⬆️', text: `Aumenta stats de ${myCard?.name||'aliada'}`, color:'#60a5fa' };
+                }
+                if (et === 'damage_reduction_aura') {
+                    return { icon:'🛡️', text: `Reduz dano elemental recebido por ${myCard?.name||'aliada'}`, color:'#34d399' };
+                }
+                if (['debuff_all_stats','debuff_combat_stats'].includes(et)) {
+                    return { icon:'⬇️', text: `Reduz stats de ${enemyCard?.name||'inimiga'}`, color:'#f87171' };
+                }
+                if (et === 'destroy_battlegear') {
+                    return { icon:'🗡️', text: `Destrói o battlegear de ${enemyCard?.name||'inimiga'}`, color:'#fb923c' };
+                }
+                if (et === 'negate_mugic') {
+                    return { icon:'🚫', text: 'Nega a próxima mugic inimiga no burst', color:'#ef4444' };
+                }
+                if (et === 'grant_element') {
+                    return { icon:'✨', text: `Concede elemento ${mg.grantElement||'?'} à ${myCard?.name||'aliada'}`, color:'#fbbf24' };
+                }
+                if (et === 'remove_abilities') {
+                    return { icon:'🔕', text: `Remove habilidades de ${enemyCard?.name||'inimiga'}`, color:'#94a3b8' };
+                }
+                return { icon:'🎶', text: mg.description || 'Efeito especial', color:'#94a3b8' };
             };
+
             playerMugics.forEach((mg, i) => {
                 const tc = tribeColors[mg.tribe] || '#7f8c8d';
+                const { icon, text, color } = impactText(mg);
+
+                // Calcula quem pode pagar, incluindo penalidade tribal
+                const myBoard = isP1 ? this.boardP1 : this.boardP2;
+                const payers  = []; // { name, cost, canPay, penalty }
+                for (const row of myBoard) for (const c of row) {
+                    if (!c) continue;
+                    const penalty = (mg.tribe !== 'Generic' && mg.tribe !== c.tribe) ? 1 : 0;
+                    const realCost = mg.cost + penalty;
+                    payers.push({ name: c.name, cost: realCost, canPay: c.mugicCounters >= realCost, penalty, counters: c.mugicCounters });
+                }
+                const canAfford = payers.some(p => p.canPay);
+
+                // Mostra quem pode pagar
+                const payersHtml = payers.map(p => {
+                    const penaltyTxt = p.penalty ? ` <span style="color:#f59e0b;font-size:9px;">(+1 tribo diferente)</span>` : '';
+                    const costColor  = p.canPay ? '#4ade80' : '#ef4444';
+                    return `<div style="font-size:10px;color:${costColor};">
+                        ${p.canPay ? '✅' : '❌'} ${p.name}: ${p.counters}/${p.cost}♪${penaltyTxt}
+                    </div>`;
+                }).join('');
+
                 handContainer.innerHTML += `
-                    <div style="background: #1a252f; border: 2px solid ${tc}; padding: 10px; border-radius: 8px; cursor: pointer; width: 160px; display:flex; flex-direction:column; gap:4px; transition: transform 0.15s, box-shadow 0.15s;"
-                         onclick="game.selectMugicToPlay(${i})"
-                         onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 6px 18px rgba(0,0,0,0.5)'"
-                         onmouseout="this.style.transform='';this.style.boxShadow=''">
-                        <div style="font-weight:bold; color:#f1c40f; font-size:13px; line-height:1.2;">${mg.name}</div>
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span style="font-size:10px; background:${tc}; color:#fff; border-radius:4px; padding:1px 5px;">${mg.tribe}</span>
-                            <span style="font-size:11px; color:#f39c12; font-weight:bold;">${mg.cost} ♪</span>
+                    <div onclick="${canAfford ? `game.selectMugicToPlay(${i})` : ''}"
+                         style="background:#0f1a24;border:2px solid ${canAfford?tc:'#334155'};padding:10px;border-radius:10px;
+                                cursor:${canAfford?'pointer':'not-allowed'};width:190px;display:flex;flex-direction:column;gap:5px;
+                                transition:all 0.15s;opacity:${canAfford?1:0.45};"
+                         ${canAfford ? `onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 6px 18px rgba(0,0,0,0.6)'"
+                         onmouseout="this.style.transform='';this.style.boxShadow=''"` : ''}>
+
+                        <!-- Header: nome + custo base -->
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px;">
+                            <div style="font-weight:800;color:#f1c40f;font-size:12px;line-height:1.2;flex:1;">${mg.name}</div>
+                            <div style="font-size:13px;color:#9b59b6;font-weight:800;flex-shrink:0;">${mg.cost}♪</div>
                         </div>
-                        <div style="font-size:10px; color:#bdc3c7; line-height:1.4; margin-top:2px;">${mg.description}</div>
+
+                        <!-- Tribo + raridade -->
+                        <div style="display:flex;align-items:center;gap:4px;">
+                            <span style="font-size:9px;background:${tc};color:#fff;border-radius:4px;padding:1px 6px;font-weight:700;">${mg.tribe}</span>
+                            <span style="font-size:9px;color:#64748b;">${mg.rarity||''}</span>
+                        </div>
+
+                        <!-- Separador -->
+                        <div style="height:1px;background:rgba(255,255,255,0.08);"></div>
+
+                        <!-- IMPACTO -->
+                        <div style="background:${color}18;border:1px solid ${color}44;border-radius:6px;padding:5px 7px;">
+                            <div style="font-size:10px;font-weight:700;color:${color};margin-bottom:2px;">${icon} ${text}</div>
+                        </div>
+
+                        <!-- Quem pode pagar -->
+                        <div style="background:rgba(0,0,0,0.2);border-radius:6px;padding:5px 7px;">
+                            <div style="font-size:9px;color:#64748b;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;">Quem pode pagar:</div>
+                            ${payersHtml}
+                        </div>
+
+                        ${!canAfford ? `<div style="font-size:10px;color:#ef4444;text-align:center;font-weight:700;">❌ Nenhuma criatura tem counters suficientes</div>` : ''}
                     </div>
                 `;
             });
@@ -212,28 +338,40 @@ Object.assign(GameEngine.prototype, {
     },
 
     selectMugicToPlay(index, fromRemote = false) {
-        if (!fromRemote) {
-            this.sendAction('selectMugic', { index });
-        }
-        const playerMugics = this.burstPriority === 1 ? this.playerMugics : this.p2Mugics;
-        const mg = playerMugics[index];
+        // Se é chamada REMOTA: não fazer nada — o burst stack é atualizado quando
+        // resolveMugicCaster chegar com os dados completos.
+        if (fromRemote) return;
 
-        if (this.burstPriority === 1) {
+        // É o turno LOCAL do jogador atual? (funciona para P1 e P2 em multiplayer)
+        const myPNum = this.multiplayerMode ? this.myPlayerNumber : 1;
+        const isMyLocalBurstTurn = this.burstPriority === myPNum;
+
+        const playerMugics = this.playerMugics; // minha mão (sempre playerMugics do lado local)
+        const mg = playerMugics[index];
+        if (!mg) return;
+
+        // Envia para o oponente com dados completos da mugic
+        this.sendAction('selectMugic', { index, mugicData: mg, casterPlayerNum: myPNum });
+
+        if (isMyLocalBurstTurn) {
+            // É a vez do JOGADOR LOCAL — entra em SELECT_MUGIC_CASTER
             this.pendingMugicIndex = index;
             this.gameState = 'SELECT_MUGIC_CASTER';
             this.closeBurstModal();
-            this.log(`🪄 Você escolheu [${mg.name}]. Clique na sua criatura que vai pagar os ${mg.cost} ♪!`);
+            this.log(`🪄 Você escolheu [${mg.name}] (custo base: ${mg.cost}♪). Clique na criatura que vai pagar — criaturas de tribo diferente pagam +1♪ extra!`);
             this.renderBoard();
         } else {
-            // IA logic for future
+            // É a vez da IA (solo) — adiciona direto ao burst
             this.burstStack.push({
-                type: 'mugic',
-                source: 'IA (Oponente)',
-                mugic: mg,
-                description: `Mugic Cast: ${mg.name}`
+                type:      'mugic',
+                source:    'IA (Oponente)',
+                playerNum: 2,
+                mugic:     mg,
+                caster:    null,
+                description: `Mugic Cast: ${mg.name} (por ?)`
             });
             this._discardMugic(2, this.p2Mugics, index);
-            this.burstPasses = 0;
+            this.burstPasses   = 0;
             this.burstPriority = 1;
             this.openBurstModal();
         }
@@ -241,24 +379,74 @@ Object.assign(GameEngine.prototype, {
 
     resolveMugicCaster(r, c, fromRemote = false) {
         if (!fromRemote) {
-            this.sendAction('resolveMugicCaster', { r, c });
+            if (this.gameState !== 'SELECT_MUGIC_CASTER') return;
+            if (this.pendingMugicIndex === null || this.pendingMugicIndex === undefined) return;
         }
-        const mg = this.playerMugics[this.pendingMugicIndex];
-        const card = this.boardP1[r][c];
+
+        // ── Determina contexto ───────────────────────────────────────────────
+        const myPNum    = this.multiplayerMode ? this.myPlayerNumber : 1;
+        const isLocalP2 = !fromRemote && myPNum === 2;
+
+        // ── Caminho REMOTO: oponente resolveu um caster ───────────────────────
+        if (fromRemote) {
+            // Qual jogador fez o cast? (guardado antes de chamar esta função)
+            const casterPN    = this._pendingRemoteCasterPlayerNum || 2;
+            const remoteMg    = this._pendingRemoteMugicData;
+            const casterBoard = casterPN === 1 ? this.boardP1 : this.boardP2;
+            const casterCard  = casterBoard[r] && casterBoard[r][c];
+
+            if (remoteMg && casterCard) {
+                // Adiciona ao burst stack com source/playerNum corretos
+                const srcName = casterPN === 1
+                    ? (this.p1Name || 'Jogador 1')
+                    : (this.p2Name || 'Jogador 2');
+                this.burstStack.push({
+                    type:      'mugic',
+                    source:    srcName,
+                    playerNum: casterPN,
+                    mugic:     remoteMg,
+                    caster:    casterCard,
+                    description: `Mugic Cast: ${remoteMg.name} (por ${casterCard.name})`
+                });
+                // Descarta da mão do caster remoto
+                if (casterPN === 1) this._discardMugic(1, this.playerMugics, this.pendingMugicIndex || 0);
+                // (P2's mugic já foi descartada no lado do P2 antes de enviar)
+            }
+
+            this._pendingRemoteMugicData      = null;
+            this._pendingRemoteCasterPlayerNum = null;
+
+            // Depois do cast remoto, é a VEZ DO RECEPTOR responder
+            this.burstPasses   = 0;
+            this.burstPriority = this.multiplayerMode ? this.myPlayerNumber : 1;
+            this.openBurstModal();
+            return;
+        }
+
+        // ── Caminho LOCAL ────────────────────────────────────────────────────
+        const localPlayerNum = isLocalP2 ? 2 : 1;
+        const mg   = this.playerMugics[this.pendingMugicIndex];
+        const card = isLocalP2 ? this.boardP2[r][c] : this.boardP1[r][c];
+
+        if (!mg)   { this.cancelMugicCaster(); return; }
+        if (!card) { this.cancelMugicCaster(); return; }
+
+        // Envia para o oponente com dados completos
+        this.sendAction('resolveMugicCaster', { r, c, mugicData: mg, casterPlayerNum: localPlayerNum });
 
         // Verificar penalidade tribal
         let cost = mg.cost;
         if (mg.tribe !== "Generic" && mg.tribe !== card.tribe) {
-            cost += 1; // Penalidade por conjurar Mugic de fora da tribo
+            cost += 1;
         }
 
-        // Iron Balls: bloqueia Mugics tribais neste burst
+        // Iron Balls
         if (this._ironBallsActive && mg.tribe !== 'Generic') {
             this.showAlert("Bloqueado por Iron Balls", `🚫 Iron Balls está ativo!\nApenas Mugics Genéricas podem ser jogadas neste burst.`).then(() => this.openBurstModal());
             return;
         }
 
-        // Verificar restrições do Local
+        // Restrições do Local
         const locEffect = this.activeLocation && this.activeLocation.effect;
         if (locEffect) {
             if (locEffect.type === 'no_mugic') {
@@ -278,9 +466,7 @@ Object.assign(GameEngine.prototype, {
         if (card.mugicCounters < cost) {
             const errorMsg = `⚠️ ${card.name} não tem contadores suficientes!\nA Mugic custa ${cost} ♪ (Custo Base: ${mg.cost} + Penalidade de Tribo: ${cost - mg.cost}).\nA criatura tem apenas ${card.mugicCounters} ♪.`;
             this.log(errorMsg);
-            this.showAlert("Custo Insuficiente", errorMsg).then(() => {
-                this.openBurstModal();
-            });
+            this.showAlert("Custo Insuficiente", errorMsg).then(() => { this.openBurstModal(); });
             return;
         }
 
@@ -288,22 +474,27 @@ Object.assign(GameEngine.prototype, {
         card.mugicCounters -= cost;
         this.log(`🎶 ${card.name} pagou ${cost} ♪ e conjurou [${mg.name}]!`);
 
-        // Adiciona à pilha
+        // Adiciona à pilha com playerNum correto
+        const mySource = isLocalP2 ? (this.p2Name || 'Jogador 2') : (this.p1Name || 'Jogador 1');
         this.burstStack.push({
-            type: 'mugic',
-            source: 'Jogador 1',
-            mugic: mg,
-            caster: card,
+            type:      'mugic',
+            source:    mySource,
+            playerNum: localPlayerNum,
+            mugic:     mg,
+            caster:    card,
             description: `Mugic Cast: ${mg.name} (por ${card.name})`
         });
 
-        // Remove da mão → discard pile
-        this._discardMugic(1, this.playerMugics, this.pendingMugicIndex);
+        // Remove da mão correta → discard pile
+        this._discardMugic(localPlayerNum, this.playerMugics, this.pendingMugicIndex);
 
-        // Volta para o Burst
-        this.gameState = 'ENGAGED_COMBAT';
-        this.burstPasses = 0;
-        this.burstPriority = 2; // Passa a bola pra IA
+        // Limpa estado
+        this.pendingMugicIndex = null;
+        this.gameState         = 'ENGAGED_COMBAT';
+
+        // Passa a vez para o oponente no burst
+        this.burstPasses   = 0;
+        this.burstPriority = isLocalP2 ? 1 : 2; // oposto de quem acabou de agir
         this.renderBoard();
         this.openBurstModal();
     },
@@ -326,7 +517,7 @@ Object.assign(GameEngine.prototype, {
         if (!fromRemote) {
             this.sendAction('passBurst');
         }
-        this.log(`${this.burstPriority === 1 ? 'Jogador 1' : 'IA'} passou a prioridade.`);
+        this.log(`${this.burstPriority === 1 ? (this.p1Name||'Jogador 1') : 'IA'} passou a prioridade.`);
         this.burstPasses++;
         if (this.burstPasses >= 2) {
             this.closeBurstModal();
@@ -490,12 +681,15 @@ Object.assign(GameEngine.prototype, {
         const p1Card = this.activeCombat.p1Card;
         const p2Card = this.activeCombat.p2Card;
 
-        // Determina quem é aliado e quem é inimigo baseado em quem jogou o Mugic
-        const isPlayer1 = item.source === 'Jogador 1';
-        const allyCard = isPlayer1 ? p1Card : p2Card;
+        // Determina quem é aliado e quem é inimigo baseado no playerNum
+        // (não usar item.source pois pode ser nome personalizado como 'sacticio')
+        const isPlayer1 = item.playerNum === 1;
+        const allyCard  = isPlayer1 ? p1Card : p2Card;
         const enemyCard = isPlayer1 ? p2Card : p1Card;
 
-        this.log(`✨ Efeito Mágico: ${mg.name} ativado!`);
+        // Log descritivo: quem usou, quem pagou, qual mugic
+        const casterLabel = caster ? ` (paga por ${caster.name})` : '';
+        this.log(`🎶 ${item.source}${casterLabel} usou [${mg.name}]!`);
         if (this.activeCombat) {
             this.activeCombat.mugicHistory.push({
                 player: item.source,
@@ -503,7 +697,7 @@ Object.assign(GameEngine.prototype, {
                 targetName: caster ? caster.name : '?'
             });
         }
-        let alertMsg = `✨ MUGIC RESOLVIDA: ${mg.name}\n\n`;
+        let alertMsg = `🎶 MUGIC: ${mg.name}\nUsada por: ${item.source}${casterLabel}\n\n`;
         let oldVal;
 
         switch (mg.effectType) {
@@ -512,8 +706,8 @@ Object.assign(GameEngine.prototype, {
             case "heal":
                 oldVal = allyCard.energy;
                 allyCard.energy = Math.min(allyCard.maxEnergy, allyCard.energy + mg.effectValue);
-                alertMsg += `Alvo: ${allyCard.name}\nCurou ${mg.effectValue} de Energia! (${oldVal} → ${allyCard.energy})`;
-                this.log(`💚 ${allyCard.name} curou ${mg.effectValue} de Energia!`);
+                alertMsg += `✅ Alvo da cura: ${allyCard.name}\n+${mg.effectValue} de Energia (${oldVal} → ${allyCard.energy})`;
+                this.log(`💚 [${mg.name}] curou ${allyCard.name} em +${mg.effectValue} HP! (${oldVal} → ${allyCard.energy})`);
                 if (this.activeCombat) this.activeCombat.healHistory.push({ targetName: allyCard.name, amount: mg.effectValue, source: mg.name });
                 this._spawnFloatingNumber(allyCard, mg.effectValue, 'heal');
                 break;
@@ -566,8 +760,8 @@ Object.assign(GameEngine.prototype, {
             case "damage":
                 oldVal = enemyCard.energy;
                 enemyCard.energy -= mg.effectValue;
-                alertMsg += `Alvo: ${enemyCard.name}\nSofreu ${mg.effectValue} de dano mágico! (${oldVal} → ${Math.max(0,enemyCard.energy)})`;
-                this.log(`💥 ${mg.name} causou ${mg.effectValue} de dano a ${enemyCard.name}!`);
+                alertMsg += `🎯 Alvo do dano: ${enemyCard.name}\n-${mg.effectValue} HP (${oldVal} → ${Math.max(0,enemyCard.energy)})`;
+                this.log(`💥 [${mg.name}] causou ${mg.effectValue} de dano a ${enemyCard.name}! (${oldVal} → ${Math.max(0,enemyCard.energy)})`);
                 if (enemyCard.energy <= 0) this.log(`💀 ${enemyCard.name} foi destruído pelo Mugic!`);
                 break;
 
@@ -701,16 +895,16 @@ Object.assign(GameEngine.prototype, {
                 // Melody of Malady: aliado +10 energia, inimigo -5
                 allyCard.energy = Math.min(allyCard.maxEnergy, allyCard.energy + (mg.gainValue||0));
                 enemyCard.energy -= (mg.lossValue||0);
-                alertMsg += `${allyCard.name} ganhou ${mg.gainValue} de Energia.\n${enemyCard.name} perdeu ${mg.lossValue} de Energia.`;
-                this.log(`🔄 Energia transferida: +${mg.gainValue} para ${allyCard.name}, -${mg.lossValue} para ${enemyCard.name}.`);
+                alertMsg += `💚 Beneficiada: ${allyCard.name} +${mg.gainValue} HP\n💥 Prejudicada: ${enemyCard.name} -${mg.lossValue} HP`;
+                this.log(`🔄 [${mg.name}]: ${allyCard.name} +${mg.gainValue} HP 💚 / ${enemyCard.name} -${mg.lossValue} HP 💥`);
                 break;
 
             case "energy_transfer":
                 // Song of Symmetry: aliado +10, inimigo -10
                 allyCard.energy = Math.min(allyCard.maxEnergy, allyCard.energy + (mg.gainValue||0));
                 enemyCard.energy -= (mg.lossValue||0);
-                alertMsg += `${allyCard.name} ganhou ${mg.gainValue} de Energia.\n${enemyCard.name} perdeu ${mg.lossValue} de Energia.`;
-                this.log(`🔄 Simetria de Energia: +${mg.gainValue}/${allyCard.name}, -${mg.lossValue}/${enemyCard.name}.`);
+                alertMsg += `💚 Beneficiada: ${allyCard.name} +${mg.gainValue} HP\n💥 Prejudicada: ${enemyCard.name} -${mg.lossValue} HP`;
+                this.log(`🔄 [${mg.name}]: ${allyCard.name} +${mg.gainValue} HP 💚 / ${enemyCard.name} -${mg.lossValue} HP 💥`);
                 break;
 
             // ── REDUÇÃO DE DANO ───────────────────────────────────────────────

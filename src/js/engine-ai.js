@@ -215,10 +215,11 @@ Object.assign(GameEngine.prototype, {
         casterCard.mugicCounters -= mg.cost;
         this.log(`🎶 IA conjurou [${mg.name}] via ${casterCard.name} (${mg.cost} ♪ gastos)!`);
         this.burstStack.push({
-            type:   'mugic',
-            source: 'IA (Oponente)',
-            mugic:  mg,
-            caster: casterCard,
+            type:      'mugic',
+            source:    'IA (Oponente)',
+            playerNum: 2, // IA é sempre P2
+            mugic:     mg,
+            caster:    casterCard,
             description: `Mugic Cast: ${mg.name} (por ${casterCard.name})`
         });
         this._discardMugic(2, this.p2Mugics, idx);
