@@ -517,9 +517,12 @@ Object.assign(GameEngine.prototype, {
                     </div>
 
                     <!-- Battlegear equipado -->
-                    <div style="flex-shrink:0; text-align:right;">
+                    <div style="flex-shrink:0; text-align:right; display:flex; flex-direction:column; align-items:flex-end;">
                         ${equipped ? `
                             <div style="font-size:10px; color:#95a5a6; margin-bottom:2px;">Equipado</div>
+                            ${equipped.image && !equipped.image.includes('placeholder.jpg') ? `<div style="width:40px; height:40px; border-radius:4px; overflow:hidden; border:1px solid #34495e; margin-bottom:4px;">
+                                <img src="${equipped.image}" style="width:100%; height:100%; object-fit:cover; object-position:center top;">
+                            </div>` : ''}
                             <div style="font-weight:bold; color:#f1c40f; font-size:12px; max-width:110px; text-align:right;">${rarityIcon(equipped)} ${equipped.name}</div>
                             ${recs[0]?.bg.name === equipped.name
                                 ? `<div style="font-size:9px; color:#2ecc71; margin-top:2px;">✨ Recomendado</div>`
@@ -563,6 +566,10 @@ Object.assign(GameEngine.prototype, {
                                 <span style="font-weight:bold; color:#f1c40f; font-size:11px;">${bg.name}</span>
                                 <span title="${bg.rarity}">${rarityIcon(bg)}</span>
                             </div>
+
+                            ${bg.image && !bg.image.includes('placeholder.jpg') ? `<div style="width:100%; height:70px; border-radius:4px; overflow:hidden; border:1px solid #34495e; margin-bottom:6px;">
+                                <img src="${bg.image}" style="width:100%; height:100%; object-fit:cover; object-position:center top;">
+                            </div>` : ''}
 
                             <!-- Barra de afinidade -->
                             <div style="background:#2c3e50; border-radius:4px; height:5px; margin-bottom:6px;">
@@ -884,6 +891,10 @@ Object.assign(GameEngine.prototype, {
                         <div style="font-size:14px; flex-shrink:0;" title="${mg.rarity || 'Common'}">${rarityIcon}</div>
                     </div>
 
+                    ${mg.image ? `<div style="width:100%; height:80px; border-radius:6px; overflow:hidden; border:1px solid ${tribeColor}55;">
+                        <img src="${mg.image}" style="width:100%; height:100%; object-fit:cover; object-position:center 20%;">
+                    </div>` : ''}
+
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <span style="font-size:10px; color:${tribeColor}; font-weight:bold; background:rgba(0,0,0,0.4); padding:2px 7px; border-radius:10px;">${mg.tribe}</span>
                         <span style="font-size:11px; color:#ecf0f1;">Custo: <b style="color:#9b59b6;">${mg.cost} ♪</b></span>
@@ -925,7 +936,12 @@ Object.assign(GameEngine.prototype, {
                             <span style="color:#f1c40f; font-weight:bold; font-size:12px;">${mg.name}</span>
                             <span style="font-size:11px; color:#9b59b6; font-weight:bold;">${mg.cost} ♪</span>
                         </div>
-                        <span style="font-size:9px; color:${dtc}; font-weight:bold;">${mg.tribe}</span>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
+                            <span style="font-size:9px; color:${dtc}; font-weight:bold;">${mg.tribe}</span>
+                        </div>
+                        ${mg.image ? `<div style="width:100%; height:50px; border-radius:4px; overflow:hidden; border:1px solid ${dtc}55; margin:3px 0;">
+                            <img src="${mg.image}" style="width:100%; height:100%; object-fit:cover; object-position:center 20%;">
+                        </div>` : ''}
                         <div style="border-top:1px solid rgba(255,255,255,0.1);"></div>
                         <div style="font-size:10px; color:#bdc3c7; line-height:1.4;">${mg.description}</div>
                         <div style="font-size:9px; color:#e74c3c; text-align:center; opacity:0.7;">✕ clique para remover</div>
@@ -1275,6 +1291,10 @@ Object.assign(GameEngine.prototype, {
                     <div style="font-size:10px;color:${rc};flex-shrink:0;">${atk.rarity==='Ultra Rare'?'💎':atk.rarity==='Super Rare'?'🔷':atk.rarity==='Rare'?'🔶':atk.rarity==='Uncommon'?'🔹':'⚪'}</div>
                 </div>
 
+                ${atk.image ? `<div style="width:100%; height:70px; border-radius:6px; overflow:hidden; border:1px solid #334155;">
+                    <img src="${atk.image}" style="width:100%; height:100%; object-fit:cover; object-position:center top;">
+                </div>` : ''}
+
                 <!-- Tags de elemento/stat/cópias -->
                 <div style="display:flex;gap:3px;flex-wrap:wrap;">${tags}</div>
 
@@ -1301,6 +1321,9 @@ Object.assign(GameEngine.prototype, {
                         cursor:pointer;transition:all 0.15s;"
                  onmouseover="this.style.background='rgba(239,68,68,0.1)';this.style.borderColor='#ef444466'"
                  onmouseout="this.style.background='rgba(34,197,94,0.06)';this.style.borderColor='#22c55e33'">
+                ${atk.image ? `<div style="width:24px; height:24px; border-radius:4px; overflow:hidden; border:1px solid #334155; flex-shrink:0;">
+                    <img src="${atk.image}" style="width:100%; height:100%; object-fit:cover; object-position:center top;">
+                </div>` : ''}
                 <span style="font-size:11px;font-weight:700;color:#f1f5f9;flex:1;">${atk.name}</span>
                 <span style="font-size:12px;font-weight:800;color:#fbbf24;">💥${atk.baseDamage||0}</span>
                 ${atk.elementRequirement ? `<span style="font-size:11px;color:${hasElem?'#fbbf24':'#475569'}">${elemIcons[atk.elementRequirement]||''}</span>` : ''}

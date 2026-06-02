@@ -70,6 +70,11 @@ Object.assign(GameEngine.prototype, {
                 </div>
             </div>
 
+            ${mg.image ? `
+            <div style="width:100%; height:120px; border-bottom:1px solid #1e293b; overflow:hidden;">
+                <img src="${mg.image}" style="width:100%; height:100%; object-fit:cover; object-position:center top;" alt="${mg.name}">
+            </div>` : ''}
+
             <!-- Descrição completa -->
             <div style="padding:10px 14px;border-bottom:1px solid #1e293b;">
                 <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#475569;margin-bottom:5px;">Efeito</div>
@@ -177,6 +182,11 @@ Object.assign(GameEngine.prototype, {
                 </div>
             </div>
 
+            ${atkCard.image ? `
+            <div style="width:100%; height:120px; border-bottom:1px solid #1e293b; overflow:hidden;">
+                <img src="${atkCard.image}" style="width:100%; height:100%; object-fit:cover; object-position:center top;" alt="${atkCard.name}">
+            </div>` : ''}
+
             <div style="padding:10px 14px;border-bottom:1px solid #1e293b;">
                 <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#475569;margin-bottom:5px;">Efeitos</div>
                 ${descHtml || '<div style="color:#475569;font-size:11px;">Sem efeitos especiais.</div>'}
@@ -273,6 +283,11 @@ Object.assign(GameEngine.prototype, {
                     <span style="font-size:18px;">${rarityIcon}</span>
                 </div>
             </div>
+
+            ${bg.image && !bg.image.includes('placeholder.jpg') ? `
+            <div style="width:100%; height:120px; border-bottom:1px solid #1e293b; overflow:hidden;">
+                <img src="${bg.image}" style="width:100%; height:100%; object-fit:cover; object-position:center top;" alt="${bg.name}">
+            </div>` : ''}
 
             <!-- Descrição -->
             ${bg.description ? `

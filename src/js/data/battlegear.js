@@ -13,7 +13,7 @@ const battlegearDatabase = [
     {
         id: "bg1",
         name: "Aqua Shield",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg1.jpg",
         rarity: "Super Rare",
         description: "Criatura equipada tem +5 Energia. Sacrifique: Cura 15 de dano a uma criatura alvo.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 5 },
@@ -23,7 +23,7 @@ const battlegearDatabase = [
     {
         id: "bg2",
         name: "Cyclance",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg2.jpg",
         rarity: "Rare",
         description: "Sacrifique: Criatura equipada ganha Ar até o fim do combate.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 0 },
@@ -33,7 +33,7 @@ const battlegearDatabase = [
     {
         id: "bg3",
         name: "Diamond of Vlaric",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg3.jpg",
         rarity: "Rare",
         description: "Sacrifique: Criatura equipada ganha Terra até o fim do combate.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 0 },
@@ -43,7 +43,7 @@ const battlegearDatabase = [
     {
         id: "bg4",
         name: "Dragon Pulse",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg4.jpg",
         rarity: "Common",
         description: "Criatura equipada tem +25 Coragem.",
         modifiers: { courage: 25, power: 0, wisdom: 0, speed: 0, energy: 0 },
@@ -52,7 +52,7 @@ const battlegearDatabase = [
     {
         id: "bg5",
         name: "Elixir of Tenacity",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg5.jpg",
         rarity: "Common",
         description: "Criatura equipada tem +10 Coragem e +10 Velocidade. Se tiver 50+ Poder, +10 Energia.",
         modifiers: { courage: 10, power: 0, wisdom: 0, speed: 10, energy: 0 },
@@ -62,7 +62,7 @@ const battlegearDatabase = [
     {
         id: "bg6",
         name: "Flux Bauble",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg6.jpg",
         rarity: "Rare",
         description: "Ao iniciar combate: veja as 2 cartas do topo do seu Deck de Locais.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 0 },
@@ -72,7 +72,7 @@ const battlegearDatabase = [
     {
         id: "bg7",
         name: "Gauntlets of Might",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg7.jpg",
         rarity: "Common",
         description: "Criatura equipada tem +25 Poder.",
         modifiers: { courage: 0, power: 25, wisdom: 0, speed: 0, energy: 0 },
@@ -81,7 +81,7 @@ const battlegearDatabase = [
     {
         id: "bg8",
         name: "Liquilizer",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg8.jpg",
         rarity: "Rare",
         description: "Sacrifique: Criatura equipada ganha Água até o fim do combate.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 0 },
@@ -91,7 +91,7 @@ const battlegearDatabase = [
     {
         id: "bg9",
         name: "Mipedian Cactus",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg9.jpg",
         rarity: "Super Rare",
         description: "Criatura equipada tem +15 Sabedoria. Se for Mipedian, pode mover-se para qualquer espaço como se fosse adjacente.",
         modifiers: { courage: 0, power: 0, wisdom: 15, speed: 0, energy: 0 },
@@ -100,7 +100,7 @@ const battlegearDatabase = [
     {
         id: "bg10",
         name: "Mowercycle",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg10.jpg",
         rarity: "Common",
         description: "Criatura equipada tem +25 Velocidade.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 25, energy: 0 },
@@ -109,7 +109,7 @@ const battlegearDatabase = [
     {
         id: "bg11",
         name: "Mugician's Lyre",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg11.jpg",
         rarity: "Common",
         description: "Sacrifique: Adicione 1 Mugic Counter à criatura equipada.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 0 },
@@ -119,7 +119,7 @@ const battlegearDatabase = [
     {
         id: "bg12",
         name: "Nexus Fuse",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg12.jpg",
         rarity: "Super Rare",
         description: "Criatura equipada tem +5 Energia. Sacrifique: Causa 15 de dano a uma criatura alvo.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 5 },
@@ -129,7 +129,7 @@ const battlegearDatabase = [
     {
         id: "bg13",
         name: "Orb of Foresight",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg13.jpg",
         rarity: "Rare",
         description: "Ao iniciar combate: veja as 3 cartas do topo do seu Deck de Ataques.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 0 },
@@ -139,7 +139,7 @@ const battlegearDatabase = [
     {
         id: "bg14",
         name: "Phobia Mask",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg14.jpg",
         rarity: "Uncommon",
         description: "Criatura equipada ganha Intimidate: Courage 10 e Intimidate: Power 10.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 0 },
@@ -152,7 +152,7 @@ const battlegearDatabase = [
     {
         id: "bg15",
         name: "Prism of Vacuity",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg15.jpg",
         rarity: "Uncommon",
         description: "Criatura equipada tem +5 Energia. Sacrifique: Criatura alvo perde 20 Poder.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 5 },
@@ -162,7 +162,7 @@ const battlegearDatabase = [
     {
         id: "bg16",
         name: "Pyroblaster",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg16.jpg",
         rarity: "Rare",
         description: "Sacrifique: Criatura equipada ganha Fogo até o fim do combate.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 0 },
@@ -172,7 +172,7 @@ const battlegearDatabase = [
     {
         id: "bg17",
         name: "Ring of Na'arin",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg17.jpg",
         rarity: "Common",
         description: "Criatura equipada tem +10 Poder e +10 Sabedoria. Se tiver 50+ Coragem, +10 Energia.",
         modifiers: { courage: 0, power: 10, wisdom: 10, speed: 0, energy: 0 },
@@ -182,7 +182,7 @@ const battlegearDatabase = [
     {
         id: "bg18",
         name: "Riverland Star",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg18.jpg",
         rarity: "Super Rare",
         description: "Criatura equipada tem +15 Coragem. Se for OverWorld, cura 5 ao causar dano de Água.",
         modifiers: { courage: 15, power: 0, wisdom: 0, speed: 0, energy: 0 },
@@ -191,7 +191,7 @@ const battlegearDatabase = [
     {
         id: "bg19",
         name: "Skeletal Steed",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg19.jpg",
         rarity: "Uncommon",
         description: "Criatura equipada ganha Range e Swift 1. Começa revelado.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 0 },
@@ -205,7 +205,7 @@ const battlegearDatabase = [
     {
         id: "bg20",
         name: "Spectral Viewer",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg20.jpg",
         rarity: "Rare",
         description: "Ao engajar em combate: Criatura inimiga perde e não pode ganhar Invisibilidade.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 0 },
@@ -215,7 +215,7 @@ const battlegearDatabase = [
     {
         id: "bg21",
         name: "Staff of Wisdom",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg21.jpg",
         rarity: "Common",
         description: "Criatura equipada tem +25 Sabedoria.",
         modifiers: { courage: 0, power: 0, wisdom: 25, speed: 0, energy: 0 },
@@ -224,7 +224,7 @@ const battlegearDatabase = [
     {
         id: "bg22",
         name: "Stone Mail",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg22.jpg",
         rarity: "Ultra Rare",
         description: "Criatura equipada não pode se mover. +50 Energia. Todo dano recebido é aumentado em 5. Sem habilidades.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 50 },
@@ -235,7 +235,7 @@ const battlegearDatabase = [
     {
         id: "bg23",
         name: "Talisman of the Mandiblor",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg23.jpg",
         rarity: "Super Rare",
         description: "Criatura equipada tem +15 Velocidade. Se for Danian, sacrifique-a para retornar um Mandiblor do descarte.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 15, energy: 0 },
@@ -244,7 +244,7 @@ const battlegearDatabase = [
     {
         id: "bg24",
         name: "Torrent Krinth",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg24.jpg",
         rarity: "Uncommon",
         description: "Criatura equipada tem Water 5.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 0 },
@@ -254,7 +254,7 @@ const battlegearDatabase = [
     {
         id: "bg25",
         name: "Torwegg",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg25.jpg",
         rarity: "Uncommon",
         description: "Criatura equipada tem Air 5.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 0 },
@@ -264,7 +264,7 @@ const battlegearDatabase = [
     {
         id: "bg26",
         name: "Viledriver",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg26.jpg",
         rarity: "Uncommon",
         description: "Criatura equipada tem Fire 5.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 0 },
@@ -274,7 +274,7 @@ const battlegearDatabase = [
     {
         id: "bg27",
         name: "Vlaric Shard",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg27.jpg",
         rarity: "Uncommon",
         description: "Criatura equipada tem Earth 5.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 0 },
@@ -284,7 +284,7 @@ const battlegearDatabase = [
     {
         id: "bg28",
         name: "Whepcrack",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg28.jpg",
         rarity: "Super Rare",
         description: "Criatura equipada tem +15 Poder. Se for UnderWorld, ganha Fire 5.",
         modifiers: { courage: 0, power: 15, wisdom: 0, speed: 0, energy: 0 },
@@ -294,7 +294,7 @@ const battlegearDatabase = [
     {
         id: "bg29",
         name: "Windstrider",
-        image: "src/assets/battlegear/placeholder.jpg",
+        image: "src/assets/battlegears/bg29.jpg",
         rarity: "Super Rare",
         description: "Criatura equipada ganha Swift 2. Começa revelado.",
         modifiers: { courage: 0, power: 0, wisdom: 0, speed: 0, energy: 0 },
