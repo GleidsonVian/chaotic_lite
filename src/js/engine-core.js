@@ -26,6 +26,8 @@ class GameEngine {
         this.draftedBattlegears = []; // Array mapeando battlegear pra cada index da criatura
         this.selectedBgToEquip = null;
         this.turn = 1; // 1 para Jogador, 2 para Oponente
+        // Contadores de estatísticas para a tela de fim de jogo
+        this._stats = { turns: 0, attacks: 0, mugics: 0, kills: 0, maxDmg: 0 };
         this.gameState = 'IDLE'; // Estados: IDLE, SELECT_TARGET, SELECT_MUGIC_TARGET, ENGAGED_COMBAT
         this.selectedAttacker = null; // Guardará o monstro atacante { player, r, c }
         this.activeCombat = null; // { p1Card, p2Card, p1R, p1C, p2R, p2C, currentStriker }
@@ -42,7 +44,8 @@ class GameEngine {
         this.nextTurnBtn = document.getElementById("btn-next-turn");
 
         // Modo de jogo
-        this.gameMode = '6v6'; // '6v6' | '3v3'
+        this.gameMode      = '6v6'; // '6v6' | '3v3' | '1v1'
+        this.draftedAttacks = []; // deck de ataques escolhido pelo jogador
 
         // Tabuleiro — shape depende do modo, inicializado em _initBoards()
         this.boardP1 = [];
@@ -92,6 +95,13 @@ class GameEngine {
         if (this.gameMode === '1v1') return 1;
         if (this.gameMode === '3v3') return 3;
         return 6;
+    }
+
+    /** Tamanho do deck de ataques conforme o modo */
+    _getAttackDeckSize() {
+        if (this.gameMode === '1v1') return 6;
+        if (this.gameMode === '3v3') return 12;
+        return 20; // 6v6 padrão
     }
 
     /** Formação de posicionamento no tabuleiro */

@@ -601,10 +601,24 @@ Object.assign(GameEngine.prototype, {
         this.locationDeck = [];
 
         if (this.attacksData && this.attacksData.length > 0) {
-            for (let i = 0; i < 20; i++) {
-                this.p1AttackDeck.push(this.attacksData[Math.floor(Math.random() * this.attacksData.length)]);
-                this.p2AttackDeck.push(this.attacksData[Math.floor(Math.random() * this.attacksData.length)]);
-            }
+            const deckSize = this._getAttackDeckSize();
+
+            // P1 usa deck escolhido (já enviado via opponent_draft e guardado em remoteDraft.attacks)
+            // P1 é quem chama _generateSharedState, então usa draftedAttacks
+            const p1Attacks = (this.draftedAttacks && this.draftedAttacks.length === deckSize)
+                ? [...this.draftedAttacks].sort(() => Math.random() - 0.5)
+                : Array.from({ length: deckSize }, () =>
+                    this.attacksData[Math.floor(Math.random() * this.attacksData.length)]);
+
+            // P2 attacks vêm do remoteDraft
+            const rd = this.remoteDraft;
+            const p2Attacks = (rd && rd.attacks && rd.attacks.length === deckSize)
+                ? [...rd.attacks].sort(() => Math.random() - 0.5)
+                : Array.from({ length: deckSize }, () =>
+                    this.attacksData[Math.floor(Math.random() * this.attacksData.length)]);
+
+            this.p1AttackDeck = p1Attacks;
+            this.p2AttackDeck = p2Attacks;
             this.p1AttackHand.push(this.p1AttackDeck.pop());
             this.p1AttackHand.push(this.p1AttackDeck.pop());
             this.p2AttackHand.push(this.p2AttackDeck.pop());

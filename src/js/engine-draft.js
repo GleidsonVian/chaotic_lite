@@ -966,6 +966,349 @@ Object.assign(GameEngine.prototype, {
 
     // ─── Tela de Formação ────────────────────────────────────────────────────
 
+    // ─── Draft de Ataques ────────────────────────────────────────────────────
+
+    openAttackDraftScreen() {
+        // Esconde mugic draft, mostra attack draft
+        const mgScreen  = document.getElementById('mugic-draft-screen');
+        const atkScreen = document.getElementById('attack-draft-screen');
+        if (mgScreen)  mgScreen.style.display  = 'none';
+        if (atkScreen) atkScreen.style.display = 'block';
+
+        // Atualiza label de tamanho
+        const deckSize = this._getAttackDeckSize();
+        const sizeLabel = document.getElementById('atk-deck-size-label');
+        if (sizeLabel) sizeLabel.textContent = deckSize;
+
+        // Se ainda não escolheu ataques, recomenda automaticamente
+        if (this.draftedAttacks.length === 0) this.autoSelectAttacks();
+        else this.renderAttackDraft();
+    },
+
+    backToMugicDraft() {
+        const atkScreen = document.getElementById('attack-draft-screen');
+        const mgScreen  = document.getElementById('mugic-draft-screen');
+        if (atkScreen) atkScreen.style.display = 'none';
+        if (mgScreen)  mgScreen.style.display  = 'block';
+    },
+
+    /** Score de sinergia de um ataque com o time atual */
+    /** Gera descrição legível do efeito do ataque */
+    _describeAttack(atk) {
+        const lines = [];
+        const elemIcons = { Fire:'🔥', Water:'💧', Earth:'🪨', Air:'🌪️' };
+        const statIcons = { courage:'⚔️', power:'💪', wisdom:'🧠', speed:'⚡' };
+
+        // Dano base
+        if (atk.baseDamage > 0)  lines.push(`💥 ${atk.baseDamage} de dano base.`);
+        else if (!atk.baseDamage) lines.push(`💥 0 de dano base.`);
+
+        // Elemento
+        if (atk.elementRequirement) {
+            const icon = elemIcons[atk.elementRequirement] || '';
+            if (atk.elementDamage)  lines.push(`${icon} Se tiver ${atk.elementRequirement}: +${atk.elementDamage} de dano.`);
+            if (atk.elementEffect) {
+                const ef = atk.elementEffect;
+                if (ef.type === 'drain_stat')      lines.push(`${icon} Se tiver ${atk.elementRequirement}: ${ef.stat} do oponente −${ef.value}.`);
+                if (ef.type === 'drain_all_stats')  lines.push(`${icon} Se tiver ${atk.elementRequirement}: todos stats do oponente −${ef.value}.`);
+                if (ef.type === 'grant_element')    lines.push(`${icon} Se tiver ${atk.elementRequirement}: ganha elemento ${ef.element}.`);
+                if (ef.type === 'shuffle_attack_deck') lines.push(`${icon} Se tiver ${atk.elementRequirement}: embaralha ambos os decks de ataque.`);
+                if (ef.type === 'reveal_top_attack')   lines.push(`${icon} Se tiver ${atk.elementRequirement}: veja ${ef.count} carta(s) do topo.`);
+                if (ef.type === 'lose_element')        lines.push(`${icon} Se tiver ${atk.elementRequirement}: atacante perde o elemento ${ef.element}.`);
+            }
+        }
+
+        // Stat challenge / check
+        if (atk.statRequirement) {
+            const icon = statIcons[atk.statRequirement] || '';
+            const mode = atk.statMode === 'challenge'
+                ? `${icon} Se ${atk.statRequirement} superar por ${atk.statThreshold}+`
+                : `${icon} Se ${atk.statRequirement} ≥ ${atk.statThreshold}`;
+            if (atk.statDamage)  lines.push(`${mode}: +${atk.statDamage} de dano.`);
+            if (atk.statHeal)    lines.push(`${mode}: cura +${atk.statHeal} HP.`);
+        }
+
+        // Efeito especial
+        if (atk.specialEffect) {
+            const sp = atk.specialEffect;
+            if (sp.type === 'peek_attack_deck')       lines.push(`👁️ Veja as ${sp.count||2} cartas do topo do seu deck de ataques.`);
+            if (sp.type === 'peek_location_deck')      lines.push(`📍 Veja as ${sp.count||2} cartas do topo do deck de locais.`);
+            if (sp.type === 'discard_mugic_counters')  lines.push(`🎶 Alvo perde ${sp.value} Mugic Counter(s).`);
+            if (sp.type === 'drain_mugic_counter')     lines.push(`🎶 Se alvo tem counter: −${sp.value} counter, +${sp.bonusDamage||0} dano.`);
+            if (sp.type === 'destroy_battlegear')      lines.push(`🗡️ Destrói o battlegear do defensor.`);
+            if (sp.type === 'force_discard')           lines.push(`🗑️ Defensor descarta ${sp.value} carta(s) de ataque.`);
+            if (sp.type === 'all_stats_lower')         lines.push(`📊 Se todos os stats do atacante < defensor: ${sp.bonusDamage||0} dano extra.`);
+            if (sp.type === 'drain_lower_courage')     lines.push(`⚔️ Se coragem do atacante > defensor: ${sp.bonusDamage} dano extra.`);
+            if (sp.type === 'megaroar')                lines.push(`📢 +${sp.value} dano para cada stat do atacante ≥ ${sp.threshold} (máx. 4×).`);
+            if (sp.type === 'double_challenge') {
+                const checks = (sp.checks||[]).map(ck => `${statIcons[ck.stat]||''} ${ck.stat} +${ck.threshold}`).join(' e ');
+                lines.push(`📊 Se ${checks}: +${sp.bonusDamage} dano${sp.bonusHeal ? ` / +${sp.bonusHeal} cura` : ''}.`);
+            }
+            if (sp.type === 'swap_speed_courage')       lines.push(`🔄 Troca Speed e Courage do atacante para este combate.`);
+        }
+
+        return lines;
+    },
+
+    _scoreAttack(atk) {
+        // Coleta elementos das criaturas: base + concedidos pelo battlegear equipado
+        const armyElements = new Set();
+        this.draftedCards.forEach((card, i) => {
+            // Elementos base da criatura
+            (card.elements || []).forEach(e => armyElements.add(e));
+
+            // Elementos do battlegear escolhido (se houver)
+            const bg = this.draftedBattlegears && this.draftedBattlegears[i];
+            if (bg) {
+                // elementGranted: elemento permanente ao revelar
+                if (bg.elementGranted) armyElements.add(bg.elementGranted);
+
+                // elementBonus: elemento com bônus de dano (Torrent Krinth, Torwegg, etc.)
+                if (bg.elementBonus && bg.elementGranted) armyElements.add(bg.elementGranted);
+
+                // tribalElement: elemento concedido por tribo (Whepcrack → Fire para UnderWorld)
+                if (bg.tribalElement && card.tribe === bg.tribalElement.tribe) {
+                    armyElements.add(bg.tribalElement.element);
+                }
+
+                // modifiers com elemento? (não existe nos dados mas previne futuras expansões)
+                if (bg.elementsGranted) {
+                    (bg.elementsGranted).forEach(e => armyElements.add(e));
+                }
+            }
+        });
+
+        const avgStat = (s) => this.draftedCards.length
+            ? Math.round(this.draftedCards.reduce((sum, c) => sum + (c[s] || 0), 0) / this.draftedCards.length)
+            : 50;
+
+        let score = (atk.baseDamage || 0) * 2;
+
+        // Bônus elemental se a criatura tem o elemento
+        if (atk.elementRequirement && armyElements.has(atk.elementRequirement)) {
+            score += (atk.elementDamage || 0) * 1.5;
+        } else if (atk.elementRequirement) {
+            score -= 5; // penalidade leve se nenhuma criatura tem o elemento
+        }
+
+        // Stat challenge
+        if (atk.statRequirement) {
+            const avg = avgStat(atk.statRequirement);
+            if (atk.statMode === 'check') {
+                score += avg >= (atk.statThreshold || 0) ? (atk.statDamage || 0) : -(atk.statDamage || 0) * 0.3;
+            } else {
+                score += (atk.statDamage || 0) * (avg / 100);
+            }
+        }
+
+        // Raridade
+        const rarBonus = { 'Ultra Rare': 4, 'Super Rare': 3, 'Rare': 2, 'Uncommon': 1 };
+        score += rarBonus[atk.rarity] || 0;
+
+        return Math.round(score);
+    },
+
+    /** Recomenda automaticamente os melhores ataques para o time */
+    autoSelectAttacks() {
+        const deckSize = this._getAttackDeckSize();
+        const scored   = (this.attacksData || [])
+            .map((atk, idx) => ({ atk, idx, score: this._scoreAttack(atk) }))
+            .sort((a, b) => b.score - a.score);
+
+        this.draftedAttacks = [];
+        for (const { atk } of scored) {
+            if (this.draftedAttacks.length >= deckSize) break;
+            const copies = this.draftedAttacks.filter(a => a.name === atk.name).length;
+            if (copies < 2) this.draftedAttacks.push(atk);
+        }
+        this.renderAttackDraft();
+        this.log('⚔️ Deck de ataques recomendado com base no seu time!');
+    },
+
+    /** Randomiza entre os melhores ataques */
+    randomizeAttacks() {
+        const deckSize = this._getAttackDeckSize();
+        const scored   = (this.attacksData || [])
+            .map((atk, idx) => ({ atk, idx, score: this._scoreAttack(atk) }))
+            .sort((a, b) => b.score - a.score);
+        const topHalf  = scored.slice(0, Math.ceil(scored.length * 0.6));
+
+        this.draftedAttacks = [];
+        let attempts = 0;
+        while (this.draftedAttacks.length < deckSize && attempts < 200) {
+            attempts++;
+            const { atk } = topHalf[Math.floor(Math.random() * topHalf.length)];
+            const copies   = this.draftedAttacks.filter(a => a.name === atk.name).length;
+            if (copies < 2) this.draftedAttacks.push(atk);
+        }
+        this.renderAttackDraft();
+        this.log('🎲 Deck de ataques randomizado!');
+    },
+
+    clearAttackDraft() {
+        this.draftedAttacks = [];
+        this.renderAttackDraft();
+    },
+
+    addAttackCard(index) {
+        const deckSize = this._getAttackDeckSize();
+        if (this.draftedAttacks.length >= deckSize) return;
+        const atk = this.attacksData[index];
+        if (!atk) return;
+        const copies = this.draftedAttacks.filter(a => a.name === atk.name).length;
+        if (copies >= 2) return; // max 2 cópias
+        this.draftedAttacks.push(atk);
+        this.renderAttackDraft();
+    },
+
+    removeAttackCard(deckIndex) {
+        this.draftedAttacks.splice(deckIndex, 1);
+        this.renderAttackDraft();
+    },
+
+    confirmAttackDraft() {
+        const deckSize = this._getAttackDeckSize();
+        if (this.draftedAttacks.length < deckSize) return;
+        const atkScreen = document.getElementById('attack-draft-screen');
+        if (atkScreen) atkScreen.style.display = 'none';
+
+        // No 1v1 só há 1 criatura — formação não faz sentido, vai direto para a batalha
+        if (this.gameMode === '1v1') {
+            this.startBattle();
+        } else {
+            this.openFormationScreen();
+        }
+    },
+
+    renderAttackDraft() {
+        const pool      = document.getElementById('attack-pool-container');
+        const deckList  = document.getElementById('attack-deck-list');
+        const counter   = document.getElementById('atk-counter');
+        const bar       = document.getElementById('atk-progress-bar');
+        const confirmBtn= document.getElementById('btn-confirm-attack-draft');
+        if (!pool || !deckList) return;
+
+        const deckSize      = this._getAttackDeckSize();
+        const currentCount  = this.draftedAttacks.length;
+        const full          = currentCount === deckSize;
+
+        // Atualiza contador e barra
+        if (counter) counter.textContent = `${currentCount} / ${deckSize}`;
+        if (bar) bar.style.width = `${(currentCount / deckSize) * 100}%`;
+        if (confirmBtn) {
+            confirmBtn.disabled      = !full;
+            confirmBtn.style.opacity = full ? '1' : '0.5';
+            confirmBtn.style.cursor  = full ? 'pointer' : 'not-allowed';
+            confirmBtn.style.background = full ? 'linear-gradient(135deg,#1e40af,#3b82f6)' : 'rgba(30,64,175,0.3)';
+            confirmBtn.style.color      = full ? 'white' : '#93c5fd';
+        }
+
+        // Filtros
+        const filterElem = (document.getElementById('atk-filter-elem') || {}).value || 'all';
+        const filterStat = (document.getElementById('atk-filter-stat') || {}).value || 'all';
+        const filterSort = (document.getElementById('atk-filter-sort') || {}).value || 'score';
+        const armyElements = new Set(this.draftedCards.flatMap(c => c.elements || []));
+
+        const elemIcons = { Fire:'🔥', Water:'💧', Earth:'🪨', Air:'🌪️' };
+        const statIcons = { courage:'⚔️', power:'💪', wisdom:'🧠', speed:'⚡' };
+        const rarColors = { 'Ultra Rare':'#e056fd', 'Super Rare':'#74b9ff', 'Rare':'#f9ca24', 'Uncommon':'#6ab04c', 'Common':'#dfe6e9' };
+
+        // Filtra e ordena
+        let attacks = (this.attacksData || []).map((atk, idx) => ({ atk, idx, score: this._scoreAttack(atk) }));
+
+        if (filterElem !== 'all') {
+            if (filterElem === 'none') attacks = attacks.filter(({ atk }) => !atk.elementRequirement);
+            else attacks = attacks.filter(({ atk }) => atk.elementRequirement === filterElem);
+        }
+        if (filterStat !== 'all') {
+            if (filterStat === 'none') attacks = attacks.filter(({ atk }) => !atk.statRequirement);
+            else attacks = attacks.filter(({ atk }) => atk.statRequirement === filterStat);
+        }
+        if (filterSort === 'damage')  attacks.sort((a, b) => (b.atk.baseDamage || 0) - (a.atk.baseDamage || 0));
+        else if (filterSort === 'rarity') {
+            const order = { 'Ultra Rare':0, 'Super Rare':1, 'Rare':2, 'Uncommon':3, 'Common':4 };
+            attacks.sort((a, b) => (order[a.atk.rarity] || 4) - (order[b.atk.rarity] || 4));
+        } else if (filterSort === 'name') attacks.sort((a, b) => a.atk.name.localeCompare(b.atk.name));
+        else attacks.sort((a, b) => b.score - a.score); // default: sinergia
+
+        // ── Pool de ataques ──────────────────────────────────────────────────
+        pool.innerHTML = attacks.map(({ atk, idx, score }) => {
+            const copies  = this.draftedAttacks.filter(a => a.name === atk.name).length;
+            const blocked = full || copies >= 2;
+            const rc      = rarColors[atk.rarity] || '#dfe6e9';
+            const scoreColor = score >= 20 ? '#22c55e' : score >= 10 ? '#f59e0b' : '#64748b';
+
+            // Calcula dano potencial para exibir
+            const hasElem = atk.elementRequirement && armyElements.has(atk.elementRequirement);
+            const totalDmg = (atk.baseDamage || 0)
+                + (hasElem ? (atk.elementDamage || 0) : 0)
+                + (atk.statDamage || 0); // otimista
+
+            let tags = '';
+            if (atk.elementRequirement) {
+                const color = hasElem ? '#fbbf24' : '#475569';
+                tags += `<span style="font-size:9px;background:${color}22;border:1px solid ${color}44;color:${color};border-radius:4px;padding:1px 5px;">${elemIcons[atk.elementRequirement]||''} ${atk.elementRequirement}</span>`;
+            }
+            if (atk.statRequirement) {
+                tags += `<span style="font-size:9px;background:#3b82f622;border:1px solid #3b82f644;color:#93c5fd;border-radius:4px;padding:1px 5px;">${statIcons[atk.statRequirement]||''} ${atk.statRequirement}</span>`;
+            }
+            if (copies > 0) {
+                tags += `<span style="font-size:9px;background:#22c55e22;border:1px solid #22c55e44;color:#4ade80;border-radius:4px;padding:1px 5px;">×${copies}</span>`;
+            }
+
+            const descLines = this._describeAttack(atk);
+            const descHtml  = descLines.map(line =>
+                `<div style="line-height:1.4;">${line}</div>`
+            ).join('');
+
+            return `
+            <div onclick="${blocked ? '' : `game.addAttackCard(${idx})`}"
+                 style="background:#0f1a24;border:2px solid ${copies>0?'#22c55e':'#334155'};border-radius:10px;
+                        padding:10px;width:170px;cursor:${blocked?'not-allowed':'pointer'};
+                        opacity:${blocked?0.45:1};transition:all 0.15s;display:flex;flex-direction:column;gap:5px;"
+                 ${!blocked ? `onmouseover="this.style.borderColor='#f59e0b';this.style.transform='translateY(-2px)'"
+                 onmouseout="this.style.borderColor='${copies>0?'#22c55e':'#334155'}';this.style.transform=''"` : ''}>
+
+                <!-- Cabeçalho: nome + raridade -->
+                <div style="display:flex;justify-content:space-between;align-items:start;gap:4px;">
+                    <div style="font-size:12px;font-weight:800;color:#f1f5f9;flex:1;line-height:1.2;">${atk.name}</div>
+                    <div style="font-size:10px;color:${rc};flex-shrink:0;">${atk.rarity==='Ultra Rare'?'💎':atk.rarity==='Super Rare'?'🔷':atk.rarity==='Rare'?'🔶':atk.rarity==='Uncommon'?'🔹':'⚪'}</div>
+                </div>
+
+                <!-- Tags de elemento/stat/cópias -->
+                <div style="display:flex;gap:3px;flex-wrap:wrap;">${tags}</div>
+
+                <!-- Score de sinergia -->
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div style="font-size:16px;font-weight:900;color:#fbbf24;">💥 ${atk.baseDamage||0}</div>
+                    <div style="font-size:10px;color:${scoreColor};font-weight:700;">⭐ ${score}</div>
+                </div>
+
+                <!-- Descrição dos efeitos -->
+                <div style="font-size:10px;color:#94a3b8;background:rgba(0,0,0,0.25);border-radius:6px;padding:6px 8px;line-height:1.5;">
+                    ${descHtml || '<span style="color:#475569;">Sem efeitos especiais.</span>'}
+                </div>
+            </div>`;
+        }).join('');
+
+        // ── Deck escolhido ───────────────────────────────────────────────────
+        deckList.innerHTML = this.draftedAttacks.map((atk, i) => {
+            const hasElem = atk.elementRequirement && armyElements.has(atk.elementRequirement);
+            return `
+            <div onclick="game.removeAttackCard(${i})"
+                 style="display:flex;align-items:center;gap:8px;padding:6px 10px;
+                        background:rgba(34,197,94,0.06);border:1px solid #22c55e33;border-radius:7px;
+                        cursor:pointer;transition:all 0.15s;"
+                 onmouseover="this.style.background='rgba(239,68,68,0.1)';this.style.borderColor='#ef444466'"
+                 onmouseout="this.style.background='rgba(34,197,94,0.06)';this.style.borderColor='#22c55e33'">
+                <span style="font-size:11px;font-weight:700;color:#f1f5f9;flex:1;">${atk.name}</span>
+                <span style="font-size:12px;font-weight:800;color:#fbbf24;">💥${atk.baseDamage||0}</span>
+                ${atk.elementRequirement ? `<span style="font-size:11px;color:${hasElem?'#fbbf24':'#475569'}">${elemIcons[atk.elementRequirement]||''}</span>` : ''}
+                <span style="font-size:9px;color:#ef4444;opacity:0.7;">✕</span>
+            </div>`;
+        }).join('') || '<div style="color:#475569;font-size:12px;padding:8px;">Nenhum ataque selecionado.</div>';
+    },
+
     openFormationScreen() {
         // Esconde draft, mostra tela de formação
         const draftScreen = document.getElementById('draft-screen');
@@ -1215,7 +1558,8 @@ Object.assign(GameEngine.prototype, {
                     cards:          this.draftedCards,
                     battlegears:    this.draftedBattlegears,
                     mugics:         this.draftedMugics,
-                    formationOrder  // array de nomes na ordem da tela de formação
+                    formationOrder, // array de nomes na ordem da tela de formação
+                    attacks:        this.draftedAttacks  // deck de ataques escolhido
                 }
             });
             this.log('📤 Seu draft foi enviado. Aguardando draft do oponente...');
@@ -1356,10 +1700,21 @@ Object.assign(GameEngine.prototype, {
 
         // Inicializa Decks de Ataque (20 cartas cada)
         if (this.attacksData && this.attacksData.length > 0) {
-            for(let i=0; i<20; i++) {
-                this.p1AttackDeck.push(this.attacksData[Math.floor(Math.random() * this.attacksData.length)]);
-                this.p2AttackDeck.push(this.attacksData[Math.floor(Math.random() * this.attacksData.length)]);
-            }
+            const deckSize = this._getAttackDeckSize();
+
+            // P1: usa deck escolhido no draft (ou gera aleatório como fallback)
+            const p1Deck = (this.draftedAttacks && this.draftedAttacks.length === deckSize)
+                ? [...this.draftedAttacks].sort(() => Math.random() - 0.5) // embaralha
+                : Array.from({ length: deckSize }, () =>
+                    this.attacksData[Math.floor(Math.random() * this.attacksData.length)]);
+
+            // P2/IA: sempre aleatório (IA não passa pela tela de draft de ataques)
+            const p2Deck = Array.from({ length: deckSize }, () =>
+                this.attacksData[Math.floor(Math.random() * this.attacksData.length)]);
+
+            this.p1AttackDeck = p1Deck;
+            this.p2AttackDeck = p2Deck;
+
             // Saca 2 cartas iniciais
             this.p1AttackHand.push(this.p1AttackDeck.pop());
             this.p1AttackHand.push(this.p1AttackDeck.pop());

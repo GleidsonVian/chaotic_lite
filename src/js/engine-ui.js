@@ -112,13 +112,570 @@ Object.assign(GameEngine.prototype, {
         if (tip) { tip.style.opacity = '0'; tip.style.visibility = 'hidden'; }
     },
 
+    // ── Tooltip de Carta de Ataque ───────────────────────────────────────────
+
+    _showAttackTooltip(event, atkCard, attacker) {
+        if (!atkCard) return;
+        const tip = document.getElementById('mugic-tooltip');
+        if (!tip) return;
+
+        const rarityColor = {
+            'Ultra Rare':'#e056fd', 'Super Rare':'#74b9ff',
+            'Rare':'#f9ca24', 'Uncommon':'#6ab04c', 'Common':'#dfe6e9'
+        };
+        const rarityIcon = { 'Ultra Rare':'💎', 'Super Rare':'🔷', 'Rare':'🔶', 'Uncommon':'🔹', 'Common':'⚪' };
+        const rc = rarityColor[atkCard.rarity] || '#dfe6e9';
+        const ri = rarityIcon[atkCard.rarity] || '⚪';
+
+        // Elementos efetivos do atacante (inclui battlegear)
+        const atkElems = new Set([
+            ...(attacker?.elements || []),
+            ...(attacker?.bgRevealed && attacker?.battlegear?.elementGranted
+                ? [attacker.battlegear.elementGranted] : [])
+        ]);
+
+        // Usa _describeAttack se disponível, senão gera descrição inline
+        const descLines = this._describeAttack
+            ? this._describeAttack(atkCard)
+            : [];
+
+        // Dano total esperado (com elementos do atacante)
+        let totalDmg = atkCard.baseDamage || 0;
+        if (atkCard.elementRequirement && atkElems.has(atkCard.elementRequirement)) {
+            totalDmg += atkCard.elementDamage || 0;
+        }
+
+        const descHtml = descLines.map(line => {
+            // Colorir linhas de acordo com tipo
+            let color = '#94a3b8';
+            if (/💥/.test(line))  color = '#fbbf24';
+            if (/🔥|💧|🪨|🌪️/.test(line)) color = atkElems.has(atkCard.elementRequirement) ? '#fbbf24' : '#475569';
+            if (/⚔️|💪|🧠|⚡/.test(line)) color = '#93c5fd';
+            if (/👁️|📍|🗑️|📢|📊/.test(line)) color = '#fb923c';
+            return `<div style="color:${color};line-height:1.5;">${line}</div>`;
+        }).join('');
+
+        // Bônus de local se ativo
+        let localBonus = '';
+        if (this.activeLocation?.effect) {
+            const ef = this.activeLocation.effect;
+            if (ef.type === 'elemental_modifiers' && atkCard.elementRequirement && atkElems.has(atkCard.elementRequirement)) {
+                const bonus = ef.bonuses?.[atkCard.elementRequirement];
+                if (bonus) localBonus = `<div style="font-size:10px;color:#38bdf8;margin-top:4px;">📍 ${this.activeLocation.name}: +${bonus} dano extra (${atkCard.elementRequirement})</div>`;
+            }
+        }
+
+        tip.innerHTML = `
+            <div style="padding:12px 14px 10px;background:linear-gradient(135deg,rgba(251,191,36,0.1),transparent);border-bottom:1px solid #f59e0b33;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;">
+                    <span style="font-size:14px;font-weight:900;color:#fbbf24;">${atkCard.name}</span>
+                    <span style="font-size:15px;" title="${atkCard.rarity||''}">${ri}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="background:${rc}22;border:1px solid ${rc}55;color:${rc};font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;">${atkCard.rarity||'Common'}</span>
+                    <span style="font-size:20px;font-weight:900;color:#fbbf24;margin-left:auto;">💥 ${totalDmg}</span>
+                </div>
+            </div>
+
+            <div style="padding:10px 14px;border-bottom:1px solid #1e293b;">
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#475569;margin-bottom:5px;">Efeitos</div>
+                ${descHtml || '<div style="color:#475569;font-size:11px;">Sem efeitos especiais.</div>'}
+                ${localBonus}
+            </div>
+
+            ${attacker ? `
+            <div style="padding:8px 14px;">
+                <div style="font-size:10px;color:#64748b;">
+                    Atacante: <span style="color:#f1f5f9;font-weight:600;">${attacker.name}</span>
+                    ${atkCard.elementRequirement ? `· Elemento ${atkCard.elementRequirement}: <span style="color:${atkElems.has(atkCard.elementRequirement)?'#22c55e':'#ef4444'};font-weight:700;">${atkElems.has(atkCard.elementRequirement)?'✅ ativo':'❌ inativo'}</span>` : ''}
+                </div>
+            </div>` : ''}
+        `;
+
+        tip.style.visibility = 'visible';
+        tip.style.opacity    = '1';
+        this._positionTooltip(event, tip);
+    },
+
+    _positionTooltip(event, tip) {
+        const margin = 14;
+        const tw = tip.offsetWidth  || 240;
+        const th = tip.offsetHeight || 200;
+        let x = event.clientX + margin;
+        let y = event.clientY - th - margin;
+        if (x + tw > window.innerWidth  - 8) x = event.clientX - tw - margin;
+        if (y < 8)                           y = event.clientY + margin;
+        tip.style.left = x + 'px';
+        tip.style.top  = y + 'px';
+    },
+
+    _hideAttackTooltip() {
+        const tip = document.getElementById('mugic-tooltip');
+        if (tip) { tip.style.opacity = '0'; tip.style.visibility = 'hidden'; }
+    },
+
+    // ── Tooltip de Battlegear no Board ───────────────────────────────────────
+
+    _showBattlegearTooltip(event, player, r, c) {
+        const board = player === 1 ? this.boardP1 : this.boardP2;
+        if (!board || !board[r]) return;
+        const card = board[r][c];
+        if (!card || !card.battlegear) return;
+        const bg = card.battlegear;
+
+        const tip = document.getElementById('mugic-tooltip');
+        if (!tip) return;
+
+        const iconMap = { Fire:'🔥', Water:'💧', Earth:'🪨', Air:'🌪️' };
+
+        // Bônus de stats
+        const mod = bg.modifiers || {};
+        const statRows = [
+            { key: 'courage', label: 'Coragem',    icon: '⚔️' },
+            { key: 'power',   label: 'Poder',      icon: '💪' },
+            { key: 'wisdom',  label: 'Sabedoria',  icon: '🧠' },
+            { key: 'speed',   label: 'Velocidade', icon: '⚡' },
+            { key: 'energy',  label: 'Energia',    icon: '❤️' },
+        ].filter(s => mod[s.key] && mod[s.key] !== 0);
+
+        const statsHtml = statRows.length > 0
+            ? statRows.map(s => `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;border-bottom:1px solid #1e293b;">
+                    <span style="color:#94a3b8;font-size:11px;">${s.icon} ${s.label}</span>
+                    <span style="color:${mod[s.key] > 0 ? '#4ade80' : '#f87171'};font-weight:700;font-size:12px;">
+                        ${mod[s.key] > 0 ? '+' : ''}${mod[s.key]}
+                    </span>
+                </div>`).join('')
+            : `<div style="font-size:11px;color:#475569;">Sem bônus de stat.</div>`;
+
+        // Elemento concedido
+        const elemGranted = bg.elementGranted || bg.tribalElement?.element;
+        const elemHtml = elemGranted ? `
+            <div style="padding:8px 12px;border-top:1px solid #1e293b;">
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#475569;margin-bottom:4px;">Elemento Concedido</div>
+                <span style="background:rgba(255,255,255,0.08);border:1px solid #334155;border-radius:6px;padding:3px 10px;font-size:12px;">
+                    ${iconMap[elemGranted] || '✨'} ${elemGranted}
+                    ${bg.tribalElement ? `<span style="font-size:10px;color:#64748b;">(tribal: ${bg.tribalElement.tribe})</span>` : ''}
+                </span>
+            </div>` : '';
+
+        // Raridade
+        const rarityIcon = bg.rarity === 'Ultra Rare' ? '💎' : bg.rarity === 'Super Rare' ? '🔷' : bg.rarity === 'Rare' ? '🔶' : bg.rarity === 'Uncommon' ? '🔹' : '⚪';
+
+        tip.innerHTML = `
+            <!-- Header -->
+            <div style="padding:10px 12px 8px;background:linear-gradient(135deg,rgba(251,191,36,0.12),transparent);border-bottom:1px solid rgba(251,191,36,0.2);">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+                    <div>
+                        <div style="font-size:13px;font-weight:900;color:#fbbf24;line-height:1.1;">🗡️ ${bg.name}</div>
+                        <div style="font-size:10px;color:#64748b;margin-top:2px;">Battlegear · ${bg.rarity || 'Common'}</div>
+                    </div>
+                    <span style="font-size:18px;">${rarityIcon}</span>
+                </div>
+            </div>
+
+            <!-- Descrição -->
+            ${bg.description ? `
+            <div style="padding:8px 12px;border-bottom:1px solid #1e293b;">
+                <div style="font-size:11px;color:#cbd5e1;line-height:1.5;">${bg.description}</div>
+            </div>` : ''}
+
+            <!-- Bônus de stats -->
+            <div style="padding:8px 12px;border-bottom:1px solid #1e293b;">
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#475569;margin-bottom:6px;">Bônus de Stats</div>
+                ${statsHtml}
+            </div>
+
+            ${elemHtml}
+
+            <!-- Equipado em -->
+            <div style="padding:6px 12px;">
+                <div style="font-size:10px;color:#475569;">Equipado em: <span style="color:#f1f5f9;font-weight:600;">${card.name}</span></div>
+            </div>
+        `;
+
+        tip.style.visibility = 'visible';
+        tip.style.opacity    = '1';
+        this._positionTooltip(event, tip);
+    },
+
+    // ── Tooltip de Criatura no Board ─────────────────────────────────────────
+
+    _showCreatureTooltip(event, player, r, c) {
+        const board = player === 1 ? this.boardP1 : this.boardP2;
+        if (!board || !board[r]) return;
+        const card = board[r][c];
+        if (!card) return;
+
+        const tip = document.getElementById('creature-tooltip');
+        if (!tip) return;
+
+        // Cores por tribo
+        const tribeColors = {
+            OverWorld: '#0ea5e9', UnderWorld: '#dc2626',
+            Mipedian: '#d97706', Danian: '#16a34a',
+            "M'arrillian": '#0f766e', Generic: '#64748b'
+        };
+        const tc = tribeColors[card.tribe] || '#64748b';
+
+        const rarityIcon = card.rarity === 'Ultra Rare' ? '💎' : card.rarity === 'Super Rare' ? '🔷' : card.rarity === 'Rare' ? '🔶' : card.rarity === 'Uncommon' ? '🔹' : '⚪';
+
+        // Stats reais (com sinergia + battlegear se revelado)
+        const syn = this.getSynergyBonus ? this.getSynergyBonus(player, r, c) : null;
+        const mod = (card.bgRevealed && card.battlegear?.modifiers) ? card.battlegear.modifiers : {};
+
+        const courage  = card.courage  + (syn?.courage  || 0) + (mod.courage  || 0);
+        const power    = card.power    + (syn?.power    || 0) + (mod.power    || 0);
+        const wisdom   = card.wisdom   + (syn?.wisdom   || 0) + (mod.wisdom   || 0);
+        const speed    = card.speed    + (syn?.speed    || 0) + (mod.speed    || 0);
+        const hpCur    = Math.max(0, card.energy);
+        const hpMax    = card.maxEnergy || card.energy;
+        const hpPct    = hpMax > 0 ? hpCur / hpMax : 1;
+        const hpColor  = hpPct > 0.5 ? '#22c55e' : hpPct > 0.2 ? '#fbbf24' : '#ef4444';
+
+        // Elementos (nativos + battlegear)
+        const iconMap = { Fire:'🔥', Water:'💧', Earth:'🪨', Air:'🌪️' };
+        const allElems = new Set([
+            ...(card.elements || []),
+            ...(card.bgRevealed && card.battlegear?.elementGranted ? [card.battlegear.elementGranted] : [])
+        ]);
+        const elemHtml = [...allElems].map(el =>
+            `<span style="background:rgba(0,0,0,0.5);border:1px solid #475569;border-radius:6px;padding:2px 7px;font-size:11px;">${iconMap[el] || '✨'} ${el}</span>`
+        ).join('');
+
+        // Passivas
+        const passives = [];
+        if (card.abilities) {
+            for (const [k, v] of Object.entries(card.abilities)) {
+                if (!v) continue;
+                const labels = {
+                    brave: '🛡️ Brave', intimidate: '😨 Intimidate',
+                    swift: `⚡ Swift ${v}`, tough: `🪨 Tough ${v}`,
+                    reckless: '⚔️ Reckless', range: '🏹 Range',
+                    invisibility: '👻 Invisibility', initiative: `🎯 Initiative: ${v}`,
+                    elementproof_fire: '🔥 Fireproof', elementproof_water: '💧 Waterproof',
+                    elementproof_earth: '🪨 Earthproof', elementproof_air: '🌪️ Airproof',
+                };
+                if (labels[k.toLowerCase()]) passives.push(labels[k.toLowerCase()]);
+            }
+        }
+
+        // Battlegear
+        let bgHtml = '';
+        if (card.battlegear) {
+            const bgLabel = card.bgRevealed
+                ? `<span style="color:#94a3b8;">${card.battlegear.name}</span>${card.battlegear.description ? `<br><span style="font-size:10px;color:#64748b;">${card.battlegear.description}</span>` : ''}`
+                : `<span style="color:#475569;">🔒 Face Down</span>`;
+            bgHtml = `
+            <div style="padding:8px 12px;border-top:1px solid #1e293b;">
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#475569;margin-bottom:4px;">🗡️ Battlegear</div>
+                <div style="font-size:11px;">${bgLabel}</div>
+            </div>`;
+        }
+
+        // Counters de mugic
+        const mc = card.mugicCounters || 0;
+
+        tip.innerHTML = `
+            <!-- Header tribo -->
+            <div style="padding:10px 12px 8px;background:linear-gradient(135deg,${tc}20,transparent);border-bottom:1px solid ${tc}30;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+                    <div>
+                        <div style="font-size:14px;font-weight:900;color:#f1f5f9;line-height:1.1;">${card.name}</div>
+                        <div style="font-size:10px;color:${tc};font-weight:700;margin-top:2px;">${card.tribe}</div>
+                    </div>
+                    <span style="font-size:20px;" title="${card.rarity||''}">${rarityIcon}</span>
+                </div>
+            </div>
+
+            <!-- Imagem pequena + HP bar -->
+            ${card.image ? `
+            <div style="position:relative;height:80px;overflow:hidden;">
+                <img src="${card.image}" style="width:100%;height:100%;object-fit:cover;object-position:top;filter:brightness(0.85);" alt="${card.name}">
+                <div style="position:absolute;bottom:0;left:0;right:0;padding:4px 8px;background:linear-gradient(transparent,rgba(0,0,0,0.85));">
+                    <div style="height:6px;border-radius:3px;background:#1e293b;overflow:hidden;">
+                        <div style="width:${Math.round(hpPct*100)}%;height:100%;background:${hpColor};border-radius:3px;transition:width .3s;"></div>
+                    </div>
+                    <div style="font-size:10px;color:${hpColor};font-weight:700;margin-top:2px;">❤️ ${hpCur} / ${hpMax}${mc > 0 ? ` &nbsp;♪ ${mc}` : ''}</div>
+                </div>
+            </div>` : `
+            <div style="padding:6px 12px;">
+                <div style="height:6px;border-radius:3px;background:#1e293b;overflow:hidden;">
+                    <div style="width:${Math.round(hpPct*100)}%;height:100%;background:${hpColor};border-radius:3px;"></div>
+                </div>
+                <div style="font-size:10px;color:${hpColor};font-weight:700;margin-top:2px;">❤️ ${hpCur} / ${hpMax}</div>
+            </div>`}
+
+            <!-- Stats -->
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;padding:8px 12px;border-top:1px solid #1e293b;">
+                ${[
+                    {icon:'⚔️', label:'COR', val:courage, base:card.courage},
+                    {icon:'💪', label:'POD', val:power,   base:card.power},
+                    {icon:'🧠', label:'SAB', val:wisdom,  base:card.wisdom},
+                    {icon:'⚡', label:'VEL', val:speed,   base:card.speed},
+                ].map(s => `
+                    <div style="text-align:center;background:#1e293b;border-radius:6px;padding:4px 2px;">
+                        <div style="font-size:11px;">${s.icon}</div>
+                        <div style="font-size:9px;color:#64748b;letter-spacing:.04em;">${s.label}</div>
+                        <div style="font-size:13px;font-weight:800;color:${s.val > s.base ? '#3b82f6' : '#f1f5f9'};">${s.val}</div>
+                    </div>`).join('')}
+            </div>
+
+            <!-- Elementos -->
+            ${allElems.size > 0 ? `
+            <div style="padding:0 12px 8px;display:flex;gap:4px;flex-wrap:wrap;">
+                ${elemHtml}
+            </div>` : ''}
+
+            <!-- Passivas -->
+            ${passives.length > 0 ? `
+            <div style="padding:6px 12px;border-top:1px solid #1e293b;display:flex;gap:4px;flex-wrap:wrap;">
+                ${passives.map(p => `<span style="background:#1e293b;border:1px solid #334155;border-radius:6px;padding:2px 7px;font-size:10px;color:#94a3b8;">${p}</span>`).join('')}
+            </div>` : ''}
+
+            ${bgHtml}
+
+            <!-- Sinergia -->
+            ${syn ? `
+            <div style="padding:6px 12px;border-top:1px solid #1e293b;">
+                <div style="font-size:10px;color:#3b82f6;">⚡ Sinergia: ${syn.description}</div>
+            </div>` : ''}
+        `;
+
+        tip.style.visibility = 'visible';
+        tip.style.opacity    = '1';
+        this._moveCreatureTooltip(event);
+    },
+
+    _moveCreatureTooltip(event) {
+        const tip = document.getElementById('creature-tooltip');
+        if (!tip || tip.style.opacity === '0') return;
+        const margin = 16;
+        const tw = tip.offsetWidth  || 280;
+        const th = tip.offsetHeight || 300;
+        let x = event.clientX + margin;
+        let y = event.clientY - th / 2;
+        if (x + tw > window.innerWidth  - 8) x = event.clientX - tw - margin;
+        if (y < 8)                           y = 8;
+        if (y + th > window.innerHeight - 8) y = window.innerHeight - th - 8;
+        tip.style.left = x + 'px';
+        tip.style.top  = y + 'px';
+    },
+
+    _hideCreatureTooltip() {
+        const tip = document.getElementById('creature-tooltip');
+        if (tip) { tip.style.opacity = '0'; tip.style.visibility = 'hidden'; }
+    },
+
+    // ── Drag & Drop de criaturas no board ────────────────────────────────────
+
+    _onCardDragStart(event, player, r, c) {
+        // Guarda origem no dataTransfer e no estado interno
+        this._dragOrigin = { player, r, c };
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', `${player},${r},${c}`);
+
+        // Seleciona a carta como atacante para aproveitar isValidMove
+        this.selectedAttacker = { player, r, c };
+        this.gameState = 'SELECT_TARGET';
+
+        // Visual: semitransparente enquanto arrasta
+        const el = event.currentTarget;
+        setTimeout(() => { if (el) el.style.opacity = '0.4'; }, 0);
+
+        this.renderBoard();
+    },
+
+    _onCardDragEnd(event) {
+        // Restaura opacidade
+        const el = event.currentTarget;
+        if (el) el.style.opacity = '';
+
+        // Remove highlights de drop dos slots
+        document.querySelectorAll('.board-slot-empty').forEach(s => {
+            s.classList.remove('drag-over-valid', 'drag-over-invalid');
+        });
+
+        // Se não houve drop válido, cancela seleção
+        if (this.gameState === 'SELECT_TARGET' && this._dragOrigin) {
+            this.selectedAttacker = null;
+            this.gameState = 'IDLE';
+            this._dragOrigin = null;
+            this.renderBoard();
+        }
+    },
+
+    _onSlotDragOver(event, player, r, c) {
+        event.preventDefault();
+        const origin = this._dragOrigin;
+        if (!origin) return;
+
+        const valid = this.isValidMove(origin.r, origin.c, r, c);
+        event.dataTransfer.dropEffect = valid ? 'move' : 'none';
+
+        // Feedback visual no slot
+        const el = event.currentTarget;
+        el.classList.remove('drag-over-valid', 'drag-over-invalid');
+        el.classList.add(valid ? 'drag-over-valid' : 'drag-over-invalid');
+    },
+
+    _onSlotDragLeave(event) {
+        event.currentTarget.classList.remove('drag-over-valid', 'drag-over-invalid');
+    },
+
+    _onSlotDrop(event, player, r, c) {
+        event.preventDefault();
+        event.currentTarget.classList.remove('drag-over-valid', 'drag-over-invalid');
+
+        const origin = this._dragOrigin;
+        if (!origin) return;
+
+        const myPlayer = this.multiplayerMode ? this.myPlayerNumber : 1;
+
+        if (this.isValidMove(origin.r, origin.c, r, c)) {
+            this.resolveMove(myPlayer, origin.r, origin.c, r, c);
+        } else {
+            this.log('⚠️ Movimento inválido — só é possível mover para espaços adjacentes vazios.');
+            this.selectedAttacker = null;
+            this.gameState = 'IDLE';
+            this.renderBoard();
+        }
+        this._dragOrigin = null;
+    },
+
+    // ── Notificação de burst no título da aba ────────────────────────────────
+
+    _startTabFlash(message) {
+        this._stopTabFlash(); // limpa qualquer flash anterior
+        const original = 'Chaotic Lite';
+        let visible = true;
+        document.title = `🔔 ${message} — ${original}`;
+        this._tabFlashInterval = setInterval(() => {
+            visible = !visible;
+            document.title = visible ? `🔔 ${message} — ${original}` : original;
+        }, 900);
+
+        // Para automaticamente após 30s (segurança caso closeBurstModal não seja chamado)
+        this._tabFlashTimeout = setTimeout(() => this._stopTabFlash(), 30000);
+    },
+
+    _stopTabFlash() {
+        if (this._tabFlashInterval) {
+            clearInterval(this._tabFlashInterval);
+            this._tabFlashInterval = null;
+        }
+        if (this._tabFlashTimeout) {
+            clearTimeout(this._tabFlashTimeout);
+            this._tabFlashTimeout = null;
+        }
+        document.title = 'Chaotic Lite';
+    },
+
+    // ── Animação de Morte (explode em pedaços) ───────────────────────────────
+
+    _playDeathAnimation(player, r, c) {
+        return new Promise(resolve => {
+            const el = document.querySelector(`[data-pos="p${player}-${r}-${c}"]`);
+            if (!el) { resolve(); return; }
+
+            const rect = el.getBoundingClientRect();
+            const cx = rect.left + rect.width  / 2;
+            const cy = rect.top  + rect.height / 2;
+            const w  = rect.width;
+            const h  = rect.height;
+
+            // ── 1. Flash branco de impacto ────────────────────────────────────
+            el.style.transition = 'filter 0.08s ease-out, transform 0.08s ease-out';
+            el.style.filter     = 'brightness(4) saturate(0) contrast(2)';
+            el.style.transform  = 'scale(1.06)';
+
+            // ── 2. Fragmentos voando ─────────────────────────────────────────
+            const container = document.createElement('div');
+            container.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:99997;overflow:visible;';
+            document.body.appendChild(container);
+
+            // Captura a imagem do card para usar como fundo dos fragmentos
+            const cardImg = el.querySelector('img.card-image');
+            const imgSrc  = cardImg ? cardImg.src : null;
+
+            // Gera fragmentos em grade 4×5 (20 pedaços)
+            const COLS = 4, ROWS = 5;
+            const fw = w / COLS, fh = h / ROWS;
+
+            for (let row = 0; row < ROWS; row++) {
+                for (let col = 0; col < COLS; col++) {
+                    const frag = document.createElement('div');
+
+                    // Posição inicial do fragmento = posição na grade do card
+                    const fx = rect.left + col * fw;
+                    const fy = rect.top  + row * fh;
+
+                    // Direção de explosão: radial a partir do centro
+                    const dx = (fx + fw/2) - cx;
+                    const dy = (fy + fh/2) - cy;
+                    const dist = 80 + Math.random() * 120;
+                    const norm = Math.sqrt(dx*dx + dy*dy) || 1;
+                    const tx = (dx / norm) * dist + (Math.random() - 0.5) * 60;
+                    const ty = (dy / norm) * dist + (Math.random() - 0.5) * 60 + 30; // gravidade
+                    const rot = (Math.random() - 0.5) * 540;
+                    const dur = 420 + Math.random() * 220;
+                    const delay = Math.random() * 60;
+
+                    frag.style.cssText = `
+                        position:fixed;
+                        left:${fx}px; top:${fy}px;
+                        width:${fw + 1}px; height:${fh + 1}px;
+                        overflow:hidden;
+                        border-radius:2px;
+                        box-shadow:0 2px 8px rgba(0,0,0,0.6);
+                        will-change:transform,opacity;
+                        transition: transform ${dur}ms cubic-bezier(0.25,0.46,0.45,0.94) ${delay}ms,
+                                    opacity  ${dur * 0.7}ms ease-in ${delay + dur * 0.3}ms;
+                    `;
+
+                    // Fundo: recorte da imagem do card OU cor sólida fallback
+                    if (imgSrc) {
+                        frag.style.backgroundImage  = `url('${imgSrc}')`;
+                        frag.style.backgroundSize   = `${w}px ${h}px`;
+                        frag.style.backgroundPosition = `-${col * fw}px -${row * fh}px`;
+                        frag.style.backgroundRepeat = 'no-repeat';
+                    } else {
+                        const colors = ['#1e293b','#334155','#475569','#0f172a'];
+                        frag.style.background = colors[Math.floor(Math.random() * colors.length)];
+                    }
+
+                    container.appendChild(frag);
+
+                    // Dispara animação após paint
+                    requestAnimationFrame(() => requestAnimationFrame(() => {
+                        frag.style.transform = `translate(${tx}px, ${ty}px) rotate(${rot}deg) scale(0.15)`;
+                        frag.style.opacity   = '0';
+                    }));
+                }
+            }
+
+            // ── 3. Some o card original ──────────────────────────────────────
+            setTimeout(() => {
+                el.style.transition = 'transform 0.15s ease-in, opacity 0.15s ease-in';
+                el.style.transform  = 'scale(0.85)';
+                el.style.opacity    = '0';
+            }, 60);
+
+            // ── 4. Limpa e resolve ───────────────────────────────────────────
+            setTimeout(() => {
+                container.remove();
+                resolve();
+            }, 680);
+        });
+    },
+
     // ── Animação de Ataque (salto do atacante) ───────────────────────────────
 
     /**
      * O atacante "salta" na direção do defensor e volta.
      * Retorna uma Promise que resolve após a animação terminar.
      */
-    _playAttackAnimation(attackerCard, attackingPlayer) {
+    _playAttackAnimation(attackerCard, attackingPlayer, atkR, atkC) {
         return new Promise(resolve => {
             // Aguarda 2 frames para garantir que o modal fechou e o board está visível
             requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -126,13 +683,20 @@ Object.assign(GameEngine.prototype, {
                 const board = document.getElementById('board');
                 if (!board) { resolve(); return; }
 
-                // Encontra o elemento do atacante pelo nome
-                const allCards = board.querySelectorAll('.card');
+                // Encontra o elemento do atacante pela posição exata (data-pos),
+                // evitando ambiguidade quando há criaturas com o mesmo nome no board
                 let atkEl = null;
-                for (const el of allCards) {
-                    const nameEl = el.querySelector('.card-name');
-                    if (nameEl && nameEl.textContent.trim().startsWith(attackerCard.name)) {
-                        atkEl = el; break;
+                if (atkR !== undefined && atkC !== undefined) {
+                    atkEl = board.querySelector(`[data-pos="p${attackingPlayer}-${atkR}-${atkC}"]`);
+                }
+                // Fallback: busca por nome (compatibilidade com chamadas sem posição)
+                if (!atkEl) {
+                    const allCards = board.querySelectorAll('.card');
+                    for (const el of allCards) {
+                        const nameEl = el.querySelector('.card-name');
+                        if (nameEl && nameEl.textContent.trim().startsWith(attackerCard.name)) {
+                            atkEl = el; break;
+                        }
                     }
                 }
                 if (!atkEl) { resolve(); return; }

@@ -174,15 +174,54 @@ Object.assign(GameEngine.prototype, {
     },
 
     /** HTML dos contadores de mugic (♪♪♪) */
-    _mugicCountersHtml(card) {
+    _mugicCountersHtml(card, pendingCounter = false) {
         const n = card.mugicCounters || 0;
-        if (n === 0) return '';
-        let html = '<div style="display:flex;justify-content:center;gap:3px;">';
-        for (let i = 0; i < n; i++) {
-            html += '<span style="color:#9b59b6;font-size:14px;text-shadow:1px 1px 2px black;line-height:1;">♪</span>';
+        if (n === 0 && !pendingCounter) return '';
+
+        // Counter pendente (será dado ao entrar em combate pelo local ativo)
+        if (n === 0 && pendingCounter) {
+            return `
+                <div style="display:flex;justify-content:center;margin-top:3px;" title="Ganhará 1 ♪ ao entrar em combate (efeito do local)">
+                    <div style="
+                        display:inline-flex;align-items:center;gap:1px;
+                        background:rgba(109,40,217,0.25);
+                        border:1px dashed rgba(139,92,246,0.5);
+                        border-radius:20px;padding:2px 6px;
+                        opacity:0.7;
+                    ">
+                        <span style="font-size:11px;color:#c4b5fd;line-height:1;">♪</span>
+                        <span style="font-size:9px;color:#7c3aed;margin-left:2px;">+1</span>
+                    </div>
+                </div>`;
         }
-        html += '</div>';
-        return html;
+
+        // Badge pequeno para 1 counter, badge maior e pulsante para 2+
+        const isRich = n >= 2;
+        const bgColor   = isRich ? 'linear-gradient(135deg,#6d28d9,#9333ea)' : 'rgba(109,40,217,0.5)';
+        const border    = isRich ? '1px solid rgba(167,139,250,0.8)' : '1px solid rgba(139,92,246,0.4)';
+        const fontSize  = isRich ? '13px' : '11px';
+        const padding   = isRich ? '3px 9px' : '2px 6px';
+        const shadow    = isRich ? 'box-shadow:0 0 8px rgba(139,92,246,0.6),0 2px 6px rgba(0,0,0,0.4);' : '';
+        const pulse     = isRich ? 'animation:mugic-counter-pulse 1.6s ease-in-out infinite;' : '';
+        const numBadge  = n > 1
+            ? `<span style="background:rgba(0,0,0,0.35);border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;margin-left:3px;color:#e9d5ff;">×${n}</span>`
+            : '';
+
+        return `
+            <div style="display:flex;justify-content:center;margin-top:3px;">
+                <div style="
+                    display:inline-flex;align-items:center;gap:1px;
+                    background:${bgColor};
+                    border:${border};
+                    border-radius:20px;
+                    padding:${padding};
+                    ${shadow}
+                    ${pulse}
+                ">
+                    <span style="font-size:${fontSize};color:#e9d5ff;line-height:1;filter:drop-shadow(0 0 3px rgba(167,139,250,0.8));">♪</span>
+                    ${numBadge}
+                </div>
+            </div>`;
     },
 
     /** HTML de uma carta no draft (card grid) */
@@ -472,9 +511,53 @@ Object.assign(GameEngine.prototype, {
 
         const entry = document.createElement('div');
         entry.className = `log-entry log-entry-${type}`;
+        entry.dataset.logType = type;
         entry.textContent = message.replace(/^[💥💚🎶🪄🎵🔮✨📍📊⚡🛡️💢💪😰🔄⚔️💀📉🌋❄️🧯⬆️↩️♪🗑️🔭👁️💫🔰]/u, '').trim();
+
+        // Aplica filtro de tab ativo
+        const activeTab = this._activeLogTab || 'all';
+        if (activeTab !== 'all') {
+            const show = (activeTab === 'combat' && ['combat','death','initiative'].includes(type))
+                      || (activeTab === 'mugic'  && type === 'mugic')
+                      || (activeTab === 'damage' && ['damage','heal','death'].includes(type));
+            if (!show) entry.style.display = 'none';
+        }
+
         this.logElement.appendChild(entry);
         this.logElement.scrollTop = this.logElement.scrollHeight;
+    },
+
+    // ── Funções do painel de log ─────────────────────────────────────────────
+
+    _switchLogTab(tab) {
+        this._activeLogTab = tab;
+        // Destaca tab ativa
+        ['all','combat','mugic','damage'].forEach(t => {
+            const btn = document.getElementById(`log-tab-${t}`);
+            if (btn) btn.classList.toggle('log-tab-active', t === tab);
+        });
+        // Filtra entradas visíveis
+        if (!this.logElement) return;
+        const entries = this.logElement.querySelectorAll('.log-entry, .log-combat-header, .log-round-header, .log-turn-sep');
+        entries.forEach(el => {
+            const type = el.dataset.logType || '';
+            if (tab === 'all') {
+                el.style.display = '';
+            } else if (tab === 'combat') {
+                el.style.display = ['combat','death','initiative','','round','turn'].includes(type) ? '' : 'none';
+            } else if (tab === 'mugic') {
+                el.style.display = type === 'mugic' ? '' : 'none';
+            } else if (tab === 'damage') {
+                el.style.display = ['damage','heal','death'].includes(type) ? '' : 'none';
+            }
+        });
+    },
+
+    _clearLog() {
+        if (this.logElement) {
+            this.logElement.innerHTML = '';
+            this.log('🗑️ Log limpo.');
+        }
     },
 
     _logEntryType(msg) {
@@ -715,22 +798,107 @@ Object.assign(GameEngine.prototype, {
         }
     },
 
+    /** Avaliação básica (rápida, sem contexto de posição) */
     evaluateAttack(atkCard, attacker, defender) {
-        let expected = atkCard.baseDamage;
+        return this.evaluateAttackFull(atkCard, attacker, defender, null, null, null, null);
+    },
+
+    /**
+     * Avaliação completa do dano esperado de um ataque.
+     * Considera: stats efetivos (synergy + battlegear + local), elementos, challenges, specials.
+     * Usada pela IA no modo Médio/Difícil.
+     *
+     * @param {object} atkCard   - carta de ataque
+     * @param {object} attacker  - criatura atacante
+     * @param {object} defender  - criatura defensora
+     * @param {number} atkR/atkC - posição do atacante (para synergy)
+     * @param {number} defR/defC - posição do defensor
+     * @returns {number} dano esperado
+     */
+    evaluateAttackFull(atkCard, attacker, defender, atkR, atkC, defR, defC) {
+        // Stats efetivos — inclui synergy + battlegear + local se posições disponíveis
+        const atkSyn   = (atkR !== null && atkC !== null) ? (this.getSynergyBonus(2, atkR, atkC) || {}) : {};
+        const defSyn   = (defR !== null && defC !== null) ? (this.getSynergyBonus(1, defR, defC) || {}) : {};
+        const locMod   = (this.activeLocation && this.activeLocation.modifiers) || {};
+        const atkBgMod = (attacker.bgRevealed && attacker.battlegear && attacker.battlegear.modifiers) || {};
+        const defBgMod = (defender.bgRevealed && defender.battlegear && defender.battlegear.modifiers) || {};
+
+        const effAtk = {
+            courage: (attacker.courage||0) + (atkSyn.courage||0) + (locMod.courage||0) + (atkBgMod.courage||0),
+            power:   (attacker.power  ||0) + (atkSyn.power  ||0) + (locMod.power  ||0) + (atkBgMod.power  ||0),
+            wisdom:  (attacker.wisdom ||0) + (atkSyn.wisdom ||0) + (locMod.wisdom ||0) + (atkBgMod.wisdom ||0),
+            speed:   (attacker.speed  ||0) + (atkSyn.speed  ||0) + (locMod.speed  ||0) + (atkBgMod.speed  ||0),
+        };
+        const effDef = {
+            courage: (defender.courage||0) + (defSyn.courage||0) + (locMod.courage||0) + (defBgMod.courage||0),
+            power:   (defender.power  ||0) + (defSyn.power  ||0) + (locMod.power  ||0) + (defBgMod.power  ||0),
+            wisdom:  (defender.wisdom ||0) + (defSyn.wisdom ||0) + (locMod.wisdom ||0) + (defBgMod.wisdom ||0),
+            speed:   (defender.speed  ||0) + (defSyn.speed  ||0) + (locMod.speed  ||0) + (defBgMod.speed  ||0),
+        };
+
+        // Elementos efetivos do atacante (base + battlegear)
+        const atkElements = new Set([
+            ...(attacker.elements || []),
+            ...(attacker.bgRevealed && attacker.battlegear?.elementGranted ? [attacker.battlegear.elementGranted] : []),
+        ]);
+
+        let expected = atkCard.baseDamage || 0;
 
         // Bônus elemental
-        if (atkCard.elementRequirement && attacker.elements && attacker.elements.includes(atkCard.elementRequirement)) {
-            expected += atkCard.elementDamage || 0;
-        }
-
-        // Bônus de challenge (estimativa: se atacante provavelmente supera o threshold)
-        if (atkCard.statRequirement) {
-            const stat = atkCard.statRequirement.toLowerCase();
-            const threshold = atkCard.statThreshold || 0;
-            if ((attacker[stat] || 0) >= (defender[stat] || 0) + threshold) {
-                expected += atkCard.statDamage || 0;
+        if (atkCard.elementRequirement) {
+            if (atkElements.has(atkCard.elementRequirement)) {
+                expected += atkCard.elementDamage || 0;
             }
         }
+
+        // Stat challenge / check
+        if (atkCard.statRequirement) {
+            const stat    = atkCard.statRequirement.toLowerCase();
+            const av      = effAtk[stat] || 0;
+            const dv      = effDef[stat] || 0;
+            const threshold = atkCard.statThreshold || 0;
+            const passed  = atkCard.statMode === 'challenge'
+                ? av > dv + threshold
+                : av >= threshold;
+            if (passed) expected += atkCard.statDamage || 0;
+        }
+
+        // Efeitos especiais — valor estimado
+        if (atkCard.specialEffect) {
+            const sp = atkCard.specialEffect;
+            if (sp.type === 'megaroar') {
+                ['courage','power','wisdom','speed'].forEach(s => {
+                    if ((effAtk[s] || 0) >= sp.threshold) expected += sp.value;
+                });
+            } else if (sp.type === 'double_challenge') {
+                let allPass = true;
+                (sp.checks || []).forEach(ck => {
+                    const av = effAtk[ck.stat] || 0;
+                    const dv = effDef[ck.stat] || 0;
+                    if (!(av > dv + ck.threshold)) allPass = false;
+                });
+                if (allPass) expected += sp.bonusDamage || 0;
+            } else if (sp.type === 'destroy_battlegear') {
+                expected += defender.bgRevealed && defender.battlegear ? 8 : 2; // valor tático
+            }
+        }
+
+        // Penalidade Reckless: IA evita ataques que a matariam
+        if (attacker._recklessPenalty && attacker._recklessPenalty > 0) {
+            const selfDmg = attacker._recklessPenalty;
+            if (attacker.energy - selfDmg <= 0) expected -= 50; // suicídio — evita
+            else expected -= selfDmg * 0.5; // penalidade parcial
+        }
+
+        // Tough do defensor reduz dano
+        const tough = (defender.passives || []).find(p => (typeof p==='string'?p:p.id) === 'tough');
+        if (tough) {
+            const reduction = typeof tough === 'object' ? tough.value : 5;
+            expected = Math.max(0, expected - reduction);
+        }
+
+        // Bônus: se o ataque mata o defensor, enorme valor tático
+        if (expected >= defender.energy) expected += 30;
 
         return expected;
     },

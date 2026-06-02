@@ -374,11 +374,89 @@
                     </div>
                 </div>
 
-                <button id="btn-finish-mg-draft" class="btn btn-primary btn-large hidden" onclick="game.openFormationScreen()">
-                    Posicionar Criaturas →
+                <button id="btn-finish-mg-draft" class="btn btn-primary btn-large hidden" onclick="game.openAttackDraftScreen()">
+                    Montar Deck de Ataques →
                 </button>
             </div>
             
+        </div>
+
+        <!-- Tela de Draft de Ataques -->
+        <div id="attack-draft-screen" style="display:none; text-align:center; padding:20px;">
+            <h2 class="text-accent mb-medium">⚔️ Monte seu Deck de Ataques</h2>
+            <p class="text-muted mb-small">Escolha <span id="atk-deck-size-label">20</span> cartas. Máximo 2 cópias da mesma carta.</p>
+
+            <div style="display:flex;gap:12px;justify-content:center;margin-bottom:16px;flex-wrap:wrap;">
+                <button onclick="game.autoSelectAttacks()" class="btn" style="background:rgba(245,158,11,0.15);border:1px solid #f59e0b;color:#fcd34d;font-size:13px;padding:7px 18px;border-radius:8px;cursor:pointer;">
+                    ⭐ Recomendar
+                </button>
+                <button onclick="game.randomizeAttacks()" class="btn" style="background:rgba(99,102,241,0.15);border:1px solid #6366f1;color:#a5b4fc;font-size:13px;padding:7px 18px;border-radius:8px;cursor:pointer;">
+                    🎲 Aleatório
+                </button>
+                <button onclick="game.clearAttackDraft()" class="btn" style="background:rgba(239,68,68,0.15);border:1px solid #ef4444;color:#f87171;font-size:13px;padding:7px 16px;border-radius:8px;cursor:pointer;">
+                    🗑️ Limpar
+                </button>
+                <button onclick="game.backToMugicDraft()" class="back-btn" style="margin:0;">
+                    ← Voltar às Mugics
+                </button>
+            </div>
+
+            <!-- Contador e barra de progresso -->
+            <div style="max-width:560px;margin:0 auto 16px;background:rgba(0,0,0,0.2);border-radius:10px;padding:12px 16px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <span id="atk-counter" style="font-size:14px;font-weight:700;color:#f1f5f9;">0 / 20</span>
+                    <span id="atk-bp-info" style="font-size:11px;color:#64748b;"></span>
+                </div>
+                <div style="height:6px;background:#1e293b;border-radius:3px;overflow:hidden;">
+                    <div id="atk-progress-bar" style="height:100%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);border-radius:3px;width:0%;transition:width 0.3s;"></div>
+                </div>
+            </div>
+
+            <div style="display:flex;gap:20px;justify-content:center;align-items:flex-start;flex-wrap:wrap;">
+                <!-- Pool de ataques disponíveis -->
+                <div style="flex:2;min-width:400px;">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:10px;">Pool de Ataques</div>
+
+                    <!-- Filtros -->
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:12px;">
+                        <select id="atk-filter-elem" onchange="game.renderAttackDraft()" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:6px;padding:5px 8px;font-size:11px;cursor:pointer;">
+                            <option value="all">🌍 Todos Elementos</option>
+                            <option value="Fire">🔥 Fire</option>
+                            <option value="Water">💧 Water</option>
+                            <option value="Earth">🪨 Earth</option>
+                            <option value="Air">🌪️ Air</option>
+                            <option value="none">⬜ Sem Elemento</option>
+                        </select>
+                        <select id="atk-filter-stat" onchange="game.renderAttackDraft()" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:6px;padding:5px 8px;font-size:11px;cursor:pointer;">
+                            <option value="all">📊 Qualquer Stat</option>
+                            <option value="courage">⚔️ Courage</option>
+                            <option value="power">💪 Power</option>
+                            <option value="wisdom">🧠 Wisdom</option>
+                            <option value="speed">⚡ Speed</option>
+                            <option value="none">⬜ Sem Challenge</option>
+                        </select>
+                        <select id="atk-filter-sort" onchange="game.renderAttackDraft()" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:6px;padding:5px 8px;font-size:11px;cursor:pointer;">
+                            <option value="score">⭐ Melhor sinergia</option>
+                            <option value="damage">💥 Maior dano</option>
+                            <option value="rarity">💎 Raridade</option>
+                            <option value="name">🔤 Nome</option>
+                        </select>
+                    </div>
+
+                    <div id="attack-pool-container" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;max-height:460px;overflow-y:auto;padding:4px;"></div>
+                </div>
+
+                <!-- Deck escolhido -->
+                <div style="flex:1;min-width:220px;">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:10px;">Seu Deck</div>
+                    <div id="attack-deck-list" style="display:flex;flex-direction:column;gap:4px;max-height:460px;overflow-y:auto;"></div>
+                </div>
+            </div>
+
+            <button id="btn-confirm-attack-draft" onclick="game.confirmAttackDraft()" disabled
+                style="margin-top:20px;background:rgba(30,64,175,0.3);border:1px solid #3b82f6;color:#93c5fd;font-size:14px;font-weight:700;padding:12px 32px;border-radius:10px;cursor:not-allowed;opacity:0.5;transition:all 0.2s;font-family:inherit;">
+                Posicionar Criaturas →
+            </button>
         </div>
 
         <!-- Tela de Formação -->
@@ -461,8 +539,20 @@
                         </button>
                     </div>
                 </div>
-                <div id="combat-log" class="combat-log-box">
-                    Batalha pronta para iniciar!
+                <!-- Painel de Log com tabs -->
+                <div class="log-panel">
+                    <div class="log-panel-header">
+                        <div class="log-tabs">
+                            <button class="log-tab log-tab-active" id="log-tab-all"    onclick="game._switchLogTab('all')">📋 Tudo</button>
+                            <button class="log-tab" id="log-tab-combat"  onclick="game._switchLogTab('combat')">⚔️ Combate</button>
+                            <button class="log-tab" id="log-tab-mugic"   onclick="game._switchLogTab('mugic')">🎶 Mugics</button>
+                            <button class="log-tab" id="log-tab-damage"  onclick="game._switchLogTab('damage')">💥 Dano</button>
+                        </div>
+                        <button onclick="game._clearLog()" class="log-clear-btn" title="Limpar log">🗑️</button>
+                    </div>
+                    <div id="combat-log" class="combat-log-box">
+                        Batalha pronta para iniciar!
+                    </div>
                 </div>
             </div>
         </div>
@@ -659,6 +749,16 @@ document.addEventListener("DOMContentLoaded", () => {
         box-shadow:0 20px 40px rgba(0,0,0,0.8);
         overflow:hidden;
     "></div>
+
+    <!-- Tooltip de Criatura no Board — mais largo para exibir stats completos -->
+    <div id="creature-tooltip" style="
+        position:fixed; z-index:99999; pointer-events:none;
+        background:#0f172a; border:1px solid #334155; border-radius:14px;
+        padding:0; width:280px; opacity:0; visibility:hidden;
+        transition:opacity 0.12s, visibility 0.12s;
+        box-shadow:0 24px 48px rgba(0,0,0,0.9);
+        overflow:hidden;
+    "></div>
     <script>
     (function () {
         const tip = document.getElementById('stat-global-tooltip');
@@ -714,6 +814,114 @@ document.addEventListener("DOMContentLoaded", () => {
             tip.style.left = x + 'px';
             tip.style.top  = y + 'px';
         }
+    })();
+    </script>
+
+    <!-- ── Atalhos de Teclado ── -->
+    <script>
+    document.addEventListener('keydown', function(e) {
+        // Ignora quando está digitando num input/textarea
+        if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+        const game = window.game;
+        if (!game || game.appState !== 'BATTLE') return;
+
+        const key = e.key;
+
+        // ── H — abre/fecha histórico ────────────────────────────────────────
+        if (key === 'h' || key === 'H') {
+            e.preventDefault();
+            game.toggleMatchHistory && game.toggleMatchHistory();
+            return;
+        }
+
+        // ── M — minimiza modal aberto ───────────────────────────────────────
+        if (key === 'm' || key === 'M') {
+            e.preventDefault();
+            const atkModal   = document.getElementById('attack-modal');
+            const burstModal = document.getElementById('burst-modal');
+            if (atkModal   && atkModal.classList.contains('flex-modal'))   game.minimizeModal('attack-modal',  '⚔️ Seleção de Ataque');
+            else if (burstModal && burstModal.classList.contains('flex-modal')) game.minimizeModal('burst-modal', '🔔 Burst Aberto');
+            return;
+        }
+
+        // ── Espaço — passar burst OU passar turno ──────────────────────────
+        if (key === ' ') {
+            e.preventDefault();
+            const burstModal = document.getElementById('burst-modal');
+            const burstOpen  = burstModal && burstModal.classList.contains('flex-modal');
+            const passBtn    = document.getElementById('btn-burst-pass');
+
+            if (burstOpen && passBtn && !passBtn.disabled) {
+                game.passBurst && game.passBurst();
+            } else if (!burstOpen && game.gameState === 'IDLE' && game.isMyTurn()) {
+                const nextBtn = document.getElementById('btn-next-turn');
+                if (nextBtn && !nextBtn.disabled) game.nextTurn && game.nextTurn();
+            }
+            return;
+        }
+
+        // ── 1-3 — selecionar carta de ataque (mão sempre tem 3 cartas) ───────
+        if (['1','2','3'].includes(key)) {
+            e.preventDefault();
+            const atkModal = document.getElementById('attack-modal');
+            if (!atkModal || !atkModal.classList.contains('flex-modal')) return;
+
+            const idx = parseInt(key) - 1;
+            const btns = atkModal.querySelectorAll('[onclick^="game.confirmAttack"]');
+            if (btns[idx]) {
+                // Flash visual no botão selecionado
+                btns[idx].style.transform = 'scale(0.95)';
+                btns[idx].style.boxShadow = '0 0 20px #f59e0b';
+                setTimeout(() => {
+                    btns[idx].style.transform = '';
+                    btns[idx].style.boxShadow = '';
+                }, 200);
+                game.confirmAttack && game.confirmAttack(idx);
+            }
+            return;
+        }
+
+        // ── Escape — restaura modal minimizado ────────────────────────────
+        if (key === 'Escape') {
+            const tray = document.getElementById('minimized-modals');
+            if (!tray) return;
+            const firstPill = tray.querySelector('.modal-pill');
+            if (firstPill) firstPill.click();
+            return;
+        }
+    });
+
+    // Mostra dica de atalhos no primeiro jogo
+    (function showShortcutsHint() {
+        const KEY = 'chaotic_shortcuts_shown';
+        if (localStorage.getItem(KEY)) return;
+        localStorage.setItem(KEY, '1');
+        const hint = document.createElement('div');
+        hint.style.cssText = `
+            position:fixed;bottom:80px;right:20px;z-index:9999;
+            background:#0f172a;border:1px solid #334155;border-radius:12px;
+            padding:12px 16px;color:#94a3b8;font-size:11px;font-family:Inter,sans-serif;
+            box-shadow:0 8px 24px rgba(0,0,0,0.6);max-width:220px;
+            animation:feedSlideIn 0.3s ease forwards;
+        `;
+        hint.innerHTML = `
+            <div style="font-weight:700;color:#f1f5f9;margin-bottom:6px;">⌨️ Atalhos de Teclado</div>
+            <div style="display:flex;flex-direction:column;gap:3px;">
+                <span><kbd style="background:#1e293b;border:1px solid #334155;border-radius:4px;padding:1px 5px;color:#f1f5f9;">Espaço</kbd> Passar burst / turno</span>
+                <span><kbd style="background:#1e293b;border:1px solid #334155;border-radius:4px;padding:1px 5px;color:#f1f5f9;">1–3</kbd> Selecionar ataque</span>
+                <span><kbd style="background:#1e293b;border:1px solid #334155;border-radius:4px;padding:1px 5px;color:#f1f5f9;">H</kbd> Histórico da partida</span>
+                <span><kbd style="background:#1e293b;border:1px solid #334155;border-radius:4px;padding:1px 5px;color:#f1f5f9;">M</kbd> Minimizar modal</span>
+                <span><kbd style="background:#1e293b;border:1px solid #334155;border-radius:4px;padding:1px 5px;color:#f1f5f9;">Esc</kbd> Restaurar modal</span>
+            </div>
+        `;
+        document.body.appendChild(hint);
+        setTimeout(() => {
+            hint.style.opacity = '0';
+            hint.style.transition = 'opacity 0.5s';
+            setTimeout(() => hint.remove(), 500);
+        }, 6000);
     })();
     </script>
 

@@ -295,9 +295,19 @@ Object.assign(GameEngine.prototype, {
         const atkSpd   = ea.speed + atkSwift;
         const defSpd   = ed.speed + defSwift;
 
-        // Quem inicia (speed como tie-breaker principal)
-        let initStat = 'speed';
-        let iGoFirst = atkSpd >= defSpd;
+        // Quem inicia — speed decide; em empate, courage como tie-breaker
+        let initStat, initAtkVal, initDefVal, iGoFirst;
+        if (atkSpd !== defSpd) {
+            initStat    = 'VEL';
+            initAtkVal  = atkSpd;
+            initDefVal  = defSpd;
+            iGoFirst    = atkSpd > defSpd;
+        } else {
+            initStat    = 'COR';
+            initAtkVal  = ea.courage;
+            initDefVal  = ed.courage;
+            iGoFirst    = ea.courage >= ed.courage;
+        }
 
         // Intimidate: atacante reduz stat do defensor
         const intimidateAdj = {};
@@ -357,9 +367,19 @@ Object.assign(GameEngine.prototype, {
             verdict = 'DESVANTAGEM';    color = '#f87171'; border = '#dc2626'; emoji = '⚠️';
         }
 
-        const initLabel = iGoFirst ? '⚡ Você inicia' : '⚡ Inimigo inicia';
+        const initLabel    = iGoFirst
+            ? `⚡ Você inicia (${initStat} ${initAtkVal} vs ${initDefVal})`
+            : `⚠️ Inimigo inicia (${initStat} ${initDefVal} vs ${initAtkVal})`;
+        const initGoFirst  = iGoFirst;
+        const initStatName = initStat;
 
-        return { verdict, color, border, emoji, myDmg, theirDmg, myRounds, theirRounds, initLabel };
+        // Prepara label de intimidate para exibir no overlay (ex: "😨 COR −10")
+        const intimidateLines = Object.entries(intimidateAdj).map(([s, v]) => {
+            const statLabel = { courage:'COR', power:'POD', wisdom:'SAB', speed:'VEL' }[s] || s.toUpperCase();
+            return `${statLabel} −${v}`;
+        });
+
+        return { verdict, color, border, emoji, myDmg, theirDmg, myRounds, theirRounds, initLabel, initGoFirst, initStatName, initAtkVal, initDefVal, intimidateLines };
     },
 
     processCombatTurn() {
@@ -399,12 +419,30 @@ Object.assign(GameEngine.prototype, {
                 // Single-player: IA escolhe automaticamente entre 3 cartas
                 setTimeout(() => {
                     const hand = this.p2AttackHand;
-                    const { attacker: aiAttacker, defender: aiDefender } = this.pendingCombat;
-                    let cardIndex = hand.reduce((bestIdx, card, idx, arr) => {
-                        const scoreNew = this.evaluateAttack(card, aiAttacker, aiDefender);
-                        const scoreBest = this.evaluateAttack(arr[bestIdx], aiAttacker, aiDefender);
-                        return scoreNew > scoreBest ? idx : bestIdx;
-                    }, 0);
+                    const { attacker: aiAttacker, defender: aiDefender,
+                            atkR, atkC, defR, defC } = this.pendingCombat;
+                    const diff = this.aiDifficulty || 'easy';
+
+                    let cardIndex;
+                    if (diff === 'easy') {
+                        // Fácil: aleatório entre as 3 cartas
+                        cardIndex = Math.floor(Math.random() * hand.length);
+                    } else {
+                        // Médio/Difícil: usa avaliação completa com stats efetivos
+                        cardIndex = hand.reduce((bestIdx, card, idx, arr) => {
+                            const scoreNew  = this.evaluateAttackFull(card, aiAttacker, aiDefender, atkR, atkC, defR, defC);
+                            const scoreBest = this.evaluateAttackFull(arr[bestIdx], aiAttacker, aiDefender, atkR, atkC, defR, defC);
+                            return scoreNew > scoreBest ? idx : bestIdx;
+                        }, 0);
+
+                        if (diff === 'hard') {
+                            // Difícil: loga a decisão para debug/feedback
+                            const chosen = hand[cardIndex];
+                            const score  = this.evaluateAttackFull(chosen, aiAttacker, aiDefender, atkR, atkC, defR, defC);
+                            this.log(`🤖 IA [Difícil] escolheu ${chosen.name} (dano esperado: ~${score})`);
+                        }
+                    }
+
                     this.confirmAttack(cardIndex);
                 }, 1500);
             }
@@ -428,11 +466,19 @@ Object.assign(GameEngine.prototype, {
             const effEnergy = card.energy;
             const maxEnergy = card.maxEnergy;
             const mugicCounters = card.mugicCounters || 0;
+            const hpPct = Math.max(0, effEnergy / (maxEnergy || 1));
+            const hpBarColor = hpPct > 0.5
+                ? 'linear-gradient(90deg,#16a34a,#22c55e)'
+                : hpPct > 0.2
+                    ? 'linear-gradient(90deg,#ca8a04,#fbbf24)'
+                    : 'linear-gradient(90deg,#b91c1c,#ef4444)';
+            const hpTextColor = hpPct > 0.5 ? '#4ade80' : hpPct > 0.2 ? '#fbbf24' : '#f87171';
+            const isCritical  = hpPct < 0.2 && effEnergy > 0;
 
-            // Gerar ícones de contador mugic (♪)
+            // Ícones de mugic counter
             let mugicHtml = '';
             for(let i=0; i<mugicCounters; i++) {
-                mugicHtml += '<span style="color:#9b59b6; margin:0 1px;">♪</span>';
+                mugicHtml += '<span style="color:#9b59b6; margin:0 1px; font-size:13px;">♪</span>';
             }
 
             let elementsHtml = '';
@@ -458,18 +504,39 @@ Object.assign(GameEngine.prototype, {
                 ${elementsHtml}
 
                 <div class="card-stats" style="grid-template-columns: 1fr 1fr;">
-                    <div class="stat-box" data-tip="Coragem — define quem ataca primeiro na iniciativa. Usada em ataques de Courage e pela passiva Intimidate."><span class="stat-icon">⚔️</span><span class="stat-label">COR</span><span class="stat-value">${effStats.courage}</span></div>
-                    <div class="stat-box" data-tip="Poder — usado em ataques físicos de Poder. Quanto maior, mais dano em ataques de Power."><span class="stat-icon">💪</span><span class="stat-label">POD</span><span class="stat-value">${effStats.power}</span></div>
-                    <div class="stat-box" data-tip="Sabedoria — usado em ataques mágicos de Sabedoria. Também define quem pode conjurar Mugics mais caras."><span class="stat-icon">🧠</span><span class="stat-label">SAB</span><span class="stat-value">${effStats.wisdom}</span></div>
-                    <div class="stat-box" data-tip="Velocidade — usado em ataques de Speed e na disputa de iniciativa. Swift aumenta este valor."><span class="stat-icon">⚡</span><span class="stat-label">VEL</span><span class="stat-value">${effStats.speed}</span></div>
+                    <div class="stat-box" data-tip="Coragem"><span class="stat-icon">⚔️</span><span class="stat-label">COR</span><span class="stat-value">${effStats.courage}</span></div>
+                    <div class="stat-box" data-tip="Poder"><span class="stat-icon">💪</span><span class="stat-label">POD</span><span class="stat-value">${effStats.power}</span></div>
+                    <div class="stat-box" data-tip="Sabedoria"><span class="stat-icon">🧠</span><span class="stat-label">SAB</span><span class="stat-value">${effStats.wisdom}</span></div>
+                    <div class="stat-box" data-tip="Velocidade"><span class="stat-icon">⚡</span><span class="stat-label">VEL</span><span class="stat-value">${effStats.speed}</span></div>
                 </div>
-                <div class="combat-card-hp">❤️ ${effEnergy} / ${maxEnergy}</div>
-                <div class="combat-card-mugics">${mugicHtml}</div>
+
+                <!-- Bloco de vida melhorado -->
+                <div style="background:${isCritical?'rgba(185,28,28,0.3)':'rgba(0,0,0,0.35)'};
+                            border-top:1px solid ${isCritical?'#b91c1c44':'rgba(255,255,255,0.06)'};
+                            padding:8px 12px;${isCritical?'animation:criticalPulse 1.2s ease-in-out infinite;':''}">
+                    <!-- Número de vida em destaque -->
+                    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;">
+                        <span style="font-size:22px;font-weight:900;color:${hpTextColor};line-height:1;text-shadow:0 2px 8px ${hpTextColor}66;">
+                            ${isCritical ? '💀' : '❤️'} ${Math.max(0, effEnergy)}
+                        </span>
+                        <span style="font-size:11px;color:#64748b;font-weight:600;">/ ${maxEnergy}</span>
+                    </div>
+                    <!-- Barra de vida -->
+                    <div style="height:8px;background:#1e293b;border-radius:4px;overflow:hidden;border:1px solid rgba(0,0,0,0.4);">
+                        <div style="width:${Math.max(0,hpPct*100)}%;height:100%;background:${hpBarColor};
+                                    border-radius:4px;transition:width 0.5s,background 0.5s;
+                                    ${isCritical?'box-shadow:0 0 6px #ef444488;':''}"></div>
+                    </div>
+                    <!-- Mugic counters abaixo da barra -->
+                    ${mugicCounters > 0 ? `<div style="margin-top:5px;display:flex;justify-content:center;gap:3px;">${mugicHtml}</div>` : ''}
+                </div>
             </div>
             `;
         };
 
         const hand = attackingPlayer === 1 ? this.p1AttackHand : this.p2AttackHand;
+        // Expõe as cartas para o tooltip (acesso via game._pendingCombatAttackCards[i])
+        this._pendingCombatAttackCards = hand;
         let handHtml = `<div class="combat-hand-col">
             <div class="combat-vs">VS</div>
             <div class="combat-select-label">Selecione sua Carta de Ataque:</div>
@@ -641,21 +708,55 @@ Object.assign(GameEngine.prototype, {
                 return `<div style="font-size:10px;color:${col};text-align:left;line-height:1.4;padding:1px 0;">${r.text}</div>`;
             }).join('');
 
+            // Número do atalho de teclado (1, 2, 3)
+            const shortcut = index + 1;
+            const rarityIcon = { 'Ultra Rare':'💎', 'Super Rare':'🔷', 'Rare':'🔶', 'Uncommon':'🔹', 'Common':'⚪' };
+            const ri = rarityIcon[atkCard.rarity] || '⚪';
+
+            // Reformata as rows com estilo mais rico
+            const richRowsHtml = rows.map(r => {
+                let bg = 'rgba(0,0,0,0)';
+                let color = '#94a3b8';
+                if (r.ok === true)      { color = '#4ade80'; bg = 'rgba(34,197,94,0.08)'; }
+                else if (r.ok === false){ color = '#f87171'; bg = 'rgba(239,68,68,0.08)'; }
+                else if (r.ok === 'special') { color = '#fb923c'; bg = 'rgba(249,115,22,0.08)'; }
+                else if (r.ok === 'warn')    { color = '#fbbf24'; bg = 'rgba(251,191,36,0.08)'; }
+                return `<div style="font-size:11px;color:${color};background:${bg};border-radius:5px;padding:3px 6px;text-align:left;line-height:1.4;">${r.text}</div>`;
+            }).join('');
+
             handHtml += `
                 <div onclick="game.confirmAttack(${index})"
-                     style="background:#1e2d3d; padding:12px 10px; border-radius:8px; cursor:pointer;
-                            border:2px solid ${borderCol}; width:170px; text-align:center; color:white;
-                            transition:transform 0.15s, box-shadow 0.15s; display:flex; flex-direction:column; gap:6px;"
-                     onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 20px rgba(0,0,0,0.6)'"
-                     onmouseout="this.style.transform='';this.style.boxShadow=''">
-                    <div style="font-weight:bold; color:#f1c40f; font-size:13px; line-height:1.2;">${atkCard.name}</div>
-                    <div style="font-size:9px; color:${rc}; letter-spacing:1px; text-transform:uppercase;">${atkCard.rarity || ''}</div>
-                    <div style="font-size:22px; font-weight:900; color:${dmgColor}; line-height:1;">
-                        💥 ${expectedDamage}
-                        <span style="font-size:11px; font-weight:400; color:#95a5a6;">dano</span>
+                     data-atk-index="${index}"
+                     style="background:linear-gradient(160deg,#0f1a24 60%,rgba(0,0,0,0.9));
+                            border:2px solid ${borderCol};border-radius:14px;cursor:pointer;
+                            width:185px;display:flex;flex-direction:column;overflow:hidden;
+                            transition:transform 0.15s,box-shadow 0.15s;position:relative;"
+                     onmouseover="this.style.transform='translateY(-5px)';this.style.boxShadow='0 12px 28px rgba(0,0,0,0.7)';this.style.borderColor='#f59e0b'"
+                     onmouseout="this.style.transform='';this.style.boxShadow='';this.style.borderColor='${borderCol}'">
+
+                    <!-- Atalho de teclado -->
+                    <div style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);
+                                border:1px solid #334155;border-radius:5px;padding:1px 6px;
+                                font-size:10px;font-weight:700;color:#64748b;">${shortcut}</div>
+
+                    <!-- Header: nome + raridade -->
+                    <div style="padding:12px 14px 8px;background:linear-gradient(135deg,${borderCol}18,transparent);border-bottom:1px solid ${borderCol}33;">
+                        <div style="display:flex;justify-content:space-between;align-items:start;gap:6px;margin-bottom:5px;">
+                            <div style="font-size:13px;font-weight:900;color:#f1f5f9;line-height:1.2;flex:1;">${atkCard.name}</div>
+                            <div style="font-size:14px;flex-shrink:0;" title="${atkCard.rarity||''}">${ri}</div>
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <span style="font-size:9px;background:${rc}22;border:1px solid ${rc}44;color:${rc};
+                                         border-radius:8px;padding:2px 8px;font-weight:700;letter-spacing:.04em;">${atkCard.rarity||''}</span>
+                            <div style="font-size:24px;font-weight:900;color:${dmgColor};line-height:1;">
+                                💥 <span style="font-size:20px;">${expectedDamage}</span>
+                            </div>
+                        </div>
                     </div>
-                    <div style="background:rgba(0,0,0,0.3); border-radius:5px; padding:6px 8px; display:flex; flex-direction:column; gap:2px;">
-                        ${rowsHtml}
+
+                    <!-- Efeitos -->
+                    <div style="padding:8px 10px;display:flex;flex-direction:column;gap:4px;flex:1;">
+                        ${richRowsHtml || `<div style="font-size:11px;color:#475569;font-style:italic;">Sem efeitos especiais.</div>`}
                     </div>
                 </div>
             `;
@@ -804,8 +905,8 @@ Object.assign(GameEngine.prototype, {
 
         this.log(`🔔 BURST ABERTO: ${attackingPlayer === 1 ? 'Jogador 1' : p2Label} atacou com ${atkCard.name}`);
 
-        // Animação de salto — abre o burst só depois que terminar
-        this._playAttackAnimation(attacker, attackingPlayer).then(() => {
+        // Animação de salto — usa posição exata (atkR,atkC) para não errar com criaturas de mesmo nome
+        this._playAttackAnimation(attacker, attackingPlayer, atkR, atkC).then(() => {
             this.openBurstModal();
         });
     },
@@ -1144,6 +1245,12 @@ Object.assign(GameEngine.prototype, {
         const energyBefore = defender.energy;
         defender.energy -= totalDamage;
 
+        // Contadores de estatísticas para tela de fim de jogo
+        if (this._stats) {
+            this._stats.attacks++;
+            if (totalDamage > this._stats.maxDmg) this._stats.maxDmg = totalDamage;
+        }
+
         if (this.activeCombat) {
             this.activeCombat.damageHistory.push({ round: this.activeCombat.rounds, target: defender.name, damage: totalDamage, energyBefore, energyAfter: defender.energy });
         }
@@ -1173,6 +1280,7 @@ Object.assign(GameEngine.prototype, {
 
         if (defender.energy <= 0) {
             this.log(`💀 ${defender.name} foi derrotado!`);
+            if (this._stats) this._stats.kills++;
         }
     },
 
@@ -1282,58 +1390,63 @@ Object.assign(GameEngine.prototype, {
 
         if (p1Card.energy <= 0 && p2Card.energy <= 0) {
             const combatSnapshot = _snapshot();
-            this._discardCreature(p1Card);
-            this._discardCreature(p2Card);
-            this.boardP1[p1R][p1C] = null;
-            this.boardP2[p2R][p2C] = null;
-            this.activeCombat = null;
-            this.selectedAttacker = null;
-
-            this._revealNextLocation();
-            _syncBoard(); // ← após revelar novo local
-
-            this.renderBoard();
-            this.log("💥 Empate no combate! Ambas as criaturas foram destruídas simultaneamente!");
-            this._recordMatchHistory(combatSnapshot, combatSnapshot.p1Card, combatSnapshot.p2Card);
-            if (this.checkWinCondition()) return;
-            setTimeout(() => this.nextTurn(), COMBAT_DELAY.NEXT_TURN);
+            Promise.all([
+                this._playDeathAnimation(1, p1R, p1C),
+                this._playDeathAnimation(2, p2R, p2C),
+            ]).then(() => {
+                this._discardCreature(p1Card);
+                this._discardCreature(p2Card);
+                this.boardP1[p1R][p1C] = null;
+                this.boardP2[p2R][p2C] = null;
+                this.activeCombat = null;
+                this.selectedAttacker = null;
+                this._revealNextLocation();
+                _syncBoard();
+                this.renderBoard();
+                this.log("💥 Empate no combate! Ambas as criaturas foram destruídas simultaneamente!");
+                this._recordMatchHistory(combatSnapshot, combatSnapshot.p1Card, combatSnapshot.p2Card);
+                if (this.checkWinCondition()) return;
+                setTimeout(() => this.nextTurn(), COMBAT_DELAY.NEXT_TURN);
+            });
             return;
         }
 
         if (p1Card.energy <= 0) {
             const combatSnapshot = _snapshot();
-            this._discardCreature(p1Card);
-            this.boardP1[p1R][p1C] = null;
-            this.activeCombat = null;
-            this.selectedAttacker = null;
-
-            this._revealNextLocation();
-            _syncBoard(); // ← após revelar novo local
-
-            this.renderBoard();
-            this.log("Fim do Combate! A carta do Jogador 1 foi destruída.");
-            this._recordMatchHistory(combatSnapshot, combatSnapshot.p1Card, combatSnapshot.p2Card);
-            this._showCombatSummary(combatSnapshot, combatSnapshot.p1Card, combatSnapshot.p2Card);
-            if (this.checkWinCondition()) return;
-            setTimeout(() => this.nextTurn(), COMBAT_DELAY.NEXT_TURN);
+            this._playDeathAnimation(1, p1R, p1C).then(() => {
+                this._discardCreature(p1Card);
+                this.boardP1[p1R][p1C] = null;
+                this.activeCombat = null;
+                this.selectedAttacker = null;
+                this._revealNextLocation();
+                _syncBoard();
+                this.renderBoard();
+                this.log("Fim do Combate! A carta do Jogador 1 foi destruída.");
+                if (!this.multiplayerMode) this._aiComment && this._aiComment('kill', { card: combatSnapshot.p2Card });
+                this._recordMatchHistory(combatSnapshot, combatSnapshot.p1Card, combatSnapshot.p2Card);
+                if (this.checkWinCondition()) return;
+                this._showCombatSummary(combatSnapshot, combatSnapshot.p1Card, combatSnapshot.p2Card);
+                setTimeout(() => this.nextTurn(), COMBAT_DELAY.NEXT_TURN);
+            });
             return;
         }
+
         if (p2Card.energy <= 0) {
             const combatSnapshot = _snapshot();
-            this._discardCreature(p2Card);
-            this.boardP2[p2R][p2C] = null;
-            this.activeCombat = null;
-            this.selectedAttacker = null;
-
-            this._revealNextLocation();
-            _syncBoard(); // ← após revelar novo local
-
-            this.renderBoard();
-            this.log("Fim do Combate! A carta do Jogador 2 foi destruída.");
-            this._recordMatchHistory(combatSnapshot, combatSnapshot.p2Card, combatSnapshot.p1Card);
-            this._showCombatSummary(combatSnapshot, combatSnapshot.p2Card, combatSnapshot.p1Card);
-            if (this.checkWinCondition()) return;
-            setTimeout(() => this.nextTurn(), COMBAT_DELAY.NEXT_TURN);
+            this._playDeathAnimation(2, p2R, p2C).then(() => {
+                this._discardCreature(p2Card);
+                this.boardP2[p2R][p2C] = null;
+                this.activeCombat = null;
+                this.selectedAttacker = null;
+                this._revealNextLocation();
+                _syncBoard();
+                this.renderBoard();
+                this.log("Fim do Combate! A carta do Jogador 2 foi destruída.");
+                this._recordMatchHistory(combatSnapshot, combatSnapshot.p2Card, combatSnapshot.p1Card);
+                if (this.checkWinCondition()) return;
+                this._showCombatSummary(combatSnapshot, combatSnapshot.p2Card, combatSnapshot.p1Card);
+                setTimeout(() => this.nextTurn(), COMBAT_DELAY.NEXT_TURN);
+            });
             return;
         }
 

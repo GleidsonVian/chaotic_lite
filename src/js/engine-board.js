@@ -296,9 +296,51 @@ Object.assign(GameEngine.prototype, {
             return textures[tribe] || textures['Generic'];
         };
 
-        this.boardElement.innerHTML = `<div class="board-header">
-            <h3 style="color: var(--accent); margin-bottom: 5px;">Turno Atual: Jogador ${this.turn}</h3>
-            <p style="color: ${this.gameState === 'SELECT_TARGET' || this.gameState === 'SELECT_MUGIC_CASTER' ? 'var(--danger)' : 'var(--text-muted)'}; font-weight: bold; font-size: 1.1em;">${msgEstado}</p>
+        // ── Banner de turno animado ──────────────────────────────────────────
+        const myP        = this.multiplayerMode ? this.myPlayerNumber : 1;
+        const isMyTurnNow = this.isMyTurn();
+        const isSpecial   = this.gameState === 'SELECT_TARGET';
+        const isMugic     = this.gameState === 'SELECT_MUGIC_CASTER';
+
+        let bannerIcon, bannerText, bannerSub, bannerClass;
+        if (isSpecial) {
+            bannerIcon  = '🎯';
+            bannerText  = 'ESCOLHA O ALVO!';
+            bannerSub   = 'Clique em uma criatura inimiga para atacar';
+            bannerClass = 'turn-banner-target';
+        } else if (isMugic) {
+            bannerIcon  = '🎵';
+            bannerText  = 'ESCOLHA O CONJURADOR';
+            bannerSub   = 'Clique em uma de suas criaturas para pagar o custo';
+            bannerClass = 'turn-banner-mugic';
+        } else if (isMyTurnNow) {
+            bannerIcon  = '⚔️';
+            bannerText  = 'SEU TURNO';
+            bannerSub   = 'Clique em uma criatura para agir';
+            bannerClass = 'turn-banner-mine';
+        } else {
+            bannerIcon  = '⏳';
+            bannerText  = 'TURNO DO OPONENTE';
+            bannerSub   = 'Aguarde o movimento inimigo…';
+            bannerClass = 'turn-banner-wait';
+        }
+
+        // Botão cancelar conjurador (só no estado MUGIC_CASTER)
+        const cancelBtn = isMugic
+            ? `<button onclick="game.cancelMugicCaster()" style="margin-top:6px;padding:4px 14px;background:#e74c3c;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit;">✕ Cancelar</button>`
+            : '';
+
+        this.boardElement.innerHTML = `
+        <div class="turn-banner ${bannerClass}">
+            <div class="turn-banner-icon">${bannerIcon}</div>
+            <div class="turn-banner-body">
+                <div class="turn-banner-title">${bannerText}</div>
+                <div class="turn-banner-sub">${bannerSub}</div>
+                ${cancelBtn}
+            </div>
+            <div class="turn-banner-dots">
+                <span></span><span></span><span></span>
+            </div>
         </div>`;
 
         const renderPlayerBoard = (board, player) => {
@@ -356,15 +398,42 @@ Object.assign(GameEngine.prototype, {
                                     attCard, this.selectedAttacker.r, this.selectedAttacker.c, myP,
                                     card, r, c
                                 );
+                                // Intimidate: linhas de redução de stat
+                                const intimidateHtml = prev.intimidateLines && prev.intimidateLines.length > 0
+                                    ? `<div style="margin-top:3px;padding:2px 5px;border-radius:5px;background:rgba(251,146,60,0.2);border:1px solid rgba(251,146,60,0.4);font-size:8px;color:#fb923c;font-weight:700;">
+                                        😨 Intimidate: ${prev.intimidateLines.join(' · ')}
+                                       </div>`
+                                    : '';
+
                                 previewHtml = `
                                     <div class="board-preview-overlay">
                                         <div class="board-preview-text">
-                                            <div style="font-size:16px;">${prev.emoji}</div>
-                                            <div style="font-size:10px; font-weight:800; color:${prev.color}; letter-spacing:0.5px;">${prev.verdict}</div>
-                                            <div style="font-size:9px; color:#cbd5e1; margin-top:2px;">${prev.initLabel}</div>
-                                            <div style="display:flex; justify-content:center; gap:6px; margin-top:3px; font-size:9px;">
-                                                <span style="color:#22c55e;">💥 ${prev.myDmg}</span>
-                                                <span style="color:#94a3b8;">vs</span>
+                                            <div style="font-size:15px;">${prev.emoji}</div>
+                                            <div style="font-size:10px;font-weight:800;color:${prev.color};letter-spacing:0.5px;">${prev.verdict}</div>
+
+                                            <!-- Indicador de iniciativa -->
+                                            <div style="
+                                                margin-top:4px;padding:2px 6px;border-radius:6px;
+                                                background:${prev.initGoFirst ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'};
+                                                border:1px solid ${prev.initGoFirst ? 'rgba(34,197,94,0.5)' : 'rgba(239,68,68,0.5)'};
+                                                font-size:9px;font-weight:700;
+                                                color:${prev.initGoFirst ? '#4ade80' : '#f87171'};
+                                                line-height:1.4;
+                                            ">
+                                                ${prev.initGoFirst ? '⚡' : '⚠️'}
+                                                ${prev.initGoFirst ? 'Você inicia' : 'Inimigo inicia'}
+                                                <span style="opacity:0.75;font-weight:400;">
+                                                    · ${prev.initStatName} ${prev.initAtkVal}vs${prev.initDefVal}
+                                                </span>
+                                            </div>
+
+                                            <!-- Intimidate -->
+                                            ${intimidateHtml}
+
+                                            <!-- Dano estimado -->
+                                            <div style="display:flex;justify-content:center;gap:5px;margin-top:4px;font-size:9px;">
+                                                <span style="color:#4ade80;">💥 ${prev.myDmg}</span>
+                                                <span style="color:#475569;">vs</span>
                                                 <span style="color:#f87171;">💥 ${prev.theirDmg}</span>
                                             </div>
                                         </div>
@@ -397,11 +466,20 @@ Object.assign(GameEngine.prototype, {
                             displayPower += mod.power || 0;
                             displayWisdom += mod.wisdom || 0;
                             displaySpeed += mod.speed || 0;
-                            bgDisplayHtml = `<div class="board-bg-revealed" data-tip="${card.battlegear.description || card.battlegear.name}">🗡️ ${card.battlegear.name}</div>`;
+                            bgDisplayHtml = `<div class="board-bg-revealed" style="cursor:help;"
+                                onmouseenter="game._showBattlegearTooltip(event,${player},${r},${c})"
+                                onmouseleave="game._hideAttackTooltip()"
+                                onmousemove="game._positionTooltip(event,document.getElementById('mugic-tooltip'))">
+                                🗡️ ${card.battlegear.name}
+                            </div>`;
                         } else if (card.battlegear && !card.bgRevealed) {
                             if (player === 1) {
-                                bgDisplayHtml = `<div class="board-bg-hidden" title="Oculto para o oponente">[Escondido] ${card.battlegear.name}</div>`;
-                            } else {
+                                bgDisplayHtml = `<div class="board-bg-hidden" style="cursor:help;"
+                                    onmouseenter="game._showBattlegearTooltip(event,${player},${r},${c})"
+                                    onmouseleave="game._hideAttackTooltip()"
+                                    onmousemove="game._positionTooltip(event,document.getElementById('mugic-tooltip'))">
+                                    [Escondido] ${card.battlegear.name}
+                                </div>`;
                                 bgDisplayHtml = `<div class="board-bg-facedown">Item: Face Down</div>`;
                             }
                         }
@@ -422,15 +500,48 @@ Object.assign(GameEngine.prototype, {
                         const hpPct = displayEnergy / (displayMaxEnergy || 1);
                         const critClass = hpPct < 0.2 && displayEnergy > 0 ? 'card-critical' : '';
 
+                        // Tribe highlight: local ativo favorece a tribo desta criatura
+                        const locEf = this.activeLocation && this.activeLocation.effect;
+                        const benefitedTribe = locEf && locEf.tribe;
+                        const tribeBoost = benefitedTribe && card.tribe === benefitedTribe
+                            && ['tribe_energy_bonus','first_attack_tribe_bonus','combat_start_mugic_counter_tribe','mugic_discount_tribe_first'].includes(locEf.type);
+                        if (tribeBoost && !previewHtml) {
+                            finalBorder = '2px solid rgba(251,191,36,0.85)';
+                            finalShadow = 'box-shadow: 0 0 12px rgba(251,191,36,0.45), 0 0 4px rgba(251,191,36,0.3);';
+                        }
+                        const tribeBoostBadge = tribeBoost
+                            ? `<div style="position:absolute;top:3px;right:3px;background:rgba(251,191,36,0.9);color:#000;font-size:8px;font-weight:900;padding:1px 5px;border-radius:4px;z-index:10;pointer-events:none;">⭐ Local</div>`
+                            : '';
+
+                        // Drag só para o próprio jogador no seu turno
+                        const myPd = this.multiplayerMode ? this.myPlayerNumber : 1;
+                        const draggable = this.isMyTurn() && player === myPd && exposed;
+
                         html += `
-                            <div class="card ${animClass} ${critClass}" onclick="game.handleCardClick(${player}, ${r}, ${c})" title="${this.getPassiveDescription(card).replace(/"/g, '&quot;')}" style="border: ${finalBorder}; ${finalShadow} ${cursorStyle} ${opacityStyle} transition: border 0.2s, box-shadow 0.2s; position:relative; overflow:hidden;">
+                            <div class="card ${animClass} ${critClass}${tribeBoost ? ' card-tribe-boost' : ''}"
+                                onclick="game.handleCardClick(${player}, ${r}, ${c})"
+                                data-pos="p${player}-${r}-${c}"
+                                ${draggable ? `
+                                    draggable="true"
+                                    ondragstart="game._onCardDragStart(event,${player},${r},${c})"
+                                    ondragend="game._onCardDragEnd(event)"
+                                ` : ''}
+                                title=""
+                                style="border: ${finalBorder}; ${finalShadow} ${cursorStyle} ${opacityStyle} transition: border 0.2s, box-shadow 0.2s; position:relative; overflow:hidden;">
+                            ${tribeBoostBadge}
                                 ${previewHtml}
-                                <div class="card-header">
+                                <div class="card-header"
+                                     onmouseenter="game._showCreatureTooltip(event,${player},${r},${c})"
+                                     onmouseleave="game._hideCreatureTooltip()"
+                                     onmousemove="game._moveCreatureTooltip(event)">
                                     <div class="card-rarity-icon rarity-${(card.rarity || 'Common').toLowerCase().replace(/\s+/g, '-')}" title="${card.rarity || 'Common'}">${card.rarity === 'Ultra Rare' ? '💎' : card.rarity === 'Super Rare' ? '🔷' : card.rarity === 'Rare' ? '🔶' : card.rarity === 'Legendary' ? '🌟' : '⚪'}</div>
                                     <div class="card-tribe">${card.tribe}</div>
                                     <div class="card-name">${card.name}</div>
                                 </div>
-                                <div class="card-image-container">
+                                <div class="card-image-container"
+                                     onmouseenter="game._showCreatureTooltip(event,${player},${r},${c})"
+                                     onmouseleave="game._hideCreatureTooltip()"
+                                     onmousemove="game._moveCreatureTooltip(event)">
                                     ${card.image ? `<img src="${card.image}" class="card-image" alt="${card.name}">` : `<div class="card-image-placeholder">Sem Imagem</div>`}
                                 </div>
                                 ${bgDisplayHtml}
@@ -446,7 +557,6 @@ Object.assign(GameEngine.prototype, {
                                     }
                                     return eHtml;
                                 })()}
-
                                 ${this._getPassiveBadgesHtml(card)}
                                 ${(() => {
                                     let badges = '';
@@ -456,13 +566,13 @@ Object.assign(GameEngine.prototype, {
                                     return badges ? `<div class="card-status-badges">${badges}</div>` : '';
                                 })()}
                                 ${syn ? `<div class="board-synergy-banner">${syn.description}</div>` : ''}
-                                <div class="card-stats">
+                                <div class="card-stats" onmouseenter="game._hideCreatureTooltip()">
                                     <div class="stat-box" data-tip="Coragem — define quem ataca primeiro na iniciativa. Usada em ataques de Courage e pela passiva Intimidate."><span class="stat-icon">⚔️</span><span class="stat-label">COR</span><span class="stat-value" style="${syn && syn.courage ? 'color:#3498db;font-weight:bold;' : ''}">${displayCourage}</span></div>
                                     <div class="stat-box" data-tip="Poder — usado em ataques físicos de Poder. Quanto maior, mais dano em ataques de Power."><span class="stat-icon">💪</span><span class="stat-label">POD</span><span class="stat-value" style="${syn && syn.power ? 'color:#3498db;font-weight:bold;' : ''}">${displayPower}</span></div>
                                     <div class="stat-box" data-tip="Sabedoria — usado em ataques mágicos de Sabedoria. Também define quem pode conjurar Mugics mais caras."><span class="stat-icon">🧠</span><span class="stat-label">SAB</span><span class="stat-value" style="${syn && syn.wisdom ? 'color:#3498db;font-weight:bold;' : ''}">${displayWisdom}</span></div>
                                     <div class="stat-box" data-tip="Velocidade — usado em ataques de Speed e na disputa de iniciativa. Swift aumenta este valor."><span class="stat-icon">⚡</span><span class="stat-label">VEL</span><span class="stat-value" style="${syn && syn.speed ? 'color:#3498db;font-weight:bold;' : ''}">${displaySpeed}</span></div>
                                 </div>
-                                <div class="card-energy-container">
+                                <div class="card-energy-container" onmouseenter="game._hideCreatureTooltip()">
                                     <!-- Barra de vida principal -->
                                     <div class="hp-bar-track">
                                         <div style="width:${Math.max(0,(displayEnergy/displayMaxEnergy)*100)}%;height:100%;border-radius:6px;
@@ -474,7 +584,15 @@ Object.assign(GameEngine.prototype, {
                                     <div class="hp-bar-text">
                                         ❤️ ${Math.max(0,displayEnergy)} / ${displayMaxEnergy}
                                     </div>
-                                    ${this._mugicCountersHtml(card)}
+                                    ${(() => {
+                                        // Counter pendente: local dá counter ao entrar em combate
+                                        const locEff = this.activeLocation && this.activeLocation.effect;
+                                        const pending = locEff
+                                            && locEff.type === 'combat_start_mugic_counter_tribe'
+                                            && card.tribe === locEff.tribe
+                                            && (card.mugicCounters || 0) === 0;
+                                        return this._mugicCountersHtml(card, pending);
+                                    })()}
                                 </div>
                             </div>
                         `;
@@ -494,7 +612,17 @@ Object.assign(GameEngine.prototype, {
                             }
                         }
 
-                        html += `<div class="board-slot-empty" style="${emptyBorder}${emptyBg}${emptyCursor}" onclick="game.handleCardClick(${player}, ${r}, ${c})"></div>`;
+                        const myPe = this.multiplayerMode ? this.myPlayerNumber : 1;
+                        const dropTarget = this.isMyTurn() && player === myPe;
+                        html += `<div class="board-slot-empty"
+                            style="${emptyBorder}${emptyBg}${emptyCursor}"
+                            onclick="game.handleCardClick(${player}, ${r}, ${c})"
+                            ${dropTarget ? `
+                                ondragover="game._onSlotDragOver(event,${player},${r},${c})"
+                                ondragleave="game._onSlotDragLeave(event)"
+                                ondrop="game._onSlotDrop(event,${player},${r},${c})"
+                            ` : ''}
+                        ></div>`;
                     }
                 }
                 html += `</div>`;
@@ -503,7 +631,51 @@ Object.assign(GameEngine.prototype, {
             return html;
         };
 
-        let boardsHtml = `<div class="boards-wrapper" style="background: transparent; align-items: stretch; gap: 20px;">`;
+        // ── Overlay ambiental do local ───────────────────────────────────────
+        const _locationOverlay = (() => {
+            const loc = this.activeLocation;
+            if (!loc) return '';
+
+            // Mapeamento: nome / tipo de efeito → tema visual
+            const name = (loc.name || '').toLowerCase();
+            const ef   = (loc.effect && loc.effect.type) || '';
+            const elem = (loc.effect && (loc.effect.element || (loc.effect.bonuses && Object.keys(loc.effect.bonuses)[0]))) || '';
+
+            let theme = null;
+
+            // Por elemento explícito no efeito
+            if (elem === 'Fire'  || name.includes('lava') || name.includes('fire'))
+                theme = 'fire';
+            else if (elem === 'Water' || name.includes('lake') || name.includes('falls') || name.includes('river') || name.includes('rain') || name.includes('plunge') || name.includes('maelstrom'))
+                theme = 'water';
+            else if (elem === 'Earth' || name.includes('cave') || name.includes('stone') || name.includes('pillar') || name.includes('mountain') || name.includes('grove') || name.includes('swamp') || name.includes('deep'))
+                theme = 'earth';
+            else if (elem === 'Air'   || name.includes('crystal') || name.includes('plains') || name.includes('ridge') || name.includes('valley') || name.includes('tower'))
+                theme = 'air';
+            // Por efeito especial
+            else if (ef.includes('tribe') && loc.effect.tribe === 'UnderWorld') theme = 'underworld';
+            else if (ef.includes('tribe') && loc.effect.tribe === 'OverWorld')  theme = 'overworld';
+            else if (ef === 'no_mugic' || ef === 'no_tribal_mugic')             theme = 'silence';
+            else if (name.includes('oasis') || name.includes('forest'))         theme = 'nature';
+
+            if (!theme) return '';
+
+            const themes = {
+                fire:       { cls: 'loc-overlay-fire',       label: '🔥' },
+                water:      { cls: 'loc-overlay-water',      label: '💧' },
+                earth:      { cls: 'loc-overlay-earth',      label: '🪨' },
+                air:        { cls: 'loc-overlay-air',        label: '🌪️' },
+                underworld: { cls: 'loc-overlay-underworld', label: '💀' },
+                overworld:  { cls: 'loc-overlay-overworld',  label: '✨' },
+                silence:    { cls: 'loc-overlay-silence',    label: '🔇' },
+                nature:     { cls: 'loc-overlay-nature',     label: '🌿' },
+            };
+            const t = themes[theme];
+            return `<div class="loc-ambient-overlay ${t.cls}" aria-hidden="true"></div>`;
+        })();
+
+        let boardsHtml = `<div class="boards-wrapper loc-boards-host" style="background: transparent; align-items: stretch; gap: 20px; position:relative;">`;
+        boardsHtml += _locationOverlay;
         boardsHtml += renderPlayerBoard(this.boardP1, 1);
         boardsHtml += '<div class="board-divider"></div>'; // Divisória vertical
         boardsHtml += renderPlayerBoard(this.boardP2, 2);

@@ -198,6 +198,7 @@ Object.assign(GameEngine.prototype, {
 
         // Médio / Difícil: considera sacrifício de battlegear primeiro
         if (diff !== 'easy' && this._aiConsiderBattlegearSacrifice()) {
+            this._aiComment('sacrifice', { card: this.activeCombat?.p2Card });
             this.sacrificeBattlegear();
             return;
         }
@@ -205,7 +206,19 @@ Object.assign(GameEngine.prototype, {
         // Médio / Difícil: lógica de mugic
         if (this.p2Mugics && this.p2Mugics.length > 0) {
             const chosen = this._aiPickMugic();
-            if (chosen) { this._aiCastMugic(chosen); return; }
+            if (chosen) {
+                // Comenta de acordo com o tipo de mugic
+                const et = chosen.mg.effectType || '';
+                if (['heal','conditional_heal','heal_and_grant_element','energy_steal'].includes(et)) {
+                    this._aiComment('mugic_heal', { card: chosen.casterCard });
+                } else if (et === 'damage') {
+                    this._aiComment('mugic_damage', { card: chosen.casterCard });
+                } else if (et === 'negate_mugic') {
+                    this._aiComment('mugic_negate', { card: chosen.casterCard });
+                }
+                this._aiCastMugic(chosen);
+                return;
+            }
         }
 
         this.passBurst();
@@ -338,6 +351,78 @@ Object.assign(GameEngine.prototype, {
         return null;
     },
 
+    // ─── Comentários da IA ──────────────────────────────────────────────────
+
+    /**
+     * Emite um comentário de personalidade da IA no feed.
+     * @param {string} context  - situação atual ('kill','low_hp','sacrifice','mugic_heal',
+     *                            'mugic_damage','attack','win_preview','losing','victory')
+     * @param {object} [data]   - dados extras (card, attacker, defender...)
+     */
+    _aiComment(context, data = {}) {
+        // Só comenta no Médio e Difícil
+        const diff = this.aiDifficulty || 'easy';
+        if (diff === 'easy') return;
+
+        const aiCard = data.card?.name || data.attacker?.name || 'IA';
+
+        const lines = {
+            kill: [
+                `🤖 Mais um eliminado. ${aiCard} não perdoa!`,
+                `🤖 Missão cumprida. ${aiCard} não deixa escapar.`,
+                `🤖 Eliminate! ${aiCard} foi implacável.`,
+                `🤖 Nenhuma criatura resiste. ${aiCard} segue em frente.`,
+            ],
+            low_hp: [
+                `🤖 ${aiCard} está crítico, mas não vai recuar!`,
+                `🤖 Com a vida baixa, ${aiCard} fica mais perigoso.`,
+                `🤖 Ferido mas furioso — ${aiCard} ainda está no jogo.`,
+                `🤖 Desespero não é derrota. ${aiCard} continua lutando.`,
+            ],
+            sacrifice: [
+                `🤖 Sacrifício calculado — ${aiCard} abre mão do equipamento para vencer.`,
+                `🤖 ${aiCard} sacrifica o battlegear. Valeu a pena?`,
+                `🤖 Sem apego ao equipamento — ${aiCard} joga tudo por um golpe decisivo.`,
+            ],
+            mugic_heal: [
+                `🤖 ${aiCard} se recupera. Você não vai acabar com ela tão facilmente.`,
+                `🤖 Mugic de cura ativada. ${aiCard} continua na luta.`,
+                `🤖 Resiliência. ${aiCard} não vai cair sem lutar.`,
+            ],
+            mugic_damage: [
+                `🤖 Mugic de dano! ${aiCard} ataca na sombra.`,
+                `🤖 A magia fala por si mesma. Sente o peso disso.`,
+                `🤖 ${aiCard} combina feitiço e espada.`,
+            ],
+            mugic_negate: [
+                `🤖 Negada. Sua mugic não vai funcionar hoje.`,
+                `🤖 ${aiCard} antecipou seu feitiço e bloqueou.`,
+                `🤖 Contra-feitiço ativado. Plano frustrado.`,
+            ],
+            attack: [
+                `🤖 ${aiCard} avança sem hesitar.`,
+                `🤖 Iniciativa de ${aiCard}. Prepare-se.`,
+                `🤖 ${aiCard} escolheu bem o alvo.`,
+                `🤖 Sem piedade — ${aiCard} ataca.`,
+            ],
+            win_preview: [
+                `🤖 ${aiCard} vê a abertura. Este será o golpe decisivo.`,
+                `🤖 ${aiCard} vai encerrar isto agora.`,
+                `🤖 Vitória à vista — ${aiCard} não vai perder essa chance.`,
+            ],
+            losing: [
+                `🤖 A situação está difícil, mas a IA não desiste.`,
+                `🤖 Recalculando estratégia...`,
+                `🤖 Isso não acabou ainda.`,
+            ],
+        };
+
+        const pool = lines[context];
+        if (!pool) return;
+        const msg = pool[Math.floor(Math.random() * pool.length)];
+        this.log(msg);
+    },
+
     // ─── Turno da IA ────────────────────────────────────────────────────────
 
     aiTurn() {
@@ -443,6 +528,22 @@ Object.assign(GameEngine.prototype, {
 
         if (attacker.card._hasRange) {
             this.log(`🏹 ${attacker.card.name} tem Range — pode atacar criaturas protegidas!`);
+        }
+
+        // Comentário contextual antes de atacar
+        const atkHpPct  = attacker.card.energy / (attacker.card.maxEnergy || attacker.card.energy);
+        const defHpPct  = defender.card.energy / (defender.card.maxEnergy || defender.card.energy);
+        const p1Alive   = this._countAlive(this.boardP1);
+        const p2Alive_n = this._countAlive(this.boardP2);
+
+        if (atkHpPct < 0.2) {
+            this._aiComment('low_hp', { card: attacker.card });
+        } else if (p2Alive_n < p1Alive && p2Alive_n <= 2) {
+            this._aiComment('losing');
+        } else if (defHpPct <= 0.25) {
+            this._aiComment('win_preview', { card: attacker.card });
+        } else if (Math.random() < 0.3) {
+            this._aiComment('attack', { card: attacker.card });
         }
 
         this.selectedAttacker = { player: 2, r: attacker.r, c: attacker.c };

@@ -8,6 +8,12 @@ Object.assign(GameEngine.prototype, {
             return;
         }
 
+        // Pisca o título da aba quando o burst abre e o jogador pode não estar olhando
+        // (multiplayer: sempre; solo: só quando for turno da IA, i.e. não é a vez do jogador)
+        if (!this.isMyTurn()) {
+            this._startTabFlash('Burst Aberto!');
+        }
+
         // Render Stack — com descrição rica para mugics
         const container = document.getElementById('burst-stack-container');
         const ac = this.activeCombat;
@@ -49,12 +55,33 @@ Object.assign(GameEngine.prototype, {
                     </div>`;
             }
 
+            // Para ataques: nome clicável com hover tooltip mostrando efeitos
+            let itemContent = '';
+            if (item.type === 'attack') {
+                const atkName = item.atkCard ? item.atkCard.name : item.description;
+                const hasCard = !!item.atkCard;
+                // Serializa o atkCard para acesso no tooltip (evita closures complexas)
+                const atkIdx  = this.burstStack.length - 1 - i; // índice no array original
+                itemContent = `
+                    <span style="color:#fbbf24;">⚔️ Ataque:</span>
+                    <b style="cursor:${hasCard?'help':'default'};border-bottom:${hasCard?'1px dashed #f59e0b44':''};padding-bottom:1px;"
+                       ${hasCard ? `
+                           onmouseenter="game._showAttackTooltip(event, game.burstStack[${atkIdx}]?.atkCard, game.burstStack[${atkIdx}]?.attacker)"
+                           onmouseleave="game._hideAttackTooltip()"
+                           onmousemove="game._positionTooltip(event, document.getElementById('mugic-tooltip'))"
+                       ` : ''}>
+                        ${atkName}
+                    </b>
+                    por <span style="color:#94a3b8">${item.source}</span>
+                    ${hasCard ? '<span style="font-size:9px;color:#475569;margin-left:4px;">(hover p/ detalhes)</span>' : ''}
+                `;
+            } else {
+                itemContent = `[${item.source}] ${item.description}`;
+            }
+
             html += `<div style="padding:8px;border-bottom:1px solid #2d3748;text-align:left;${negStyle}">
                 <span style="color:#f1c40f;">${this.burstStack.length - i}.</span>
-                ${item.type === 'attack'
-                    ? `<span style="color:#fbbf24;">⚔️ Ataque:</span> <b>${item.atkCard ? item.atkCard.name : item.description}</b> por <span style="color:#94a3b8">${item.source}</span>`
-                    : `[${item.source}] ${item.description}`
-                }${negTag}
+                ${itemContent}${negTag}
                 ${extraHtml}
             </div>`;
         });
@@ -606,6 +633,7 @@ Object.assign(GameEngine.prototype, {
             modal.classList.remove('flex-modal', 'modal-minimized');
         }
         this.restoreModal && this.restoreModal('burst-modal');
+        this._stopTabFlash(); // para o pisca-pisca ao fechar
     },
 
     async resolveBurst() {
@@ -723,6 +751,9 @@ Object.assign(GameEngine.prototype, {
         }
         let alertMsg = `🎶 MUGIC: ${mg.name}\nUsada por: ${item.source}${casterLabel}\n\n`;
         let oldVal;
+
+        // Contador de mugics para a tela de fim de jogo
+        if (this._stats) this._stats.mugics++;
 
         switch (mg.effectType) {
 
