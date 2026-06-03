@@ -1,6 +1,6 @@
 # Chaotic Lite
 
-Simulador tático multiplayer de batalha em turnos rodando no navegador, inspirado no card game **Chaotic**. Servidor Node.js + Socket.IO para partidas em tempo real entre dois jogadores.
+Simulador tático multiplayer de batalha em turnos rodando no navegador, inspirado no card game **Chaotic**. Servidor Node.js + Socket.IO para partidas em tempo real com suporte a múltiplas salas simultâneas.
 
 ---
 
@@ -36,6 +36,45 @@ O link do ngrok aparece automaticamente no lobby do jogo ~2s após iniciar.
 
 ---
 
+### Deploy online (24/7)
+
+Para deixar o jogo acessível sem depender da sua máquina local:
+
+1. Suba o código no **GitHub**
+2. Crie uma conta em [Railway](https://railway.app)
+3. Conecte o repositório — Railway detecta Node.js automaticamente
+4. Deploy com 1 clique; o servidor fica online 24/7 gratuitamente dentro do limite de uso
+
+O `process.env.PORT` já está configurado no `server.js` para compatibilidade com Railway e outros serviços de PaaS.
+
+---
+
+## Sistema de Salas
+
+O servidor suporta **múltiplas partidas simultâneas** isoladas. Qualquer número de jogadores pode se conectar ao mesmo servidor e jogar entre si sem interferência.
+
+### Tipos de sala
+
+| Tipo | Como funciona |
+|---|---|
+| **Sala Privada** | Cria uma sala e recebe um código de 4 letras (ex: `KXBW`). Só entra quem tiver o código. Ideal para jogar com amigos. |
+| **Sala Pública** | Aparece na lista de salas abertas para qualquer jogador conectado. Qualquer um pode entrar com 1 clique. |
+| **Entrar por código** | Se alguém te mandou o código de uma sala privada, basta digitá-lo no campo e entrar. |
+
+### Fluxo do lobby
+
+```
+Jogador abre o site
+    │
+    ├── Criar Sala Privada  →  código KXBW gerado  →  manda pro amigo
+    ├── Salas Públicas      →  lista de salas abertas + botão "Criar Pública"
+    └── Entrar com Código   →  digita KXBW e entra direto
+```
+
+Após ambos entrarem na sala → votação de modo → draft → batalha.
+
+---
+
 ## O que o jogo tem
 
 ### Modos de jogo
@@ -53,7 +92,7 @@ No multiplayer os dois jogadores votam no modo antes da partida começar.
 | Etapa | Descrição |
 |---|---|
 | **Tela de Setup** | Escolha dificuldade da IA (Fácil/Médio/Difícil) e tribo antes de qualquer coisa |
-| **Lobby Multiplayer** | Tela de espera com link copiável, slots dos jogadores, campo de nome e votação de modo |
+| **Lobby Multiplayer** | Seleção de sala (privada/pública/código), nome do jogador e votação de modo |
 | **Posicionamento** | Antes da batalha o jogador posiciona suas criaturas no tabuleiro manualmente (pulado no 1v1) |
 | **Reconexão automática** | Socket.IO reconecta automaticamente; overlay com progresso |
 
@@ -66,7 +105,7 @@ No multiplayer os dois jogadores votam no modo antes da partida começar.
 | **Barra de afinidade** | Cada carta mostra % de sinergia com o time atual em tempo real |
 | **Deck stats em tempo real** | Média de stats, distribuição de tribos e passivas do deck |
 | **Battlegear** | 29 equipamentos com imagens; recomendação automática + randomização por afinidade |
-| **Mugics** | Pré-seleção automática das 6 mais sinergicas + botões Recomendar e Randomizar |
+| **Mugics** | Pré-seleção automática das 6 mais sinérgicas + botões Recomendar e Randomizar |
 | **Tabuleiro adaptativo** | Pirâmide invertida (6v6/3v3) ou duelo direto (1v1) com proteção posicional |
 | **Locais** | Deck de 10 locais; define iniciativa e aplica efeitos passivos de combate |
 | **Iniciativa** | Determinada pelo atributo do Local (Coragem, Poder, Sabedoria ou Velocidade) |
@@ -100,12 +139,16 @@ No multiplayer os dois jogadores votam no modo antes da partida começar.
 
 | Recurso | Descrição |
 |---|---|
+| **Salas isoladas** | N partidas simultâneas no mesmo servidor; cada sala tem estado independente |
+| **Código curto** | Salas privadas identificadas por código de 4 letras sem ambiguidade (sem I/O/0/1) |
+| **Lista pública** | Salas públicas aparecem em tempo real para qualquer jogador conectado |
 | **Nome customizável** | Cada jogador define seu nome no lobby antes de entrar |
 | **Votação de modo** | Ambos os jogadores votam em 1v1 / 3v3 / 6v6; partida só começa com consenso |
 | **Mugics P1 e P2** | Ambos os jogadores podem lançar mugics corretamente durante o burst |
 | **Sync de estado do tabuleiro** | Após cada morte de criatura o estado é sincronizado entre os clientes |
 | **Sync de local** | Locais de batalha são sincronizados entre os jogadores em tempo real |
 | **Reconexão** | Reconexão automática com overlay de progresso; estado da partida preservado |
+| **Limpeza automática** | Salas inativas por mais de 2h são removidas automaticamente do servidor |
 
 ### Interface e UX
 
@@ -152,7 +195,7 @@ No multiplayer os dois jogadores votam no modo antes da partida começar.
 ```
 chaotic_lite/
 ├── index.html              <- interface completa (single-page)
-├── server.js               <- servidor Node.js + Socket.IO
+├── server.js               <- servidor Node.js + Socket.IO (suporte a N salas simultâneas)
 ├── iniciar.bat             <- inicia servidor + ngrok com 1 clique
 ├── encerrar.bat            <- encerra tudo
 ├── README.md
@@ -168,7 +211,7 @@ chaotic_lite/
         ├── engine-combat.js        <- executeAttack, resolveAttack, _getCombatPreview, resumo
         ├── engine-burst.js         <- burst stack, mugics em combate, painel de burst
         ├── engine-ui.js            <- tooltips ricos, animações, floating numbers, drag&drop handlers
-        ├── engine-multiplayer.js   <- Socket.IO, lobby, votação de modo, reconexão, sync
+        ├── engine-multiplayer.js   <- Socket.IO, salas, lobby, votação, reconexão, sync
         ├── engine-ai.js            <- sistema de dificuldade da IA, comentários de personalidade
         ├── engine-turn.js          <- nextTurn, checkWinCondition, tela de fim de jogo
         └── data/
@@ -186,12 +229,14 @@ chaotic_lite/
 ## Fluxo de uma partida
 
 ```
-SETUP
+SETUP (solo)
   └─ Escolher Dificuldade (Fácil / Médio / Difícil)
   └─ Escolher Tribo da IA (Auto / OverWorld / UnderWorld / Mipedian / Danian)
 
-LOBBY MULTIPLAYER (quando aplicável)
+LOBBY MULTIPLAYER
   └─ Definir nome do jogador
+  └─ Criar sala privada (código KXBW) OU entrar em sala pública OU digitar código
+  └─ Aguardar segundo jogador
   └─ Votar no modo de jogo (1v1 / 3v3 / 6v6)
   └─ Aguardar consenso dos dois jogadores
 
@@ -244,3 +289,14 @@ FIM DE JOGO
   └─ Estatísticas da partida: turnos, ataques, mugics, kills, maior dano único
   └─ Histórico completo da partida no painel lateral
 ```
+
+---
+
+## Notas sobre monetização
+
+Este projeto é um fangame sem fins lucrativos. Caso deseje monetizar uma versão derivada:
+
+- **Cosméticos** (bordas, sleeves, avatares, efeitos visuais) são o modelo mais sustentável para TCGs — não afetam o equilíbrio do jogo
+- **Doação voluntária** (Ko-fi, Pix) funciona bem em projetos de nicho com comunidade engajada
+- **AdSense** gera renda passiva após atingir volume de visitantes
+- **Importante:** o nome Chaotic, artes e nomes de personagens são propriedade intelectual registrada. Para monetizar legalmente é necessário renomear o universo e usar assets originais
