@@ -51,15 +51,16 @@ O `process.env.PORT` já está configurado no `server.js` para compatibilidade c
 
 ## Sistema de Salas
 
-O servidor suporta **múltiplas partidas simultâneas** isoladas. Qualquer número de jogadores pode se conectar ao mesmo servidor e jogar entre si sem interferência.
+O servidor suporta **múltiplas partidas simultâneas** isoladas.
 
 ### Tipos de sala
 
 | Tipo | Como funciona |
 |---|---|
-| **Sala Privada** | Cria uma sala e recebe um código de 4 letras (ex: `KXBW`). Só entra quem tiver o código. Ideal para jogar com amigos. |
-| **Sala Pública** | Aparece na lista de salas abertas para qualquer jogador conectado. Qualquer um pode entrar com 1 clique. |
-| **Entrar por código** | Se alguém te mandou o código de uma sala privada, basta digitá-lo no campo e entrar. |
+| **Sala Privada** | Gera código de 4 letras (ex: `KXBW`). Só entra quem tiver o código. |
+| **Sala Pública** | Aparece na lista para qualquer jogador. Qualquer um entra com 1 clique. |
+| **Entrar por código** | Digite o código de uma sala privada e entre diretamente. |
+| **Espectador** | Entre como espectador por código ou pelo botão "👁️ Assistir" na lista pública. |
 
 ### Fluxo do lobby
 
@@ -68,10 +69,11 @@ Jogador abre o site
     │
     ├── Criar Sala Privada  →  código KXBW gerado  →  manda pro amigo
     ├── Salas Públicas      →  lista de salas abertas + botão "Criar Pública"
-    └── Entrar com Código   →  digita KXBW e entra direto
+    ├── Entrar com Código   →  digita KXBW e entra direto
+    └── 👁️ Assistir         →  digita código ou clica "Assistir" na lista pública
 ```
 
-Após ambos entrarem na sala → votação de modo → draft → batalha.
+Após ambos entrarem → votação de modo → draft (4 fases) → batalha.
 
 ---
 
@@ -87,40 +89,31 @@ Após ambos entrarem na sala → votação de modo → draft → batalha.
 
 No multiplayer os dois jogadores votam no modo antes da partida começar.
 
-### Fluxo de entrada
+### Draft (4 fases)
 
-| Etapa | Descrição |
+| Fase | Descrição |
 |---|---|
-| **Tela de Setup** | Escolha dificuldade da IA (Fácil/Médio/Difícil) e tribo antes de qualquer coisa |
-| **Lobby Multiplayer** | Seleção de sala (privada/pública/código), nome do jogador e votação de modo |
-| **Posicionamento** | Antes da batalha o jogador posiciona suas criaturas no tabuleiro manualmente (pulado no 1v1) |
-| **Reconexão automática** | Socket.IO reconecta automaticamente; overlay com progresso |
+| **1 — Criaturas** | 92 criaturas com filtros (tribo, stat mínimo, passiva, ordenação) e barra de afinidade em tempo real |
+| **2 — Battlegear** | 29 equipamentos; recomendação automática por afinidade + randomização |
+| **3 — Mugics** | Pré-seleção automática das mais sinérgicas + botões Recomendar e Randomizar |
+| **4 — Ataques** | Monta deck de 20/12/6 cartas (por modo); recomendação considera elementos e battlegear |
 
-### Sistemas de jogo
+Em qualquer fase: botão **💾 Salvar Deck** para salvar o progresso no localStorage.
+
+### Sistemas de combate
 
 | Sistema | Descrição |
 |---|---|
-| **Draft de criaturas** | 92 criaturas com filtros (tribo, stat mínimo, passiva, ordenação) |
-| **Times Sugeridos** | 18 times para 6v6 + 8 times para 3v3 pré-montados; clique para pré-selecionar |
-| **Barra de afinidade** | Cada carta mostra % de sinergia com o time atual em tempo real |
-| **Deck stats em tempo real** | Média de stats, distribuição de tribos e passivas do deck |
-| **Battlegear** | 29 equipamentos com imagens; recomendação automática + randomização por afinidade |
-| **Mugics** | Pré-seleção automática das 6 mais sinérgicas + botões Recomendar e Randomizar |
 | **Tabuleiro adaptativo** | Pirâmide invertida (6v6/3v3) ou duelo direto (1v1) com proteção posicional |
-| **Locais** | Deck de 10 locais; define iniciativa e aplica efeitos passivos de combate |
+| **Locais** | Deck de 10 locais; define iniciativa e aplica efeitos de combate (30 efeitos distintos) |
 | **Iniciativa** | Determinada pelo atributo do Local (Coragem, Poder, Sabedoria ou Velocidade) |
-| **Draft de ataques** | Jogador monta seu deck de ataques antes da batalha (20/12/6 cartas por modo, máx 2 cópias) |
-| **Recomendação de ataques** | Sistema sugere os melhores ataques considerando elementos das criaturas E do battlegear |
 | **Deck de ataques** | Deck embaralhado; compra ANTES do modal (sempre 3 opções como no TCG original) |
 | **Challenge de atributo** | Threshold verificado no preview E na execução — valores sempre consistentes |
 | **Bônus elemental** | Fire / Water / Earth / Air amplificam dano de ataques compatíveis |
 | **Burst Stack (LIFO)** | Janela de resposta após cada ataque; preview de dano inimigo visível no burst |
-| **Painel de burst** | Lista o que cada mugic fará e quem será afetado antes de confirmar |
-| **Morte simultânea** | Se ambas as criaturas morrem no mesmo ataque o resultado é empate no duelo |
+| **Morte simultânea** | Se ambas morrem no mesmo ataque o resultado é empate no duelo |
 | **Sinergia tribal** | OverWorld +COR/SAB · UnderWorld +POD · Mipedian +VEL · Danian +Hive |
-| **IA com 3 níveis** | Fácil (aleatório) · Médio (alvo mais fraco, usa mugics) · Difícil (counter-pick, look-ahead) |
-| **IA usa battlegear** | Sacrifica equipamentos estrategicamente no burst (Médio e Difícil) |
-| **IA comenta as jogadas** | Mensagens de personalidade no feed em Médio/Difícil (kill, heal, mugic, etc.) |
+| **Reciclagem de deck** | Quando o deck de ataques esvazia, o descarte é embaralhado e reutilizado |
 
 ### Passivas de criaturas
 
@@ -130,63 +123,61 @@ No multiplayer os dois jogadores votam no modo antes da partida começar.
 | **Swift** | Adiciona velocidade efetiva para fins de iniciativa |
 | **Strike** | Causa dano extra no primeiro ataque do combate |
 | **Tough** | Reduz todo dano recebido por valor fixo |
-| **Berserk** | Ganha bônus de stat a cada ponto de dano recebido |
+| **Berserk** | Ganha bônus de Power quando abaixo de 50% de energia |
 | **Reckless** | Causa dano extra mas o atacante também se fere |
-| **Fireproof** | Imune a dano de elemento Fire |
-| **Range** | Pode atacar criaturas não-adjacentes |
+| **Fireproof** | Reduz dano de elemento Fire |
+| **Range** | Pode atacar criaturas protegidas (não-adjacentes) |
+
+### IA
+
+| Nível | Comportamento |
+|---|---|
+| **Fácil** | Aleatório — ataques e alvos escolhidos sem estratégia |
+| **Médio** | Prioriza alvo mais fraco, usa mugics de sobrevivência, sacrifica battlegear |
+| **Difícil** | Counter-pick de mugics, avaliação de ameaça, look-ahead de dano |
 
 ### Multiplayer
 
 | Recurso | Descrição |
 |---|---|
-| **Salas isoladas** | N partidas simultâneas no mesmo servidor; cada sala tem estado independente |
-| **Código curto** | Salas privadas identificadas por código de 4 letras sem ambiguidade (sem I/O/0/1) |
-| **Lista pública** | Salas públicas aparecem em tempo real para qualquer jogador conectado |
-| **Nome customizável** | Cada jogador define seu nome no lobby antes de entrar |
-| **Votação de modo** | Ambos os jogadores votam em 1v1 / 3v3 / 6v6; partida só começa com consenso |
-| **Mugics P1 e P2** | Ambos os jogadores podem lançar mugics corretamente durante o burst |
-| **Sync de estado do tabuleiro** | Após cada morte de criatura o estado é sincronizado entre os clientes |
-| **Sync de local** | Locais de batalha são sincronizados entre os jogadores em tempo real |
-| **Reconexão** | Reconexão automática com overlay de progresso; estado da partida preservado |
-| **Limpeza automática** | Salas inativas por mais de 2h são removidas automaticamente do servidor |
+| **Salas isoladas** | N partidas simultâneas; cada sala tem estado independente |
+| **Código curto** | 4 letras sem ambiguidade (sem I/O/0/1) |
+| **Lista pública** | Salas abertas e em andamento aparecem em tempo real |
+| **Espectador** | Assiste partidas ao vivo sem interagir; recebe estado sincronizado ao entrar |
+| **Chat em partida** | Mensagens em tempo real com indicador "digitando..." · atalho `T` |
+| **Votação de modo** | Ambos votam em 1v1 / 3v3 / 6v6; partida só começa com consenso |
+| **Reconexão inteligente** | Overlay de 60s aguardando reconexão antes de declarar abandono |
+| **Link de convite** | Botão copia `?sala=KXBW` — amigo abre o link e entra direto |
+| **Torneio (melhor de 3)** | Placar acumulado entre partidas; tela de "Série Vencida!" ao fim |
+| **Sync de estado** | Tabuleiro sincronizado após cada morte de criatura e para espectadores |
+| **Limpeza automática** | Salas inativas por +2h removidas automaticamente |
+
+### Decks salvos
+
+| Recurso | Descrição |
+|---|---|
+| **Salvar deck** | Botão disponível em todas as 4 fases do draft |
+| **Carregar deck** | Preenche o draft completo (criaturas + battlegear + mugics + ataques) |
+| **Renomear** | Edita o nome de qualquer deck salvo |
+| **Exportar código** | Gera string base64 compartilhável — importável em qualquer navegador |
+| **Importar código** | Cola o código do amigo e carrega o deck direto no draft |
+| **Histórico de torneios** | Últimas 20 séries salvas com placar, oponente, modo e data |
 
 ### Interface e UX
 
 | Recurso | Descrição |
 |---|---|
-| **Banner de turno animado** | "⚔️ SEU TURNO" (verde pulsante) vs "⏳ TURNO DO OPONENTE" (cinza com pontinhos) vs "🎯 ESCOLHA O ALVO!" (vermelho urgente) |
-| **Preview de combate** | Overlay nas cartas inimigas: veredito, dano estimado dos dois lados, quem tem iniciativa com stat e valores |
-| **Intimidate no preview** | Badge laranja "😨 Intimidate: COR −10" aparece no overlay quando o atacante tem a passiva |
-| **Banner de iniciativa** | No modal de ataque: "Você ataca primeiro!" ou "Inimigo ataca primeiro!" com stats comparados |
-| **Preview de dano no burst** | Quando inimigo ataca, o burst mostra quanto dano você vai tomar antes de decidir resposta |
-| **Hover de ataque no burst** | Passar o mouse no nome do ataque inimigo no burst mostra tooltip com todos os efeitos |
-| **Tooltips ricos de mugic** | Tooltip com efeito, custo real, penalidade de tribo e status de counters disponíveis |
-| **Tooltips de ataque** | Hover em cada carta de ataque mostra dano total esperado e todos os efeitos em texto legível |
-| **Tooltips de battlegear** | Hover no battlegear (board e modal de ataque) mostra imagem, bônus de stats, elemento concedido e descrição |
-| **Tooltips de criatura no board** | Hover na imagem/nome da criatura: stats completos, imagem, elementos, passivas, battlegear e sinergia |
-| **Notificação de burst na aba** | Título da aba pisca "🔔 Burst Aberto! — Chaotic Lite" quando o burst abre fora do seu turno |
-| **Overlay ambiental do local** | Efeito visual no board por tipo de local: névoa azul (Water), brasas (Fire), âmbar (Earth), brilho frio (Air), etc. |
-| **Tribe highlight do local** | Criaturas beneficiadas pelo local ganham borda dourada pulsante + badge "⭐ Local" |
-| **Counter pendente de local** | Criaturas que ganharão counter ao engajar (ex: Gigantempopolis) mostram "♪ +1" tracejado antes do combate |
-| **Counters de mugic** | Badge roxo pulsante para 2+ counters; counter pendente (tracejado) para efeitos de local |
-| **Animação de morte** | Carta explode em 20 fragmentos (grid 4×5) voando para fora com rotação, usando recortes reais da imagem |
-| **Animação de ataque** | Carta do atacante salta na direção do defensor usando posição exata (data-pos) — sem erro com criaturas de mesmo nome |
-| **Floating damage numbers** | `-35` vermelho / `+20` verde flutuando sobre a carta ao receber dano/cura |
-| **Drag & drop no board** | Arrastar criatura para reposicionar: slot verde = válido, vermelho = inválido |
-| **Barra de vida** | Barra colorida (verde → amarelo → vermelho) com pulso crítico em HP < 20% |
-| **Animação de entrada** | Cartas "caem" em posição com stagger ao início da batalha |
-| **Tela de fim de jogo** | Header animado com gradiente, confete (vitória), estatísticas da partida (turnos, ataques, mugics, kills, maior dano) |
-| **Resumo pós-combate** | Timeline de ataques, total de dano, mugics e curas por duelo; não aparece no combate decisivo |
-| **Minimizar modais** | Botão em qualquer modal; fica como pílula flutuante para restaurar depois |
-| **Atalhos de teclado** | Espaço = passar burst/turno · 1-3 = selecionar ataque · H = histórico · M = minimizar · Esc = restaurar |
-| **Feed de batalha** | Mensagens animadas classificadas por tipo (dano, cura, mugic, morte, local) |
-| **Histórico da partida** | Painel lateral colapsável com todos os combates da partida |
-
-### Correções de dados
-
-- Stats de **92 criaturas** corrigidos com os valores oficiais do Chaotic TCG (Dawn of Perim)
-- Elementos, raridades, subtypes e habilidades atualizados
-- Preview de ataques (`showAttackModal`) usa **mesmos stats efetivos** que a execução — sem surpresas
+| **Banner de turno animado** | Verde pulsante (seu turno) · cinza com pontinhos (oponente) · vermelho urgente (escolha alvo) |
+| **Indicador de borda** | Pulso na borda da tela: verde (seu turno) · vermelho (escolha alvo) · roxo (conjurador) |
+| **Preview de combate** | Overlay nas cartas inimigas: veredito, dano estimado dos dois lados, iniciativa |
+| **Range visual** | Cartas protegidas mas alcançáveis por Range pulsam em laranja com badge 🏹 |
+| **Floating damage numbers** | `-35` vermelho / `+20` verde / 🎵 roxo (mugic) flutuando sobre a carta |
+| **Painel deck de ataques** | Mão / Deck / Descarte + barra de progresso + top-3 prováximas cartas |
+| **Destaques pós-partida** | Maior destruidor, mais resiliente, mais abates, sobrevivente — com foto |
+| **Histórico de combates** | Painel lateral colapsável com timeline de cada duelo da partida |
+| **Log estruturado** | Organizado por rounds com cores por tipo (dano, cura, mugic, local, passiva) |
+| **Banner de iniciativa** | Popup antes do primeiro ataque mostrando quem inicia e por qual stat |
+| **Atalhos de teclado** | `T` chat · `Enter` passar burst · `Esc` cancelar · `1/2/3` escolher ataque |
 
 ---
 
@@ -194,109 +185,32 @@ No multiplayer os dois jogadores votam no modo antes da partida começar.
 
 ```
 chaotic_lite/
-├── index.html              <- interface completa (single-page)
-├── server.js               <- servidor Node.js + Socket.IO (suporte a N salas simultâneas)
-├── iniciar.bat             <- inicia servidor + ngrok com 1 clique
-├── encerrar.bat            <- encerra tudo
-├── README.md
+├── index.html              ← interface completa (single-page)
+├── server.js               ← servidor Node.js + Socket.IO
+├── iniciar.bat             ← inicia servidor + ngrok com 1 clique
+├── encerrar.bat            ← encerra tudo
+├── README.md / RULES.md / MULTIPLAYER.md
 └── src/
-    ├── css/
-    │   └── style.css       <- todos os estilos e animações
-    ├── assets/             <- imagens das cartas, battlegears e localizações
+    ├── css/style.css
+    ├── assets/
     └── js/
-        ├── engine-core.js          <- GameEngine: constructor, init, modos de jogo, contadores de stats
-        ├── engine-helpers.js       <- utils, setupBoard, _placeCardsOnBoard, _mugicCountersHtml
-        ├── engine-draft.js         <- fases de draft, times sugeridos, afinidade, tela de ataques
-        ├── engine-board.js         <- renderBoard, handleCardClick, drag&drop, overlays de local
-        ├── engine-combat.js        <- executeAttack, resolveAttack, _getCombatPreview, resumo
-        ├── engine-burst.js         <- burst stack, mugics em combate, painel de burst
-        ├── engine-ui.js            <- tooltips ricos, animações, floating numbers, drag&drop handlers
-        ├── engine-multiplayer.js   <- Socket.IO, salas, lobby, votação, reconexão, sync
-        ├── engine-ai.js            <- sistema de dificuldade da IA, comentários de personalidade
-        ├── engine-turn.js          <- nextTurn, checkWinCondition, tela de fim de jogo
+        ├── engine-core.js          ← constructor, init, modos de jogo
+        ├── engine-helpers.js       ← helpers, log estruturado, passivas
+        ├── engine-draft.js         ← draft 4 fases, times sugeridos
+        ├── engine-board.js         ← tabuleiro, renderização, movimento
+        ├── engine-combat.js        ← combate, iniciativa, dano, locais
+        ├── engine-burst.js         ← burst stack, mugics, sacrifício
+        ├── engine-ui.js            ← tooltips, animações, histórico
+        ├── engine-multiplayer.js   ← Socket.IO, lobby, chat, espectador
+        ├── engine-ai.js            ← IA (Fácil/Médio/Difícil)
+        ├── engine-turn.js          ← turnos, vitória, torneio
+        ├── engine-decks.js         ← decks salvos, exportar/importar
         └── data/
-            ├── cards.js        <- 92 criaturas (stats oficiais)
-            ├── attacks.js      <- deck de ataques
-            ├── mugics.js       <- magias
-            ├── battlegear.js   <- 29 equipamentos com imagens
-            ├── locations.js    <- locais de batalha
-            ├── passives.js     <- lógica de passivas
-            └── teams.js        <- 18 times para 6v6 + 8 times para 3v3
+            ├── cards.js        ← 92 criaturas
+            ├── attacks.js      ← 49 ataques (0–5 BP)
+            ├── mugics.js       ← 38 magias
+            ├── battlegear.js   ← 29 equipamentos
+            ├── locations.js    ← 30 locais de batalha
+            ├── passives.js     ← catálogo de passivas
+            └── teams.js        ← 18 times sugeridos (6v6 + 3v3 + 1v1)
 ```
-
----
-
-## Fluxo de uma partida
-
-```
-SETUP (solo)
-  └─ Escolher Dificuldade (Fácil / Médio / Difícil)
-  └─ Escolher Tribo da IA (Auto / OverWorld / UnderWorld / Mipedian / Danian)
-
-LOBBY MULTIPLAYER
-  └─ Definir nome do jogador
-  └─ Criar sala privada (código KXBW) OU entrar em sala pública OU digitar código
-  └─ Aguardar segundo jogador
-  └─ Votar no modo de jogo (1v1 / 3v3 / 6v6)
-  └─ Aguardar consenso dos dois jogadores
-
-DRAFT
-  └─ Fase 1 — Criaturas
-       └─ Ver Times Sugeridos (18 para 6v6 / 8 para 3v3)
-       └─ Barra de afinidade dinâmica em cada carta
-       └─ Filtros + deck stats em tempo real
-  └─ Fase 2 — Battlegears
-       └─ Recomendação automática por afinidade
-       └─ Randomizar entre os mais indicados
-  └─ Fase 3 — Mugics
-       └─ Pré-seleção automática das mais sinérgicas
-       └─ Botões Recomendar e Randomizar
-  └─ Fase 4 — Deck de Ataques
-       └─ Escolhe 20 cartas (6v6) / 12 (3v3) / 6 (1v1) — máx 2 cópias da mesma
-       └─ Recomendação inteligente: considera elementos da criatura E do battlegear
-       └─ Cada carta exibe descrição completa do efeito em português
-       └─ Filtros por elemento, stat do challenge e ordenação
-       └─ Score de sinergia ⭐ visível em cada carta
-
-POSICIONAMENTO (pulado no 1v1)
-  └─ Jogador arranja suas criaturas no tabuleiro antes da batalha
-  └─ Drag & drop ou clique para mover durante a batalha
-
-BATALHA
-  └─ Banner de turno animado indica claramente quem está jogando
-  └─ Overlay ambiental no board reflete o local ativo (névoa, brasas, etc.)
-  └─ Tribe highlight dourado nas criaturas beneficiadas pelo local
-  └─ Turno do Jogador
-       ├─ Arrastar ou clicar criatura para mover -> fim do turno
-       └─ Atacar -> entra em combate
-            └─ Preview de veredito com iniciativa e valores de stat
-            └─ Badge de Intimidate no preview se aplicável
-            └─ Modal de ataque: dano real com battlegear + sinergia + local
-            └─ Battlegear revelado apenas ao confirmar o ataque
-            └─ Compra de carta ANTES do modal (sempre 3 opções)
-            └─ Burst: tooltip rico + painel mostrando efeito e alvo de cada mugic
-            └─ Hover no ataque inimigo no burst mostra efeitos completos
-            └─ Preview de dano inimigo visível antes de responder no burst
-            └─ Animação de ataque com salto por posição exata (data-pos)
-            └─ Dano aplicado -> floating numbers + sync de tabuleiro (multiplayer)
-            └─ Morte -> animação de explosão em fragmentos + sync
-            └─ Morte simultânea -> empate no duelo
-            └─ Resumo do combate ao fim de cada duelo (omitido no combate decisivo)
-  └─ Turno da IA (automático, adapta-se à dificuldade + comentários de personalidade)
-
-FIM DE JOGO
-  └─ Tela animada: confete (vitória) / visual sombrio (derrota)
-  └─ Estatísticas da partida: turnos, ataques, mugics, kills, maior dano único
-  └─ Histórico completo da partida no painel lateral
-```
-
----
-
-## Notas sobre monetização
-
-Este projeto é um fangame sem fins lucrativos. Caso deseje monetizar uma versão derivada:
-
-- **Cosméticos** (bordas, sleeves, avatares, efeitos visuais) são o modelo mais sustentável para TCGs — não afetam o equilíbrio do jogo
-- **Doação voluntária** (Ko-fi, Pix) funciona bem em projetos de nicho com comunidade engajada
-- **AdSense** gera renda passiva após atingir volume de visitantes
-- **Importante:** o nome Chaotic, artes e nomes de personagens são propriedade intelectual registrada. Para monetizar legalmente é necessário renomear o universo e usar assets originais
