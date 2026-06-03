@@ -46,9 +46,126 @@ Object.assign(GameEngine.prototype, {
         }
 
         container.innerHTML = html;
+
+        // Renderiza painel de status do deck de ataques abaixo das Mugics
+        this._renderAttackDeckPanel();
+    },
+
+    _renderAttackDeckPanel() {
+        // Cria ou reutiliza o painel
+        let panel = document.getElementById('attack-deck-panel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'attack-deck-panel';
+            const hand = document.getElementById('player-hand');
+            if (!hand || !hand.parentNode) return;
+            hand.parentNode.insertBefore(panel, hand.nextSibling);
+        }
+
+        const myP     = this.multiplayerMode ? this.myPlayerNumber : 1;
+        const myHand  = myP === 1 ? this.p1AttackHand  : this.p2AttackHand;
+        const myDeck  = myP === 1 ? this.p1AttackDeck  : this.p2AttackDeck;
+        const myDisc  = myP === 1 ? this.p1AttackDiscard : this.p2AttackDiscard;
+
+        const handCount = (myHand  || []).length;
+        const deckCount = (myDeck  || []).length;
+        const discCount = (myDisc  || []).length;
+        const total     = handCount + deckCount + discCount;
+
+        if (total === 0) { panel.innerHTML = ''; return; }
+
+        // Probabilidade de comprar cada carta da mão ou deck
+        const allAvail = [...(myDeck || [])];
+        const cardCounts = {};
+        allAvail.forEach(c => { cardCounts[c.name] = (cardCounts[c.name] || 0) + 1; });
+        const uniqueNames = Object.keys(cardCounts);
+
+        // Top-3 mais prováveis
+        const topCards = uniqueNames
+            .sort((a, b) => cardCounts[b] - cardCounts[a])
+            .slice(0, 3)
+            .map(name => {
+                const pct = Math.round((cardCounts[name] / Math.max(deckCount, 1)) * 100);
+                return `<span style="background:rgba(255,255,255,0.07);border-radius:4px;padding:1px 5px;font-size:9px;color:#94a3b8;">${name} <span style="color:#60a5fa">${pct}%</span></span>`;
+            }).join('');
+
+        // Barra de progresso do deck
+        const deckPct = Math.round((deckCount / Math.max(total, 1)) * 100);
+        const barColor = deckPct > 50 ? '#22c55e' : deckPct > 20 ? '#f59e0b' : '#ef4444';
+
+        panel.innerHTML = `
+            <div style="margin-top:8px;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.07);
+                border-radius:8px;padding:7px 10px;font-family:inherit;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+                    <span style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">🃏 Deck de Ataques</span>
+                    <div style="display:flex;gap:10px;">
+                        <span style="font-size:11px;color:#f1f5f9;font-weight:700;" title="Cartas na mão">Mão: <b style="color:#60a5fa">${handCount}</b></span>
+                        <span style="font-size:11px;color:#f1f5f9;font-weight:700;" title="Cartas no deck">Deck: <b style="color:#22c55e">${deckCount}</b></span>
+                        <span style="font-size:11px;color:#f1f5f9;font-weight:700;" title="Cartas no descarte">Desc: <b style="color:#94a3b8">${discCount}</b></span>
+                    </div>
+                </div>
+                <div style="height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;margin-bottom:5px;">
+                    <div style="height:100%;width:${deckPct}%;background:${barColor};border-radius:2px;transition:width 0.4s ease;"></div>
+                </div>
+                ${topCards ? `<div style="display:flex;gap:4px;flex-wrap:wrap;">${topCards}</div>` : ''}
+            </div>`;
+    },
+
+    // ── Indicador de borda da tela por estado de turno ───────────────────────
+    _updateScreenBorder(isMyTurn, isSelectTarget, isMugicCaster) {
+        // Só mostra em batalha multiplayer (ou batalha solo para consistência)
+        if (this.appState !== 'BATTLE') {
+            this._setScreenBorder('none');
+            return;
+        }
+
+        if (isSelectTarget) {
+            this._setScreenBorder('target');   // vermelho — escolha o alvo
+        } else if (isMugicCaster) {
+            this._setScreenBorder('mugic');    // roxo — escolha o conjurador
+        } else if (isMyTurn) {
+            this._setScreenBorder('mine');     // verde — seu turno
+        } else {
+            this._setScreenBorder('wait');     // cinza — oponente agindo
+        }
+    },
+
+    _setScreenBorder(state) {
+        let el = document.getElementById('screen-turn-border');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'screen-turn-border';
+            el.style.cssText = `
+                position:fixed;inset:0;pointer-events:none;z-index:7000;
+                border-radius:0;transition:opacity 0.5s ease, box-shadow 0.5s ease;
+            `;
+            document.body.appendChild(el);
+        }
+
+        // Limpa classes anteriores
+        el.className = '';
+
+        if (state === 'none') {
+            el.style.opacity = '0';
+            el.style.boxShadow = 'none';
+            return;
+        }
+
+        const configs = {
+            mine:   { shadow: 'inset 0 0 0 3px rgba(34,197,94,0.6),  inset 0 0 40px rgba(34,197,94,0.12)',  cls: 'screen-border-mine'   },
+            target: { shadow: 'inset 0 0 0 3px rgba(239,68,68,0.7),  inset 0 0 40px rgba(239,68,68,0.15)',  cls: 'screen-border-target' },
+            mugic:  { shadow: 'inset 0 0 0 3px rgba(139,92,246,0.65),inset 0 0 40px rgba(139,92,246,0.12)', cls: 'screen-border-mugic'  },
+            wait:   { shadow: 'none', cls: '' },
+        };
+
+        const cfg = configs[state] || configs.wait;
+        el.style.opacity = state === 'wait' ? '0' : '1';
+        el.style.boxShadow = cfg.shadow;
+        if (cfg.cls) el.classList.add(cfg.cls);
     },
 
     handleMugicClick(index) {
+        if (this.isSpectator) return; // espectadores não interagem
         if (this.turn !== 1) return;
 
         if (this.selectedMugic === index) {
@@ -117,6 +234,7 @@ Object.assign(GameEngine.prototype, {
     },
 
     handleCardClick(player, r, c) {
+        if (this.isSpectator) return; // espectadores não interagem
         const myPlayer = this.multiplayerMode ? this.myPlayerNumber : 1;
 
         // SELECT_MUGIC_CASTER precisa ser tratado ANTES da guarda de turno:
@@ -189,10 +307,12 @@ Object.assign(GameEngine.prototype, {
                 const hasRange = !!(attacker && attacker._hasRange);
 
                 // ── Regra de Range ─────────────────────────────────────────
-                // Sem Range: só pode atacar criaturas expostas
                 if (!exposed && !hasRange) {
-                    this.log(`🛡️ ${clickedCard.name} está protegida! ${hasRange ? '' : 'Use uma criatura com Range para atacar posições protegidas.'}`);
+                    this.log(`🛡️ ${clickedCard.name} está protegida! Use uma criatura com Range para atacar posições protegidas.`);
                     return;
+                }
+                if (!exposed && hasRange) {
+                    this.log(`🏹 ${attacker.name} usa Range para atacar ${clickedCard.name} mesmo protegida!`);
                 }
 
                 // ── Regra de Invisibility ──────────────────────────────────
@@ -302,6 +422,9 @@ Object.assign(GameEngine.prototype, {
         const isSpecial   = this.gameState === 'SELECT_TARGET';
         const isMugic     = this.gameState === 'SELECT_MUGIC_CASTER';
 
+        // Atualiza indicador de borda da tela
+        this._updateScreenBorder(isMyTurnNow, isSpecial, isMugic);
+
         let bannerIcon, bannerText, bannerSub, bannerClass;
         if (isSpecial) {
             bannerIcon  = '🎯';
@@ -363,6 +486,17 @@ Object.assign(GameEngine.prototype, {
                     const isSelected = this.selectedAttacker && this.selectedAttacker.player === player && this.selectedAttacker.r === r && this.selectedAttacker.c === c;
                     const exposed = this.isExposed(player, r, c);
 
+                    // ── Verifica se o atacante selecionado tem Range ──────────
+                    const myP  = this.multiplayerMode ? this.myPlayerNumber : 1;
+                    const enemyP = myP === 1 ? 2 : 1;
+                    const myBoard = myP === 1 ? this.boardP1 : this.boardP2;
+                    const selCard = this.selectedAttacker ? myBoard[this.selectedAttacker.r]?.[this.selectedAttacker.c] : null;
+                    const attackerHasRange = !!(selCard && selCard._hasRange);
+
+                    // Range + SELECT_TARGET → inimigo protegido vira alvo válido
+                    const isRangeTarget = !exposed && attackerHasRange
+                        && this.gameState === 'SELECT_TARGET' && player === enemyP && card;
+
                     const borderStyle = isSelected ? '3px solid #f1c40f' : `2px solid ${player === 2 ? '#c0392b' : '#2980b9'}`;
                     const shadowStyle = isSelected ? 'box-shadow: 0 0 15px #f1c40f; transform: scale(1.05);' : '';
 
@@ -370,12 +504,15 @@ Object.assign(GameEngine.prototype, {
                     let opacityStyle = '';
 
                     if (card) {
-                        if (!exposed) {
+                        if (!exposed && !isRangeTarget) {
+                            // Protegido e não alcançável por Range
                             cursorStyle = 'cursor: not-allowed;';
                             opacityStyle = 'opacity: 0.6; filter: grayscale(30%);';
+                        } else if (isRangeTarget) {
+                            // Protegido mas alcançável — visual distinto
+                            cursorStyle = 'cursor: crosshair;';
+                            opacityStyle = 'opacity: 0.9;';
                         } else {
-                            const myP = this.multiplayerMode ? this.myPlayerNumber : 1;
-                            const enemyP = myP === 1 ? 2 : 1;
                             cursorStyle = (this.isMyTurn() && player === myP) || (this.isMyTurn() && this.gameState === 'SELECT_TARGET' && player === enemyP) ? 'cursor: pointer;' : '';
                         }
                     }
@@ -386,11 +523,10 @@ Object.assign(GameEngine.prototype, {
                         const isDefenderAnim = animState.defender && animState.defender.player === player && animState.defender.r === r && animState.defender.c === c;
                         const animClass = isDefenderAnim && animState.destroyed ? 'defeat-anim' : isAttackerAnim ? 'attack-anim' : isDefenderAnim ? 'hit-anim' : '';
 
-                        // Preview de combate: só em cartas inimigas quando atacante selecionado
-                        const myP    = this.multiplayerMode ? this.myPlayerNumber : 1;
-                        const enemyP = myP === 1 ? 2 : 1;
+                        // Preview de combate: cartas inimigas expostas OU alcançáveis por Range
                         let previewHtml = '';
-                        if (this.gameState === 'SELECT_TARGET' && this.selectedAttacker && player === enemyP && !card._invisibility) {
+                        if (this.gameState === 'SELECT_TARGET' && this.selectedAttacker && player === enemyP
+                            && !card._invisibility && (exposed || isRangeTarget)) {
                             const myBoard  = myP === 1 ? this.boardP1 : this.boardP2;
                             const attCard  = myBoard[this.selectedAttacker.r][this.selectedAttacker.c];
                             if (attCard) {
@@ -473,13 +609,17 @@ Object.assign(GameEngine.prototype, {
                                 🗡️ ${card.battlegear.name}
                             </div>`;
                         } else if (card.battlegear && !card.bgRevealed) {
-                            if (player === 1) {
+                            // Minha carta face-down: mostro o nome (só eu vejo)
+                            // Carta do oponente face-down: mostro apenas "Face Down"
+                            const myP = this.multiplayerMode ? this.myPlayerNumber : 1;
+                            if (player === myP) {
                                 bgDisplayHtml = `<div class="board-bg-hidden" style="cursor:help;"
                                     onmouseenter="game._showBattlegearTooltip(event,${player},${r},${c})"
                                     onmouseleave="game._hideAttackTooltip()"
                                     onmousemove="game._positionTooltip(event,document.getElementById('mugic-tooltip'))">
                                     [Escondido] ${card.battlegear.name}
                                 </div>`;
+                            } else {
                                 bgDisplayHtml = `<div class="board-bg-facedown">Item: Face Down</div>`;
                             }
                         }
@@ -494,7 +634,18 @@ Object.assign(GameEngine.prototype, {
                             );
                             finalBorder = `3px solid ${prev.border}`;
                             finalShadow = `box-shadow: 0 0 14px ${prev.border}88;`;
+                        } else if (isRangeTarget) {
+                            // Alvo protegido alcançável por Range — borda laranja pulsante
+                            finalBorder = '3px solid #e67e22';
+                            finalShadow = 'box-shadow: 0 0 12px rgba(230,126,34,0.6); animation: range-pulse 1.2s ease-in-out infinite;';
                         }
+
+                        // Badge Range: aparece sobre a carta quando ela é alvo protegido alcançável
+                        const rangeBadgeHtml = isRangeTarget
+                            ? `<div style="position:absolute;top:4px;right:4px;background:rgba(230,126,34,0.9);
+                                color:#fff;font-size:10px;font-weight:700;padding:2px 5px;border-radius:4px;
+                                z-index:10;pointer-events:none;">🏹 Range</div>`
+                            : '';
 
                         // Pulso crítico: HP < 20%
                         const hpPct = displayEnergy / (displayMaxEnergy || 1);
@@ -529,6 +680,7 @@ Object.assign(GameEngine.prototype, {
                                 title=""
                                 style="border: ${finalBorder}; ${finalShadow} ${cursorStyle} ${opacityStyle} transition: border 0.2s, box-shadow 0.2s; position:relative; overflow:hidden;">
                             ${tribeBoostBadge}
+                            ${rangeBadgeHtml}
                                 ${previewHtml}
                                 <div class="card-header"
                                      onmouseenter="game._showCreatureTooltip(event,${player},${r},${c})"

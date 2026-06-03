@@ -16,8 +16,13 @@ Object.assign(GameEngine.prototype, {
         if (card.mugicCounters === undefined) card.mugicCounters = 0;
         if (bg) {
             card.battlegear = JSON.parse(JSON.stringify(bg));
-            card.bgRevealed = !!card.battlegear.faceUp;
-            if (card.bgRevealed) this._revealBattlegear(card);
+            if (card.battlegear.faceUp) {
+                // Deixa _revealBattlegear definir bgRevealed e aplicar todos os efeitos
+                // (elemento, passivas, stats, Range…). NÃO setar bgRevealed antes.
+                this._revealBattlegear(card);
+            } else {
+                card.bgRevealed = false;
+            }
         }
         return card;
     },
@@ -291,12 +296,27 @@ Object.assign(GameEngine.prototype, {
         const counter = document.getElementById('draft-counter');
         const limit = this._getDraftLimit();
         if (counter) counter.innerText = `${this.draftedCards.length} / ${limit} Escolhidas`;
+
+        // Atualiza o texto de instrução conforme o modo
+        const instrEl = document.getElementById('draft-instructions');
+        if (instrEl) {
+            const modeLabel = this.gameMode === '1v1' ? '1 criatura'
+                            : this.gameMode === '3v3' ? '3 criaturas'
+                            : '6 criaturas';
+            instrEl.textContent = `Selecione exatamente ${modeLabel} para formar o seu exército!`;
+        }
         const full = this.draftedCards.length === limit;
         const btnStart = document.getElementById('btn-start-battle');
         if (btnStart) {
             btnStart.classList.toggle('hidden', !full);
             btnStart.style.display = full ? 'block' : 'none';
         }
+        // Botões salvar/exportar: visíveis assim que tiver pelo menos 1 criatura
+        const hasDraft = this.draftedCards.length > 0;
+        const btnSave   = document.getElementById('btn-save-deck');
+        const btnExport = document.getElementById('btn-export-deck');
+        if (btnSave)   { btnSave.classList.toggle('hidden', !hasDraft);   btnSave.style.display   = hasDraft ? 'inline-block' : 'none'; }
+        if (btnExport) { btnExport.classList.toggle('hidden', !hasDraft); btnExport.style.display = hasDraft ? 'inline-block' : 'none'; }
         this.updateSynergyPreview();
         this.updateDeckStats();
     },

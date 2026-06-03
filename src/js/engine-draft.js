@@ -377,6 +377,8 @@ Object.assign(GameEngine.prototype, {
             finishBtn.classList.remove('hidden');
             finishBtn.style.display = 'block';
         }
+        const saveBg = document.getElementById('btn-save-deck-bg');
+        if (saveBg) { saveBg.classList.remove('hidden'); saveBg.style.display = 'inline-block'; }
 
         this.renderBattlegearDraft();
     },
@@ -956,12 +958,15 @@ Object.assign(GameEngine.prototype, {
         const mgLimit = this._getDraftLimit();
         counter.innerText = `${this.draftedMugics.length} / ${mgLimit} Escolhidas`;
 
+        const saveMg = document.getElementById('btn-save-deck-mg');
         if (this.draftedMugics.length === mgLimit) {
             finishBtn.classList.remove('hidden');
             finishBtn.style.display = 'block';
+            if (saveMg) { saveMg.classList.remove('hidden'); saveMg.style.display = 'inline-block'; }
         } else {
             finishBtn.classList.add('hidden');
             finishBtn.style.display = 'none';
+            if (saveMg) { saveMg.classList.add('hidden'); saveMg.style.display = 'none'; }
         }
     },
 

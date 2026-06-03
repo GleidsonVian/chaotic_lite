@@ -248,6 +248,7 @@ Object.assign(GameEngine.prototype, {
     },
 
     showBurstMugicSelection() {
+        if (this.isSpectator) return;
         const mugicSel = document.getElementById('burst-mugic-selection');
         const handContainer = document.getElementById('burst-hand-container');
         if (!mugicSel || !handContainer) return;
@@ -562,6 +563,7 @@ Object.assign(GameEngine.prototype, {
     },
 
     passBurst(fromRemote = false) {
+        if (this.isSpectator && !fromRemote) return;
         if (!fromRemote) {
             this.sendAction('passBurst');
         }

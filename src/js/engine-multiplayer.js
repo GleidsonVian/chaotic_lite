@@ -16,6 +16,8 @@ Object.assign(GameEngine.prototype, {
         document.getElementById('lobby-room-select').style.display  = 'block';
         document.getElementById('lobby-public-panel').style.display = 'none';
         document.getElementById('lobby-card').style.display         = 'none';
+        // Verifica se há ?sala= na URL ao mostrar a seleção de sala
+        this._checkInviteParam();
     },
 
     _openPublicLobby() {
@@ -86,19 +88,33 @@ Object.assign(GameEngine.prototype, {
                 <div style="flex:1;min-width:0;">
                     <div style="font-size:13px;font-weight:800;color:#f1f5f9;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${room.name}</div>
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                        <span style="font-size:11px;color:#4ade80;font-weight:600;">● 1/2 jogadores</span>
+                        <span style="font-size:11px;color:${room.state==='playing'?'#f59e0b':'#4ade80'};font-weight:600;">
+                            ${room.state==='playing' ? '⚔️ Em andamento' : `● ${room.players}/2 jogadores`}
+                        </span>
+                        ${room.spectators > 0 ? `<span style="font-size:10px;color:#8b5cf6;">👁️ ${room.spectators}</span>` : ''}
                         <span style="font-size:10px;color:#475569;">·</span>
                         <span style="font-size:11px;color:#94a3b8;">${modeIcon[room.gameMode]||'🎮'} ${modeLabel[room.gameMode]||'Aguardando modo'}</span>
                         <span style="font-size:10px;color:#334155;">· ${ago(room.createdAt)}</span>
                     </div>
                 </div>
-                <button onclick="game._quickJoin('${room.code}')" style="
-                    background:linear-gradient(135deg,#16a34a,#22c55e);border:none;border-radius:8px;
-                    color:#000;font-size:12px;font-weight:900;padding:8px 16px;cursor:pointer;
-                    white-space:nowrap;font-family:inherit;transition:transform 0.15s;
-                " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                    Entrar →
-                </button>
+                <div style="display:flex;gap:6px;">
+                    ${room.state === 'waiting' ? `
+                    <button onclick="game._quickJoin('${room.code}')" style="
+                        background:linear-gradient(135deg,#16a34a,#22c55e);border:none;border-radius:8px;
+                        color:#000;font-size:12px;font-weight:900;padding:8px 14px;cursor:pointer;
+                        white-space:nowrap;font-family:inherit;transition:transform 0.15s;
+                    " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        Entrar →
+                    </button>` : ''}
+                    ${room.state === 'playing' ? `
+                    <button onclick="game.spectateRoom('${room.code}')" style="
+                        background:linear-gradient(135deg,#4f46e5,#7c3aed);border:none;border-radius:8px;
+                        color:#fff;font-size:12px;font-weight:700;padding:8px 14px;cursor:pointer;
+                        white-space:nowrap;font-family:inherit;transition:transform 0.15s;
+                    " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        👁️ Assistir
+                    </button>` : ''}
+                </div>
             </div>`).join('');
     },
 
@@ -106,6 +122,258 @@ Object.assign(GameEngine.prototype, {
         const codeEl = document.getElementById('lobby-code-input');
         if (codeEl) codeEl.value = code;
         this._joinRoom();
+    },
+
+    // ── Entrar como espectador ────────────────────────────────────────────────
+    spectateRoom(code) {
+        if (!code) {
+            const input = document.getElementById('lobby-code-input');
+            code = input ? input.value.trim().toUpperCase() : '';
+        }
+        if (!code || code.length !== 4) {
+            this.showAlert('Código inválido', 'Digite um código de sala de 4 letras para espectatar.');
+            return;
+        }
+        if (!this.socket || !this.socket.connected) {
+            this.showAlert('Sem conexão', 'Conecte-se ao servidor primeiro.');
+            return;
+        }
+        const name = this._getPlayerName() || 'Espectador';
+        this.socket.emit('spectate_room', { code, playerName: name });
+    },
+
+    // ── Overlay de espera de reconexão do oponente ────────────────────────────
+    _showReconnectWaitOverlay(opponentName, totalSeconds) {
+        const old = document.getElementById('reconnect-wait-overlay');
+        if (old) old.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'reconnect-wait-overlay';
+        overlay.style.cssText = `
+            position:fixed;inset:0;z-index:8900;
+            display:flex;align-items:center;justify-content:center;
+            background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);`;
+        overlay.innerHTML = `
+            <div style="background:#0f172a;border:1px solid #334155;border-radius:16px;
+                padding:32px 40px;text-align:center;max-width:380px;width:90%;
+                box-shadow:0 16px 48px rgba(0,0,0,0.8);">
+                <div style="font-size:40px;margin-bottom:12px;">📡</div>
+                <h3 style="color:#f1f5f9;margin:0 0 6px;font-size:18px;">${opponentName} desconectou</h3>
+                <p style="color:#64748b;font-size:13px;margin:0 0 20px;">Aguardando reconexão...</p>
+                <div style="position:relative;height:8px;background:#1e293b;border-radius:4px;overflow:hidden;margin-bottom:14px;">
+                    <div id="reconnect-wait-bar" style="height:100%;background:#f59e0b;border-radius:4px;
+                        width:100%;transition:width 1s linear;"></div>
+                </div>
+                <div id="reconnect-wait-count" style="font-size:28px;font-weight:900;color:#f59e0b;">${totalSeconds}s</div>
+                <p style="color:#475569;font-size:11px;margin:8px 0 0;">O jogo continuará automaticamente se ele voltar.</p>
+            </div>`;
+        document.body.appendChild(overlay);
+
+        // Countdown
+        let remaining = totalSeconds;
+        this._reconnectWaitTimer = setInterval(() => {
+            remaining--;
+            const countEl = document.getElementById('reconnect-wait-count');
+            const barEl   = document.getElementById('reconnect-wait-bar');
+            if (countEl) countEl.textContent = `${remaining}s`;
+            if (barEl)   barEl.style.width   = `${(remaining / totalSeconds) * 100}%`;
+            if (remaining <= 0) this._hideReconnectWaitOverlay();
+        }, 1000);
+    },
+
+    _hideReconnectWaitOverlay() {
+        clearInterval(this._reconnectWaitTimer);
+        const overlay = document.getElementById('reconnect-wait-overlay');
+        if (overlay) overlay.remove();
+    },
+
+    _sendBoardStateToSpectator() {
+        if (!this.socket || !this.myPlayerNumber) return;
+        this.socket.emit('sync_state', {
+            boardP1:          JSON.parse(JSON.stringify(this.boardP1)),
+            boardP2:          JSON.parse(JSON.stringify(this.boardP2)),
+            activeLocation:   this.activeLocation ? JSON.parse(JSON.stringify(this.activeLocation)) : null,
+            locationDeck:     JSON.parse(JSON.stringify(this.locationDeck || [])),
+            turn:             this.turn,
+            gameState:        this.gameState,
+            appState:         this.appState,
+            p1AttackHand:     JSON.parse(JSON.stringify(this.p1AttackHand || [])),
+            p2AttackHand:     JSON.parse(JSON.stringify(this.p2AttackHand || [])),
+            p1AttackDeck:     JSON.parse(JSON.stringify(this.p1AttackDeck || [])),
+            p2AttackDeck:     JSON.parse(JSON.stringify(this.p2AttackDeck || [])),
+            p1AttackDiscard:  JSON.parse(JSON.stringify(this.p1AttackDiscard || [])),
+            p2AttackDiscard:  JSON.parse(JSON.stringify(this.p2AttackDiscard || [])),
+        });
+    },
+
+    _showSpectatorBanner(p1Name, p2Name, spectatorCount) {
+        const old = document.getElementById('spectator-banner');
+        if (old) old.remove();
+
+        const banner = document.createElement('div');
+        banner.id = 'spectator-banner';
+        banner.style.cssText = `
+            position: fixed; top: 0; left: 0; right: 0; z-index: 8000;
+            background: linear-gradient(90deg, #7c3aed, #4f46e5);
+            color: white; padding: 8px 16px;
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 13px; font-weight: 600; font-family: inherit;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+        `;
+        banner.innerHTML = `
+            <span>👁️ Modo Espectador — <strong>${p1Name}</strong> vs <strong>${p2Name}</strong></span>
+            <span id="spectator-count" style="background:rgba(255,255,255,0.2);border-radius:12px;padding:2px 10px;font-size:11px;">
+                👁️ ${spectatorCount} espectador${spectatorCount !== 1 ? 'es' : ''}
+            </span>
+        `;
+        document.body.appendChild(banner);
+
+        // Bloqueia qualquer interação com o tabuleiro
+        this.isSpectator = true;
+    },
+
+    _updateSpectatorCount(count) {
+        const el = document.getElementById('spectator-count');
+        if (el) el.textContent = `👁️ ${count} espectador${count !== 1 ? 'es' : ''}`;
+    },
+
+    // ── Chat ─────────────────────────────────────────────────────────────────
+
+    sendChat() {
+        const input = document.getElementById('chat-input');
+        if (!input) return;
+        const msg = input.value.trim();
+        if (!msg) return;
+        input.value = '';
+
+        // Para o indicador de digitando
+        this._stopTypingIndicator();
+
+        // Mostra a própria mensagem imediatamente
+        this._receiveChatMessage('__me__', msg, Date.now(), false);
+
+        // Usa sendAction — o mesmo canal confiável das jogadas do jogo
+        this.sendAction('chat_msg', { msg });
+    },
+
+    // Chama isso no keyup do input de chat
+    _onChatInputKey() {
+        // Envia sinal de "digitando" com debounce de 2s
+        if (!this._typingTimeout) {
+            this.sendAction('chat_typing');
+        }
+        clearTimeout(this._typingTimeout);
+        this._typingTimeout = setTimeout(() => {
+            this._typingTimeout = null;
+        }, 2000);
+    },
+
+    _stopTypingIndicator() {
+        clearTimeout(this._typingTimeout);
+        this._typingTimeout = null;
+        // Esconde o indicador próprio (não relevante, mas limpa estado)
+    },
+
+    _showTypingIndicator(name) {
+        const box = document.getElementById('chat-messages');
+        if (!box) return;
+
+        // Remove indicador anterior se existir
+        const old = document.getElementById('chat-typing-indicator');
+        if (old) old.remove();
+
+        const el = document.createElement('div');
+        el.id = 'chat-typing-indicator';
+        el.style.cssText = 'padding:4px 8px;display:flex;align-items:center;gap:6px;';
+        el.innerHTML = `
+            <span style="font-size:10px;color:#475569;">${name} está digitando</span>
+            <span style="display:flex;gap:3px;align-items:center;">
+                ${[0,1,2].map(i => `<span style="width:5px;height:5px;border-radius:50%;background:#475569;
+                    animation:typingDot 1.2s ${i*0.2}s ease-in-out infinite;display:inline-block;"></span>`).join('')}
+            </span>`;
+        box.appendChild(el);
+        box.scrollTop = box.scrollHeight;
+
+        // Adiciona keyframe se ainda não existe
+        if (!document.getElementById('typing-anim')) {
+            const s = document.createElement('style');
+            s.id = 'typing-anim';
+            s.textContent = `@keyframes typingDot {
+                0%,60%,100% { opacity:0.3; transform:translateY(0); }
+                30% { opacity:1; transform:translateY(-3px); }
+            }`;
+            document.head.appendChild(s);
+        }
+
+        // Esconde após 3s se não chegar nova mensagem
+        clearTimeout(this._typingHideTimeout);
+        this._typingHideTimeout = setTimeout(() => {
+            document.getElementById('chat-typing-indicator')?.remove();
+        }, 3000);
+    },
+
+    _receiveChatMessage(name, msg, ts, isSpectator) {
+        const box = document.getElementById('chat-messages');
+        if (!box) return;
+
+        // '__me__' é a mensagem própria mostrada imediatamente pelo sendChat
+        const isMe = name === '__me__';
+        const displayName = isMe
+            ? (this.myPlayerNumber === 1 ? (this.p1Name || 'Você') : (this.p2Name || 'Você'))
+            : name;
+        const badge  = isSpectator ? '👁️' : (isMe ? '🟢' : '🔴');
+        const align  = isMe ? 'flex-end' : 'flex-start';
+        const bubbleBg = isMe
+            ? 'linear-gradient(135deg,#1e40af,#2563eb)'
+            : isSpectator
+                ? 'rgba(107,114,128,0.4)'
+                : 'rgba(30,41,59,0.9)';
+        const bubbleBorder = isMe ? '#3b82f6' : isSpectator ? '#6b7280' : '#334155';
+
+        const time = new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+        const el = document.createElement('div');
+        el.style.cssText = `display:flex;flex-direction:column;align-items:${align};margin-bottom:6px;`;
+        el.innerHTML = `
+            <div style="max-width:80%;background:${bubbleBg};border:1px solid ${bubbleBorder};
+                border-radius:${isMe ? '12px 12px 2px 12px' : '12px 12px 12px 2px'};
+                padding:6px 10px;font-size:12px;color:#e2e8f0;word-break:break-word;line-height:1.4;">
+                ${!isMe ? `<div style="font-size:10px;font-weight:700;color:${isSpectator?'#9ca3af':'#94a3b8'};margin-bottom:2px;">${badge} ${displayName}</div>` : ''}
+                ${msg}
+            </div>
+            <div style="font-size:9px;color:#475569;margin-top:2px;">${time}</div>
+        `;
+
+        box.appendChild(el);
+        box.scrollTop = box.scrollHeight;
+
+        // Notificação se o painel estiver fechado
+        if (!this._chatOpen) {
+            const badge_el = document.getElementById('chat-badge');
+            if (badge_el) {
+                this._chatUnread = (this._chatUnread || 0) + 1;
+                badge_el.textContent = this._chatUnread;
+                badge_el.style.display = 'flex';
+            }
+        }
+    },
+
+    toggleChat() {
+        const panel = document.getElementById('chat-panel');
+        if (!panel) return;
+        this._chatOpen = !this._chatOpen;
+        panel.style.display = this._chatOpen ? 'flex' : 'none';
+        if (this._chatOpen) {
+            // Zera badge e foca input
+            this._chatUnread = 0;
+            const badge = document.getElementById('chat-badge');
+            if (badge) badge.style.display = 'none';
+            const input = document.getElementById('chat-input');
+            if (input) setTimeout(() => input.focus(), 50);
+            // Scroll para o fim
+            const box = document.getElementById('chat-messages');
+            if (box) box.scrollTop = box.scrollHeight;
+        }
     },
 
     _copyRoomCode() {
@@ -118,6 +386,42 @@ Object.assign(GameEngine.prototype, {
                 setTimeout(() => { btn.textContent = '📋 Copiar'; }, 2000);
             });
         });
+    },
+
+    // Copia um link direto que já entra na sala ao abrir
+    _copyInviteLink() {
+        const code = this._myRoomCode;
+        if (!code) return;
+        const base = this._lobbyPublicUrl || window.location.origin;
+        const link = `${base}?sala=${code}`;
+        navigator.clipboard.writeText(link).then(() => {
+            const btn = document.getElementById('btn-invite-link');
+            if (btn) {
+                const orig = btn.textContent;
+                btn.textContent = '✅ Link copiado!';
+                setTimeout(() => { btn.textContent = orig; }, 2500);
+            }
+        }).catch(() => {
+            // Fallback: prompt manual
+            prompt('Copie o link de convite:', link);
+        });
+    },
+
+    // Detecta ?sala=XXXX na URL e entra automaticamente
+    _checkInviteParam() {
+        const params = new URLSearchParams(window.location.search);
+        const salaCode = params.get('sala');
+        if (!salaCode) return;
+        // Remove o parâmetro da URL sem recarregar
+        const clean = window.location.pathname;
+        window.history.replaceState({}, '', clean);
+        // Pre-preenche o campo de código e entra
+        this.log(`🔗 Link de convite detectado: sala ${salaCode}`);
+        setTimeout(() => {
+            const input = document.getElementById('lobby-code-input');
+            if (input) input.value = salaCode.toUpperCase();
+            this._joinRoom && this._joinRoom();
+        }, 800);
     },
 
     _showWaitingRoom(code, playerNumber) {
@@ -256,6 +560,8 @@ Object.assign(GameEngine.prototype, {
 
     _voteMode(mode) {
         this._myVote = mode;
+        // Persiste voto para sobreviver a reconexões
+        try { sessionStorage.setItem('chaotic_vote', mode); } catch(_) {}
         this.setGameMode(mode); // aplica localmente
 
         // Destaca botão escolhido
@@ -337,12 +643,17 @@ Object.assign(GameEngine.prototype, {
         if (this.draftedCards.length === 0) this.renderDraft();
     },
 
-    _exitLobbyToSolo() {
-        // Desativa multiplayer e vai direto ao draft solo
+    _exitLobbyToSolo(mode = '6v6') {
+        // Desativa multiplayer e vai direto ao draft solo com o modo escolhido
         this.multiplayerMode = false;
-        if (this.socket) { this.socket.disconnect(); this.socket = null; }
+        this.setGameMode(mode);
+        if (this.socket) {
+            this._intentionalDisconnect = true; // impede o overlay de "Conexão perdida"
+            this.socket.disconnect();
+            this.socket = null;
+        }
         this._hideLobby();
-        this.log('🎮 Modo solo ativado.');
+        this.log(`🎮 Modo solo ${mode} ativado.`);
         if (this.draftedCards.length === 0) this.renderDraft();
     },
 
@@ -374,6 +685,8 @@ Object.assign(GameEngine.prototype, {
             this.myPlayerNumber = playerNumber;
             this._myRoomCode    = code;
             this.log(`🌐 Sala ${code} criada — aguardando oponente`);
+            // Persiste para reconexão automática
+            try { sessionStorage.setItem('chaotic_room', JSON.stringify({ code, playerNum: playerNumber, playerName: this._getPlayerName() })); } catch(_) {}
             this._showWaitingRoom(code, playerNumber);
         });
 
@@ -431,14 +744,37 @@ Object.assign(GameEngine.prototype, {
             this.executeRemoteAction(data);
         });
 
+        // Oponente desconectou — aguarda reconexão com countdown
+        this.socket.on('opponent_reconnecting', ({ playerName, timeout }) => {
+            this.log(`⚠️ ${playerName || 'Oponente'} desconectou. Aguardando reconexão (${timeout}s)...`);
+            this._showReconnectWaitOverlay(playerName || 'Oponente', timeout);
+        });
+
+        // Oponente reconectou — cancela o overlay de espera
+        this.socket.on('opponent_reconnected', ({ playerName }) => {
+            this.log(`✅ ${playerName || 'Oponente'} reconectou!`);
+            this._hideReconnectWaitOverlay();
+            // P1 reenvia o estado ao oponente que voltou
+            if (this.myPlayerNumber === 1 && this.appState === 'BATTLE') {
+                setTimeout(() => this._sendBoardStateToSpectator(), 800);
+            }
+        });
+
+        // Abandono definitivo (60s sem reconexão)
         this.socket.on('opponent_disconnected', () => {
-            this.log('❌ Oponente desconectou.');
+            this.log('❌ Oponente abandonou a partida.');
+            this._hideReconnectWaitOverlay();
             this._showOpponentDisconnectBanner();
         });
 
         // ── Eventos de reconexão ──────────────────────────────────────────────
 
         this.socket.on('disconnect', (reason) => {
+            // Desconexão intencional (modo solo, revanche) — silencia o overlay
+            if (this._intentionalDisconnect) {
+                this._intentionalDisconnect = false;
+                return;
+            }
             this.log(`⚠️ Conexão perdida: ${reason}. Tentando reconectar...`);
             this._reconnecting = true;
             this._showReconnectOverlay('Conexão perdida. Reconectando...');
@@ -450,7 +786,31 @@ Object.assign(GameEngine.prototype, {
 
         this.socket.on('reconnect', (attempt) => {
             this.log(`✅ Reconectado após ${attempt} tentativa(s)!`);
-            // O evento 'assigned' vai chegar logo depois e tratar o resync
+
+            // Tenta reentrar na sala automaticamente
+            try {
+                const roomData = JSON.parse(sessionStorage.getItem('chaotic_room') || 'null');
+                if (roomData && roomData.code) {
+                    this.log(`↩️ Tentando reentrar na sala ${roomData.code}...`);
+                    this.socket.emit('rejoin_room', {
+                        code:       roomData.code,
+                        playerNum:  roomData.playerNum,
+                        playerName: roomData.playerName || this._getPlayerName()
+                    });
+                    return; // aguarda rejoin_ok ou rejoin_error
+                }
+            } catch(_) {}
+
+            // Restaura voto de modo se não tinha sala para reentrar
+            try {
+                const savedVote = sessionStorage.getItem('chaotic_vote');
+                if (savedVote && !this._myVote) {
+                    this._myVote = savedVote;
+                    this.setGameMode(savedVote);
+                    this.sendAction('vote_mode', { mode: savedVote });
+                    this._updateVoteStatus();
+                }
+            } catch(_) {}
         });
 
         this.socket.on('reconnect_failed', () => {
@@ -459,15 +819,95 @@ Object.assign(GameEngine.prototype, {
             this.log('❌ Falha ao reconectar após 10 tentativas.');
         });
 
+        // Reentrada na sala confirmada
+        this.socket.on('rejoin_ok', ({ code, playerNum }) => {
+            this.myPlayerNumber = playerNum;
+            this._myRoomCode    = code;
+            this._reconnecting  = false;
+            this._hideReconnectOverlay();
+            this.log(`↩️ Voltou à sala ${code} como Jogador ${playerNum}!`);
+            // Pede o estado atual ao oponente
+            setTimeout(() => {
+                if (this.socket) this.socket.emit('spectate_request_state');
+            }, 500);
+        });
+
+        this.socket.on('rejoin_error', ({ message }) => {
+            this._reconnecting = false;
+            this._updateReconnectOverlay(`Não foi possível reentrar: ${message}`, true);
+            try { sessionStorage.removeItem('chaotic_room'); } catch(_) {}
+        });
+
         this.socket.on('reconnect_error', () => {
             // silencioso — o overlay já está visível
         });
 
-        // ── Resposta ao pedido de resync (servidor envia estado atual) ─────────
+        // ── Resposta ao pedido de resync ──────────────────────────────────────
         this.socket.on('resync_state', (data) => {
             this.log('📡 Estado de jogo restaurado!');
             this._applyResyncState(data);
             this._hideReconnectOverlay();
+        });
+
+        // sync_state: enviado pelos jogadores para espectadores (e também após morte de criatura)
+        this.socket.on('sync_state', (data) => {
+            if (!this.isSpectator) return; // jogadores já processam via action
+            this._applyResyncState(data);
+            this.renderBoard();
+            this.renderLocation && this.renderLocation();
+        });
+
+        // ── Modo espectador ───────────────────────────────────────────────────
+        this.socket.on('spectate_joined', ({ p1Name, p2Name, spectatorCount, gameMode }) => {
+            this.isSpectator     = true;
+            this.multiplayerMode = true;
+            this.p1Name          = p1Name;
+            this.p2Name          = p2Name;
+            if (gameMode) this.setGameMode(gameMode);
+
+            this.log(`👁️ Entrando como espectador — ${p1Name} vs ${p2Name} (${spectatorCount} espectadores)`);
+
+            // Navega para a tela de batalha
+            const lobby  = document.getElementById('lobby-screen');
+            const setup  = document.getElementById('setup-screen');
+            const game   = document.getElementById('game-container');
+            const draft  = document.getElementById('draft-screen');
+            const battle = document.getElementById('battle-screen');
+            if (lobby)  lobby.style.display  = 'none';
+            if (setup)  setup.style.display  = 'none';
+            if (game)   game.style.display   = '';
+            if (draft)  draft.classList.add('hidden');
+            if (battle) battle.classList.remove('hidden');
+
+            this.appState = 'BATTLE';
+            this._showSpectatorBanner(p1Name, p2Name, spectatorCount);
+
+            // Solicita o estado atual do tabuleiro via servidor
+            if (this.socket) this.socket.emit('spectate_request_state');
+        });
+
+        this.socket.on('spectate_error', ({ message }) => {
+            this.showAlert('❌ Erro ao Espectatar', message);
+        });
+
+        this.socket.on('spectator_joined', ({ name, count }) => {
+            this._updateSpectatorCount(count);
+            this.log(`👁️ ${name} entrou como espectador (${count} total).`);
+            // Só P1 envia o estado (evita duplicata)
+            if (this.myPlayerNumber === 1 && this.appState === 'BATTLE') {
+                this._sendBoardStateToSpectator();
+            }
+        });
+
+        this.socket.on('spectator_left', ({ count }) => {
+            this._updateSpectatorCount(count);
+        });
+
+        // Espectador pediu o estado — P1 responde com o tabuleiro atual
+        this.socket.on('spectate_send_state', () => {
+            if (this.myPlayerNumber === 1 && this.appState === 'BATTLE') {
+                this._sendBoardStateToSpectator();
+            }
         });
 
         // Recebe URL pública do ngrok quando ela fica disponível (pode chegar depois da conexão)
@@ -541,26 +981,52 @@ Object.assign(GameEngine.prototype, {
 
     _applyResyncState(data) {
         if (!data) return;
-        // Restaura apenas os campos que podem ter mudado durante a desconexão
-        if (data.boardP1)        this.boardP1        = data.boardP1;
-        if (data.boardP2)        this.boardP2        = data.boardP2;
-        if (data.turn !== undefined) this.turn       = data.turn;
-        if (data.activeLocation) this.activeLocation = data.activeLocation;
-        if (data.locationDeck)   this.locationDeck   = data.locationDeck;
-        if (data.p1AttackHand)   this.p1AttackHand   = data.p1AttackHand;
-        if (data.p2AttackHand)   this.p2AttackHand   = data.p2AttackHand;
-        if (data.playerMugics)   this.playerMugics   = data.playerMugics;
-        if (data.p2Mugics)       this.p2Mugics       = data.p2Mugics;
 
-        this.renderBoard();
-        this.renderMugics();
-        this.renderLocation();
+        // ── Estado de batalha ─────────────────────────────────────────────────
+        if (data.boardP1)            this.boardP1        = data.boardP1;
+        if (data.boardP2)            this.boardP2        = data.boardP2;
+        if (data.turn !== undefined) this.turn           = data.turn;
+        if (data.activeLocation)     this.activeLocation = data.activeLocation;
+        if (data.locationDeck)       this.locationDeck   = data.locationDeck;
+        if (data.p1AttackHand)       this.p1AttackHand   = data.p1AttackHand;
+        if (data.p2AttackHand)       this.p2AttackHand   = data.p2AttackHand;
+        if (data.p1AttackDeck)       this.p1AttackDeck    = data.p1AttackDeck;
+        if (data.p2AttackDeck)       this.p2AttackDeck    = data.p2AttackDeck;
+        if (data.p1AttackDiscard)    this.p1AttackDiscard = data.p1AttackDiscard;
+        if (data.p2AttackDiscard)    this.p2AttackDiscard = data.p2AttackDiscard;
+        if (data.playerMugics)       this.playerMugics   = data.playerMugics;
+        if (data.p2Mugics)           this.p2Mugics       = data.p2Mugics;
+        if (data.appState)           this.appState       = data.appState;
+        if (data.gameState)          this.gameState      = data.gameState;
+
+        // ── Draft (reconexão durante fase de draft) ───────────────────────────
+        if (data.draftedCards)       this.draftedCards       = data.draftedCards;
+        if (data.draftedBattlegears) this.draftedBattlegears = data.draftedBattlegears;
+        if (data.draftedMugics)      this.draftedMugics      = data.draftedMugics;
+        if (data.draftedAttacks)     this.draftedAttacks     = data.draftedAttacks;
+        if (data.draftState)         this.draftState         = data.draftState;
+
+        // ── Voto de modo (restaura UI de votação se ainda no lobby) ──────────
+        if (data.oppVote && !this._oppVote) {
+            this._oppVote = data.oppVote;
+            this._updateVoteStatus && this._updateVoteStatus();
+        }
+
+        // ── Re-renderiza a tela correta conforme estado restaurado ────────────
+        if (this.appState === 'BATTLE') {
+            this.renderBoard();
+            this.renderMugics();
+            this.renderLocation && this.renderLocation();
+        } else if (this.appState === 'DRAFT') {
+            this.renderDraft && this.renderDraft();
+        }
     },
 
     // ─── Actions ─────────────────────────────────────────────────────────────
 
     sendAction(type, data = {}) {
         if (!this.socket || !this.multiplayerMode) return;
+        if (this.isSpectator) return; // espectadores nunca enviam ações
 
         // Se desconectado, enfileira a action para reenviar após reconexão
         if (!this.socket.connected) {
@@ -694,6 +1160,50 @@ Object.assign(GameEngine.prototype, {
                 this.log(`📍 Local Inicial: ${this.activeLocation ? this.activeLocation.name : '—'}!`);
                 if (this.activeLocation) this.showLocationToast(this.activeLocation, false);
                 break;
+
+            case 'rematch_request':
+                this._handleRematchRequest && this._handleRematchRequest();
+                break;
+
+            case 'rematch_accept':
+                // Oponente aceitou — executa rematch do meu lado
+                this._executeMultiplayerRematch && this._executeMultiplayerRematch();
+                break;
+
+            case 'chat_msg': {
+                const senderName = this.myPlayerNumber === 1
+                    ? (this.p2Name || 'Oponente')
+                    : (this.p1Name || 'Oponente');
+                // Remove indicador de digitando ao receber mensagem
+                document.getElementById('chat-typing-indicator')?.remove();
+                clearTimeout(this._typingHideTimeout);
+                this._receiveChatMessage(senderName, data.msg, Date.now(), false);
+                break;
+            }
+
+            case 'tournament_start':
+                // Oponente iniciou torneio — sincroniza estado e aceita rematch
+                this._tournament = data.t ? { ...data.t } : { p1Wins:0, p2Wins:0, game:1, maxWins:2 };
+                this.log(`🏆 Torneio iniciado — Melhor de ${this._tournament.maxWins * 2 - 1}!`);
+                this._handleRematchRequest && this._handleRematchRequest();
+                break;
+
+            case 'tournament_score':
+                // Sincroniza placar intermediário
+                if (data.t && this._tournament) {
+                    this._tournament.p1Wins = data.t.p1Wins;
+                    this._tournament.p2Wins = data.t.p2Wins;
+                    this._tournament.game   = data.t.game;
+                }
+                break;
+
+            case 'chat_typing': {
+                const typingName = this.myPlayerNumber === 1
+                    ? (this.p2Name || 'Oponente')
+                    : (this.p1Name || 'Oponente');
+                this._showTypingIndicator(typingName);
+                break;
+            }
         }
     },
 
@@ -797,6 +1307,10 @@ Object.assign(GameEngine.prototype, {
         this.renderLocation();
         const myRole = this.myPlayerNumber === 1 ? 'Jogador 1 (você ataca primeiro)' : 'Jogador 2 (aguarde o Jogador 1)';
         this.log(`⚔️ Batalha Multiplayer iniciada! ${myRole}`);
+
+        // Mostra botão de chat (só em partidas multiplayer reais)
+        const chatBtn = document.getElementById('chat-toggle-btn');
+        if (chatBtn) chatBtn.style.display = 'flex';
     },
 
 });

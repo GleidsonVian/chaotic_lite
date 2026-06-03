@@ -869,6 +869,7 @@ Object.assign(GameEngine.prototype, {
     },
 
     confirmAttack(cardIndex, fromRemote = false) {
+        if (this.isSpectator && !fromRemote) return;
         const modal = document.getElementById("attack-modal");
         if (modal) {
             modal.classList.add('hidden');
@@ -1087,14 +1088,33 @@ Object.assign(GameEngine.prototype, {
                     break;
                 }
                 case "peek_location_deck": {
-                    const top = this.locationDeck ? this.locationDeck.slice(-2).reverse().map(l => l.name).join(', ') : '';
-                    this.log(`👁️ Flash Kick: topo do Location Deck — [${top || 'vazio'}]`);
+                    // Informação privada — só mostra para quem usou o ataque
+                    const isMyAtk = this.multiplayerMode
+                        ? attackingPlayer === this.myPlayerNumber
+                        : attackingPlayer === 1;
+                    if (isMyAtk) {
+                        const top = this.locationDeck ? this.locationDeck.slice(-2).reverse().map(l => l.name).join(', ') : '';
+                        this.log(`👁️ Flash Kick: topo do Location Deck — [${top || 'vazio'}]`);
+                        // Mostra popup para não perder a info no log
+                        this._showPeekPopup('📍 Próximos Locais', top || '(deck vazio)');
+                    } else {
+                        this.log(`👁️ Oponente usou Flash Kick — espreitou o Location Deck.`);
+                    }
                     break;
                 }
                 case "peek_attack_deck": {
+                    // Informação privada — só mostra para quem usou o ataque
+                    const isMyAtkP = this.multiplayerMode
+                        ? attackingPlayer === this.myPlayerNumber
+                        : attackingPlayer === 1;
                     const myDeck = attackingPlayer === 1 ? this.p1AttackDeck : this.p2AttackDeck;
-                    const top2 = myDeck.slice(-2).reverse().map(a => a.name).join(', ');
-                    this.log(`👁️ Squeeze Play: topo do seu Attack Deck — [${top2 || 'vazio'}]`);
+                    if (isMyAtkP) {
+                        const top2 = myDeck.slice(-2).reverse().map(a => a.name).join(', ');
+                        this.log(`👁️ Squeeze Play: topo do seu Attack Deck — [${top2 || 'vazio'}]`);
+                        this._showPeekPopup('🃏 Próximas Cartas de Ataque', top2 || '(deck vazio)');
+                    } else {
+                        this.log(`👁️ Oponente usou Squeeze Play — espreitou o próprio deck.`);
+                    }
                     break;
                 }
                 case "reveal_battlegear":
@@ -1472,6 +1492,46 @@ Object.assign(GameEngine.prototype, {
     },
 
     // ── Revela o próximo local do deck (chamado ao fim de cada combate) ──────
+    /** Popup privado de peek — auto-dismiss após 4s, só aparece para quem usou o ataque. */
+    _showPeekPopup(title, content) {
+        const existing = document.getElementById('peek-popup');
+        if (existing) existing.remove();
+
+        const popup = document.createElement('div');
+        popup.id = 'peek-popup';
+        popup.style.cssText = `
+            position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%) translateY(20px);
+            background: rgba(10,15,30,0.97); border: 2px solid #8b5cf6;
+            border-radius: 12px; padding: 14px 22px; z-index: 9998;
+            text-align: center; color: white; font-family: inherit;
+            box-shadow: 0 0 28px rgba(139,92,246,0.4);
+            animation: peekIn 0.3s ease forwards;
+            min-width: 260px; max-width: 400px;
+        `;
+        popup.innerHTML = `
+            <div style="font-size:11px;color:#8b5cf6;font-weight:700;text-transform:uppercase;
+                letter-spacing:.08em;margin-bottom:6px;">👁️ ${title}</div>
+            <div style="font-size:14px;font-weight:600;color:#e2e8f0;line-height:1.5;">${content}</div>
+            <div style="font-size:10px;color:#475569;margin-top:6px;">Só você pode ver isso</div>
+        `;
+
+        if (!document.getElementById('peek-anim-style')) {
+            const s = document.createElement('style');
+            s.id = 'peek-anim-style';
+            s.textContent = `
+                @keyframes peekIn  { from{opacity:0;transform:translateX(-50%) translateY(20px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+                @keyframes peekOut { from{opacity:1;transform:translateX(-50%) translateY(0)}    to{opacity:0;transform:translateX(-50%) translateY(10px)} }
+            `;
+            document.head.appendChild(s);
+        }
+
+        document.body.appendChild(popup);
+        setTimeout(() => {
+            popup.style.animation = 'peekOut 0.35s ease forwards';
+            setTimeout(() => popup.remove(), 360);
+        }, 4000);
+    },
+
     _revealNextLocation() {
         if (this.locationDeck.length === 0) return;
         this.activeLocation = this.locationDeck.pop();

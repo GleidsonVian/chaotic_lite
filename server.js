@@ -33,27 +33,30 @@ function genCode() {
 
 // ─── Estado das salas ─────────────────────────────────────────────────────────
 // Map<code, Room>
-// Room: { code, type, name, p1, p2, state, createdAt }
+// Room: { code, type, name, p1, p2, spectators, state, createdAt }
 //   p1/p2: { id, name } | null
+//   spectators: Set<socketId>
 //   state: 'waiting' | 'playing' | 'done'
 const rooms = new Map();
 
 function roomPublicInfo(room) {
     return {
-        code:      room.code,
-        name:      room.name,
-        type:      room.type,
-        players:   (room.p1 ? 1 : 0) + (room.p2 ? 1 : 0),
-        state:     room.state,
-        gameMode:  room.gameMode || null,
-        createdAt: room.createdAt,
+        code:       room.code,
+        name:       room.name,
+        type:       room.type,
+        players:    (room.p1 ? 1 : 0) + (room.p2 ? 1 : 0),
+        spectators: room.spectators ? room.spectators.size : 0,
+        state:      room.state,
+        gameMode:   room.gameMode || null,
+        createdAt:  room.createdAt,
     };
 }
 
 function broadcastPublicRooms() {
     const list = [];
     for (const room of rooms.values()) {
-        if (room.type === 'public' && room.state === 'waiting') {
+        // Mostra salas públicas abertas (waiting) E em andamento (playing — para espectadores)
+        if (room.type === 'public' && (room.state === 'waiting' || room.state === 'playing')) {
             list.push(roomPublicInfo(room));
         }
     }
@@ -82,7 +85,7 @@ io.on('connection', (socket) => {
     socket.on('get_public_rooms', () => {
         const list = [];
         for (const room of rooms.values()) {
-            if (room.type === 'public' && room.state === 'waiting') {
+            if (room.type === 'public' && (room.state === 'waiting' || room.state === 'playing')) {
                 list.push(roomPublicInfo(room));
             }
         }
@@ -102,10 +105,12 @@ io.on('connection', (socket) => {
             state:     'waiting',
             createdAt: Date.now(),
         };
+        room.spectators = new Set();
         rooms.set(code, room);
         socket.join(code);
-        socket.roomCode     = code;
-        socket.playerNumber = 1;
+        socket.roomCode      = code;
+        socket.playerNumber  = 1;
+        socket.isSpectator   = false;
 
         socket.emit('room_created', { code, playerNumber: 1 });
         console.log(`[+] Sala ${code} criada (${room.type}) por ${room.p1.name}`);
@@ -135,8 +140,9 @@ io.on('connection', (socket) => {
         room.p2    = { id: socket.id, name: data.playerName || 'Jogador 2' };
         room.state = 'playing';
         socket.join(code);
-        socket.roomCode     = code;
-        socket.playerNumber = 2;
+        socket.roomCode      = code;
+        socket.playerNumber  = 2;
+        socket.isSpectator   = false;
 
         console.log(`[=] Sala ${code} completa: ${room.p1.name} vs ${room.p2.name}`);
 
@@ -159,21 +165,128 @@ io.on('connection', (socket) => {
         if (room.type === 'public') broadcastPublicRooms();
     });
 
-    // ── Repassar ações do jogo para o outro jogador ───────────────────────────
+    // ── Entrar como espectador ────────────────────────────────────────────────
+    // data: { code: string, playerName: string }
+    socket.on('spectate_room', (data) => {
+        const code = (data.code || '').toUpperCase().trim();
+        const room = rooms.get(code);
+
+        if (!room) {
+            socket.emit('spectate_error', { message: `Sala "${code}" não encontrada.` });
+            return;
+        }
+        if (room.state === 'waiting') {
+            socket.emit('spectate_error', { message: `Sala "${code}" ainda não tem partida em andamento.` });
+            return;
+        }
+
+        socket.join(code);
+        socket.roomCode    = code;
+        socket.isSpectator = true;
+        socket.spectName   = data.playerName || 'Espectador';
+        room.spectators    = room.spectators || new Set();
+        room.spectators.add(socket.id);
+
+        const spectCount = room.spectators.size;
+        socket.emit('spectate_joined', {
+            code,
+            spectatorCount: spectCount,
+            p1Name: room.p1 ? room.p1.name : 'Jogador 1',
+            p2Name: room.p2 ? room.p2.name : 'Jogador 2',
+            gameMode: room.gameMode || null,
+        });
+
+        // Avisa os jogadores que um espectador entrou
+        socket.to(code).emit('spectator_joined', {
+            name:  socket.spectName,
+            count: spectCount,
+        });
+
+        console.log(`[👁] ${socket.spectName} entrou como espectador na sala ${code} (total: ${spectCount})`);
+        if (room.type === 'public') broadcastPublicRooms();
+    });
+
+    // ── Reentrar numa sala após reconexão ────────────────────────────────────
+    // data: { code, playerNum, playerName }
+    socket.on('rejoin_room', (data) => {
+        const code = (data.code || '').toUpperCase().trim();
+        const room = rooms.get(code);
+
+        if (!room) {
+            socket.emit('rejoin_error', { message: 'Sala não encontrada ou já encerrada.' });
+            return;
+        }
+
+        const pn = data.playerNum; // 1 ou 2
+        if (room[`p${pn}`]) {
+            socket.emit('rejoin_error', { message: 'Slot já ocupado.' });
+            return;
+        }
+
+        // Cancela o timer de abandono
+        const timer = room[`p${pn}ReconnectTimer`];
+        if (timer) { clearTimeout(timer); room[`p${pn}ReconnectTimer`] = null; }
+
+        // Restaura o slot
+        room[`p${pn}`]    = { id: socket.id, name: data.playerName || room[`p${pn}DisconnectedName`] || `Jogador ${pn}` };
+        room.state        = 'playing';
+        socket.join(code);
+        socket.roomCode     = code;
+        socket.playerNumber = pn;
+        socket.isSpectator  = false;
+
+        console.log(`[↩] Jogador ${pn} reconectou na sala ${code}`);
+
+        socket.emit('rejoin_ok', { code, playerNum: pn });
+        // Avisa o oponente que o jogador voltou
+        socket.to(code).emit('opponent_reconnected', {
+            playerNum: pn,
+            playerName: room[`p${pn}`].name
+        });
+
+        if (room.type === 'public') broadcastPublicRooms();
+    });
+
+    // ── Repassar ações do jogo — jogadores enviam, todos na sala recebem ──────
     socket.on('action', (data) => {
         const code = socket.roomCode;
         if (!code) return;
+        // Espectadores não podem enviar ações de jogo
+        if (socket.isSpectator) return;
         // Guarda o modo votado na sala (para exibir na lista pública)
         if (data.type === 'vote_mode' && rooms.has(code)) {
             rooms.get(code).gameMode = data.mode;
         }
+        // Envia para todos na sala EXCETO o remetente (inclui espectadores)
         socket.to(code).emit('action', data);
+    });
+
+    // ── Chat em partida ───────────────────────────────────────────────────────
+    socket.on('chat', (data) => {
+        const code = socket.roomCode;
+        if (!code || !rooms.has(code)) return;
+        const room  = rooms.get(code);
+        const name  = socket.isSpectator
+            ? (socket.spectName || 'Espectador')
+            : (socket.playerNumber === 1 ? (room.p1 && room.p1.name) : (room.p2 && room.p2.name)) || `J${socket.playerNumber}`;
+        const msg   = String(data.msg || '').trim().slice(0, 200); // limita a 200 chars
+        if (!msg) return;
+        // Envia para todos na sala EXCETO quem enviou (cliente mostra a própria msg imediatamente)
+        socket.to(code).emit('chat', { name, msg, ts: Date.now(), isSpectator: !!socket.isSpectator });
     });
 
     // ── Sync de estado completo ───────────────────────────────────────────────
     socket.on('sync_state', (state) => {
         const code = socket.roomCode;
         if (code) socket.to(code).emit('sync_state', state);
+    });
+
+    // ── Espectador pede o estado atual (solicita aos jogadores da sala) ───────
+    socket.on('spectate_request_state', () => {
+        const code = socket.roomCode;
+        if (!code) return;
+        // Pede ao P1 da sala que envie o estado
+        socket.to(code).emit('spectate_send_state');
     });
 
     // ── Desconexão ────────────────────────────────────────────────────────────
@@ -183,18 +296,58 @@ io.on('connection', (socket) => {
         if (!code || !rooms.has(code)) return;
 
         const room = rooms.get(code);
-        socket.to(code).emit('opponent_disconnected');
 
-        // Marca como encerrada mas não deleta imediatamente (reconexão)
-        room.state = 'done';
+        if (socket.isSpectator) {
+            // Espectador saiu — só remove do Set
+            if (room.spectators) room.spectators.delete(socket.id);
+            socket.to(code).emit('spectator_left', { count: room.spectators ? room.spectators.size : 0 });
+            console.log(`[👁-] Espectador ${socket.spectName || socket.id} saiu da sala ${code}`);
+            if (room.type === 'public') broadcastPublicRooms();
+            return;
+        }
+
+        const playerNum = socket.playerNumber;
+        const playerName = playerNum === 1
+            ? (room.p1 && room.p1.name) : (room.p2 && room.p2.name);
+
+        // Guarda info do jogador que saiu para permitir reconexão
+        room[`p${playerNum}DisconnectedId`]   = socket.id;
+        room[`p${playerNum}DisconnectedName`] = playerName;
+        room.state = 'reconnecting';
+
+        // Avisa o oponente que vai ter 60s de espera
+        socket.to(code).emit('opponent_reconnecting', {
+            playerNum,
+            playerName,
+            timeout: 60
+        });
+        console.log(`[~] Jogador ${playerNum} (${playerName}) desconectou da sala ${code}. Aguardando 60s...`);
+
+        // Timer de 60s — se não reconectar, encerra
+        const timer = setTimeout(() => {
+            if (!rooms.has(code)) return;
+            const r = rooms.get(code);
+            // Verifica se ainda não reconectou (slot ainda null ou mesmo ID)
+            const slotNull = r[`p${playerNum}`] === null
+                || r[`p${playerNum}`]?.id === socket.id;
+            if (slotNull) {
+                socket.to(code).emit('opponent_disconnected');
+                r.state = 'done';
+                r[`p${playerNum}`] = null;
+                if (!r.p1 && !r.p2) {
+                    rooms.delete(code);
+                    console.log(`[x] Sala ${code} encerrada por timeout.`);
+                }
+                if (r.type === 'public') broadcastPublicRooms();
+            }
+        }, 60 * 1000);
+
+        // Guarda o timer para cancelar se reconectar
+        room[`p${playerNum}ReconnectTimer`] = timer;
+
+        // Zera o slot (socket desapareceu) mas preserva a sala
         if (room.p1 && room.p1.id === socket.id) room.p1 = null;
         if (room.p2 && room.p2.id === socket.id) room.p2 = null;
-
-        // Se ambos saíram, remove a sala
-        if (!room.p1 && !room.p2) {
-            rooms.delete(code);
-            console.log(`[x] Sala ${code} encerrada.`);
-        }
 
         if (room.type === 'public') broadcastPublicRooms();
     });

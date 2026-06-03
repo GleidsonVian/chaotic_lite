@@ -59,6 +59,10 @@ class GameEngine {
         // Histórico de partida completo
         this.matchHistory = []; // array de combates encerrados
 
+        // Torneio (melhor de N)
+        this._tournament = null;
+        // Formato quando ativo: { p1Wins: 0, p2Wins: 0, game: 1, maxWins: 2, mode: '6v6' }
+
         // Multiplayer
         this._myVote    = null;
         this._oppVote   = null;
@@ -140,7 +144,7 @@ class GameEngine {
         }
 
         if (this.nextTurnBtn) {
-            this.nextTurnBtn.addEventListener("click", () => this.nextTurn());
+            this.nextTurnBtn.addEventListener("click", () => { if (!this.isSpectator) this.nextTurn(); });
         }
 
         // Mostra a tela de setup (dificuldade) antes do draft
@@ -149,6 +153,81 @@ class GameEngine {
         this.setAiTribe('auto');
         this._showSetupScreen();
         this.initMultiplayer();
+        this._registerKeyboardShortcuts();
+    }
+
+    _registerKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Ignora quando foco está em input, textarea ou select
+            const tag = document.activeElement ? document.activeElement.tagName : '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            if (this.isSpectator) return; // espectadores não interagem
+
+            // ── T — abre/fecha chat ───────────────────────────────────────────
+            if (e.key === 't' || e.key === 'T') {
+                const chatBtn = document.getElementById('chat-toggle-btn');
+                if (chatBtn && chatBtn.style.display !== 'none') {
+                    e.preventDefault();
+                    this.toggleChat();
+                    if (this._chatOpen) {
+                        const input = document.getElementById('chat-input');
+                        if (input) setTimeout(() => input.focus(), 60);
+                    }
+                }
+                return;
+            }
+
+            // ── Enter — passar no burst ───────────────────────────────────────
+            if (e.key === 'Enter') {
+                const burstModal = document.getElementById('burst-modal');
+                const passBtn    = document.getElementById('btn-burst-pass');
+                if (burstModal && !burstModal.classList.contains('hidden') &&
+                    passBtn && !passBtn.disabled) {
+                    e.preventDefault();
+                    this.passBurst && this.passBurst();
+                }
+                return;
+            }
+
+            // ── Escape — cancelar seleção atual ──────────────────────────────
+            if (e.key === 'Escape') {
+                // Cancela seleção de mugic caster
+                if (this.gameState === 'SELECT_MUGIC_CASTER') {
+                    e.preventDefault();
+                    this.cancelMugicCaster && this.cancelMugicCaster();
+                    return;
+                }
+                // Cancela seleção de atacante
+                if (this.gameState === 'SELECT_TARGET' && this.selectedAttacker) {
+                    e.preventDefault();
+                    this.selectedAttacker = null;
+                    this.gameState = 'IDLE';
+                    this.log('Seleção cancelada.');
+                    this.renderBoard && this.renderBoard();
+                    return;
+                }
+                // Fecha modal de ataque se estiver aberto
+                const attackModal = document.getElementById('attack-modal');
+                if (attackModal && !attackModal.classList.contains('hidden')) {
+                    e.preventDefault();
+                    this.cancelAttackModal && this.cancelAttackModal();
+                    return;
+                }
+            }
+
+            // ── 1, 2, 3 — escolher carta de ataque no modal ───────────────────
+            if (e.key === '1' || e.key === '2' || e.key === '3') {
+                const attackModal = document.getElementById('attack-modal');
+                if (!attackModal || attackModal.classList.contains('hidden')) return;
+                const index = parseInt(e.key) - 1;
+                const myP   = this.multiplayerMode ? this.myPlayerNumber : 1;
+                const hand  = myP === 1 ? this.p1AttackHand : this.p2AttackHand;
+                if (hand && hand[index] !== undefined) {
+                    e.preventDefault();
+                    this.confirmAttack && this.confirmAttack(index);
+                }
+            }
+        });
     }
 
     _showSetupScreen() {
@@ -166,6 +245,7 @@ class GameEngine {
         if (game)  game.style.display  = '';
 
         this.renderDraft();
+        this.renderSavedDecks && this.renderSavedDecks();
 
         // Mostra dificuldade escolhida no header do draft
         const diff = this.aiDifficulty;
