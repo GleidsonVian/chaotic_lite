@@ -509,13 +509,30 @@ Object.assign(GameEngine.prototype, {
                             : `<div style="width:100%;height:100%;background:#2c3e50;display:flex;align-items:center;justify-content:center;font-size:22px;">⚔️</div>`}
                     </div>
 
-                    <!-- Info da criatura -->
+                    <!-- Info da criatura (stats com bônus do battlegear equipado) -->
                     <div style="flex:1; min-width:0;">
                         <div style="font-weight:bold; color:#ecf0f1; font-size:14px; margin-bottom:2px;">${creature.name}</div>
                         <div style="font-size:10px; color:${tribeColor}; margin-bottom:6px;">${creature.tribe}</div>
-                        <div style="font-size:10px; color:#95a5a6;">
-                            ⚔️${creature.courage} 💪${creature.power} 🧠${creature.wisdom} ⚡${creature.speed} ❤️${creature.energy}
-                        </div>
+                        ${(() => {
+                            const mod = (equipped && equipped.modifiers) ? equipped.modifiers : {};
+                            const stats = [
+                                { icon:'⚔️', key:'courage',  base:creature.courage,  bonus:mod.courage  ||0 },
+                                { icon:'💪', key:'power',    base:creature.power,    bonus:mod.power    ||0 },
+                                { icon:'🧠', key:'wisdom',   base:creature.wisdom,   bonus:mod.wisdom   ||0 },
+                                { icon:'⚡', key:'speed',    base:creature.speed,    bonus:mod.speed    ||0 },
+                                { icon:'❤️', key:'energy',   base:creature.energy,   bonus:mod.energy   ||0 },
+                            ];
+                            return `<div style="display:flex;flex-wrap:wrap;gap:4px;">` +
+                                stats.map(s => {
+                                    const total = s.base + s.bonus;
+                                    const color = s.bonus > 0 ? '#4ade80' : s.bonus < 0 ? '#f87171' : '#95a5a6';
+                                    const bonusLabel = s.bonus !== 0 ? `<span style="font-size:8px;color:${color};"> (${s.bonus > 0 ? '+' : ''}${s.bonus})</span>` : '';
+                                    return `<span style="color:${color};font-weight:${s.bonus !== 0 ? '800' : '400'};">${s.icon}${total}${bonusLabel}</span>`;
+                                }).join(' ') +
+                            `</div>`;
+                        })()}
+                        ${equipped && equipped.elementGranted ? `<div style="font-size:9px;color:#fbbf24;margin-top:2px;">✨ +${equipped.elementGranted}</div>` : ''}
+                        ${equipped && equipped.tribalElement && creature.tribe === equipped.tribalElement.tribe ? `<div style="font-size:9px;color:#fbbf24;margin-top:2px;">✨ +${equipped.tribalElement.element} (tribal)</div>` : ''}
                     </div>
 
                     <!-- Battlegear equipado -->
@@ -1099,26 +1116,65 @@ Object.assign(GameEngine.prototype, {
             }
         });
 
-        const avgStat = (s) => this.draftedCards.length
-            ? Math.round(this.draftedCards.reduce((sum, c) => sum + (c[s] || 0), 0) / this.draftedCards.length)
+        // Stats efetivos por criatura (base + bônus do battlegear equipado)
+        const effCreatures = this.draftedCards.map((card, i) => {
+            const bg  = this.draftedBattlegears && this.draftedBattlegears[i];
+            const mod = (bg && bg.modifiers) ? bg.modifiers : {};
+            return {
+                courage: (card.courage || 0) + (mod.courage || 0),
+                power:   (card.power   || 0) + (mod.power   || 0),
+                wisdom:  (card.wisdom  || 0) + (mod.wisdom  || 0),
+                speed:   (card.speed   || 0) + (mod.speed   || 0),
+                energy:  (card.energy  || 0) + (mod.energy  || 0),
+            };
+        });
+
+        // Média usando stats efetivos
+        const avgStatEff = (s) => effCreatures.length
+            ? Math.round(effCreatures.reduce((sum, c) => sum + (c[s] || 0), 0) / effCreatures.length)
             : 50;
+
+        // Quantas criaturas cumprem o threshold (check ou challenge) — com stats efetivos
+        const countMeeting = (s, mode, threshold) => {
+            return effCreatures.filter(c => {
+                const val = c[s] || 0;
+                return mode === 'check' ? val >= threshold : val >= threshold;
+            }).length;
+        };
 
         let score = (atk.baseDamage || 0) * 2;
 
-        // Bônus elemental se a criatura tem o elemento
+        // Bônus elemental — já considera battlegear via armyElements acima
         if (atk.elementRequirement && armyElements.has(atk.elementRequirement)) {
-            score += (atk.elementDamage || 0) * 1.5;
+            // Conta quantas criaturas têm o elemento (não só se alguma tem)
+            const countWithElem = this.draftedCards.filter((card, i) => {
+                const bg = this.draftedBattlegears && this.draftedBattlegears[i];
+                const elems = new Set([
+                    ...(card.elements || []),
+                    ...(bg && bg.elementGranted ? [bg.elementGranted] : []),
+                    ...(bg && bg.tribalElement && card.tribe === bg.tribalElement.tribe ? [bg.tribalElement.element] : []),
+                ]);
+                return elems.has(atk.elementRequirement);
+            }).length;
+            const ratio = countWithElem / Math.max(1, this.draftedCards.length);
+            score += (atk.elementDamage || 0) * 1.5 * ratio;
         } else if (atk.elementRequirement) {
-            score -= 5; // penalidade leve se nenhuma criatura tem o elemento
+            score -= 5; // penalidade se nenhuma criatura tem o elemento
         }
 
-        // Stat challenge
+        // Stat challenge — usa stats efetivos e conta criaturas que cumprem
         if (atk.statRequirement) {
-            const avg = avgStat(atk.statRequirement);
-            if (atk.statMode === 'check') {
-                score += avg >= (atk.statThreshold || 0) ? (atk.statDamage || 0) : -(atk.statDamage || 0) * 0.3;
+            const threshold = atk.statThreshold || 0;
+            const mode      = atk.statMode || 'check';
+            const meeting   = countMeeting(atk.statRequirement, mode, threshold);
+            const ratio     = meeting / Math.max(1, this.draftedCards.length);
+
+            if (ratio > 0) {
+                // Mais criaturas cumprem = score proporcional maior
+                score += (atk.statDamage || 0) * ratio * (mode === 'check' ? 1.2 : 0.9);
             } else {
-                score += (atk.statDamage || 0) * (avg / 100);
+                // Nenhuma criatura cumpre — penalidade
+                score -= (atk.statDamage || 0) * 0.4;
             }
         }
 
@@ -1235,6 +1291,44 @@ Object.assign(GameEngine.prototype, {
         const rarColors = { 'Ultra Rare':'#e056fd', 'Super Rare':'#74b9ff', 'Rare':'#f9ca24', 'Uncommon':'#6ab04c', 'Common':'#dfe6e9' };
 
         // Filtra e ordena
+        // Pré-calcula stats efetivos das criaturas (base + battlegear) para os indicadores
+        const creatureEffStats = this.draftedCards.map((c, ci) => {
+            const bg  = this.draftedBattlegears[ci];
+            const mod = (bg && bg.modifiers) ? bg.modifiers : {};
+            const elems = new Set([
+                ...(c.elements || []),
+                ...(bg && bg.elementGranted ? [bg.elementGranted] : []),
+                ...(bg && bg.tribalElement && c.tribe === bg.tribalElement.tribe ? [bg.tribalElement.element] : []),
+            ]);
+            return {
+                name:    c.name,
+                courage: c.courage + (mod.courage || 0),
+                power:   c.power   + (mod.power   || 0),
+                wisdom:  c.wisdom  + (mod.wisdom  || 0),
+                speed:   c.speed   + (mod.speed   || 0),
+                energy:  c.energy  + (mod.energy  || 0),
+                elements: elems,
+            };
+        });
+
+        // Retorna lista de criaturas que cumprem o requisito do ataque
+        const getMatchingCreatures = (atk) => {
+            const matches = [];
+            creatureEffStats.forEach(cs => {
+                let ok = false;
+                if (atk.elementRequirement) {
+                    ok = cs.elements.has(atk.elementRequirement);
+                } else if (atk.statRequirement) {
+                    const val = cs[atk.statRequirement] || 0;
+                    ok = atk.statMode === 'challenge'
+                        ? val >= atk.statThreshold   // challenge: só sabe se supera sem o oponente, assume true
+                        : val >= atk.statThreshold;  // check
+                }
+                if (ok) matches.push(cs.name);
+            });
+            return matches;
+        };
+
         let attacks = (this.attacksData || []).map((atk, idx) => ({ atk, idx, score: this._scoreAttack(atk) }));
 
         if (filterElem !== 'all') {
@@ -1264,6 +1358,35 @@ Object.assign(GameEngine.prototype, {
             const totalDmg = (atk.baseDamage || 0)
                 + (hasElem ? (atk.elementDamage || 0) : 0)
                 + (atk.statDamage || 0); // otimista
+
+            // Criaturas que cumprem o requisito (com stats efetivos incluindo battlegear)
+            const hasRequirement = !!(atk.elementRequirement || atk.statRequirement);
+            const matchingCreatures = hasRequirement ? getMatchingCreatures(atk) : [];
+            const allMatch   = hasRequirement && matchingCreatures.length === this.draftedCards.length;
+            const noneMatch  = hasRequirement && matchingCreatures.length === 0;
+            const someMatch  = hasRequirement && matchingCreatures.length > 0 && !allMatch;
+
+            // Badge de compatibilidade
+            let compatBadge = '';
+            if (hasRequirement) {
+                if (allMatch) {
+                    compatBadge = `<div style="display:flex;align-items:center;gap:4px;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.35);border-radius:6px;padding:3px 6px;margin-top:2px;">
+                        <span style="font-size:10px;">✅</span>
+                        <span style="font-size:9px;color:#4ade80;font-weight:700;">Todas as criaturas cumprem</span>
+                    </div>`;
+                } else if (someMatch) {
+                    const names = matchingCreatures.map(n => `<span style="background:rgba(34,197,94,0.15);border-radius:3px;padding:1px 4px;font-size:8px;color:#4ade80;">${n}</span>`).join(' ');
+                    compatBadge = `<div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:6px;padding:3px 6px;margin-top:2px;">
+                        <div style="font-size:9px;color:#fbbf24;font-weight:700;margin-bottom:2px;">⚡ ${matchingCreatures.length}/${this.draftedCards.length} criaturas:</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:2px;">${names}</div>
+                    </div>`;
+                } else {
+                    compatBadge = `<div style="display:flex;align-items:center;gap:4px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:6px;padding:3px 6px;margin-top:2px;">
+                        <span style="font-size:10px;">❌</span>
+                        <span style="font-size:9px;color:#f87171;">Nenhuma criatura cumpre</span>
+                    </div>`;
+                }
+            }
 
             let tags = '';
             if (atk.elementRequirement) {
@@ -1313,6 +1436,9 @@ Object.assign(GameEngine.prototype, {
                 <div style="font-size:10px;color:#94a3b8;background:rgba(0,0,0,0.25);border-radius:6px;padding:6px 8px;line-height:1.5;">
                     ${descHtml || '<span style="color:#475569;">Sem efeitos especiais.</span>'}
                 </div>
+
+                <!-- Indicador de compatibilidade com o time -->
+                ${compatBadge}
             </div>`;
         }).join('');
 
