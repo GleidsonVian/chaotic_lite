@@ -226,12 +226,22 @@ Object.assign(GameEngine.prototype, {
 
     // ── Tooltip de Battlegear no Board ───────────────────────────────────────
 
+    // Versão direta: recebe {bg, card} — usada no modal de ataque
+    _showBattlegearTooltipDirect(event, ref) {
+        if (!ref || !ref.bg) return;
+        this._renderBattlegearTooltip(event, ref.bg, ref.card);
+    },
+
     _showBattlegearTooltip(event, player, r, c) {
         const board = player === 1 ? this.boardP1 : this.boardP2;
         if (!board || !board[r]) return;
         const card = board[r][c];
         if (!card || !card.battlegear) return;
         const bg = card.battlegear;
+        this._renderBattlegearTooltip(event, bg, card);
+    },
+
+    _renderBattlegearTooltip(event, bg, card) {
 
         const tip = document.getElementById('mugic-tooltip');
         if (!tip) return;

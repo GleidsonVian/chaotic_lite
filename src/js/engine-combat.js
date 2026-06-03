@@ -462,7 +462,12 @@ Object.assign(GameEngine.prototype, {
         const effAtk = this._effectiveStats(attacker, attackingPlayer, atkR, atkC);
         const effDef = this._effectiveStats(defender, defPlayer, defR, defC);
 
+        // Guarda referências para o tooltip de battlegear no modal
+        this._combatBgRef_atk = { bg: attacker.battlegear, card: attacker };
+        this._combatBgRef_def = { bg: defender.battlegear, card: defender };
+
         const renderCard = (card, effStats, label) => {
+            const side = card === attacker ? 'atk' : 'def';
             const effEnergy = card.energy;
             const maxEnergy = card.maxEnergy;
             const mugicCounters = card.mugicCounters || 0;
@@ -500,7 +505,12 @@ Object.assign(GameEngine.prototype, {
                 <div class="card-image-container combat-card-image">
                     ${card.image ? `<img src="${card.image}" style="width: 100%; height: 100%; object-fit: cover;" alt="${card.name}">` : `<div class="card-image-placeholder">Sem Imagem</div>`}
                 </div>
-                ${card.battlegear ? `<div class="combat-card-battlegear" title="${card.battlegear.description || 'Equipamento'}">🗡️ ${card.battlegear.name}${!card.bgRevealed ? ' <span style="font-size:9px;opacity:0.6;">(oculto ao oponente)</span>' : ''}</div>` : ''}
+                ${card.battlegear ? `<div class="combat-card-battlegear" style="cursor:help;"
+                    onmouseenter="game._showBattlegearTooltipDirect(event, game._combatBgRef_${side})"
+                    onmouseleave="game._hideAttackTooltip()"
+                    onmousemove="game._positionTooltip(event,document.getElementById('mugic-tooltip'))">
+                    🗡️ ${card.battlegear.name}${!card.bgRevealed ? ' <span style="font-size:9px;opacity:0.6;">(oculto ao oponente)</span>' : ''}
+                </div>` : ''}
                 ${elementsHtml}
 
                 <div class="card-stats" style="grid-template-columns: 1fr 1fr;">
