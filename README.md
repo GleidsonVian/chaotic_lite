@@ -43,98 +43,107 @@ O link do ngrok aparece automaticamente no lobby do jogo ~2s após iniciar.
 | Modo | Formato | Descrição |
 |---|---|---|
 | **6v6 — Padrão** | 6 criaturas por lado | Partida completa com tabuleiro em pirâmide invertida |
-| **3v3 — Rapido** | 3 criaturas por lado | Partida mais curta; 8 times sugeridos exclusivos |
-| **1v1 — Duelo** | 1 criatura por lado | Confronto direto; sem posicionamento |
+| **3v3 — Rápido** | 3 criaturas por lado | Partida mais curta; 8 times sugeridos exclusivos |
+| **1v1 — Duelo** | 1 criatura por lado | Confronto direto; sem tela de posicionamento |
 
-No multiplayer os dois jogadores votam no modo antes da partida começar — a partida só avanca quando ambos concordam.
+No multiplayer os dois jogadores votam no modo antes da partida começar.
 
 ### Fluxo de entrada
 
-| Etapa | Descricao |
+| Etapa | Descrição |
 |---|---|
-| **Tela de Setup** | Escolha dificuldade da IA (Facil/Medio/Dificil) e tribo antes de qualquer coisa |
-| **Lobby Multiplayer** | Tela de espera com link copiavel, slots dos jogadores, campo de nome customizavel e votacao de modo |
-| **Selecao de formacao** | Antes da batalha o jogador posiciona suas criaturas no tabuleiro manualmente |
-| **Reconexao automatica** | Socket.IO reconecta automaticamente; overlay com progresso |
+| **Tela de Setup** | Escolha dificuldade da IA (Fácil/Médio/Difícil) e tribo antes de qualquer coisa |
+| **Lobby Multiplayer** | Tela de espera com link copiável, slots dos jogadores, campo de nome e votação de modo |
+| **Posicionamento** | Antes da batalha o jogador posiciona suas criaturas no tabuleiro manualmente (pulado no 1v1) |
+| **Reconexão automática** | Socket.IO reconecta automaticamente; overlay com progresso |
 
 ### Sistemas de jogo
 
-| Sistema | Descricao |
+| Sistema | Descrição |
 |---|---|
-| **Draft de criaturas** | 92 criaturas com filtros (tribo, stat minimo, passiva, ordenacao) |
-| **Times Sugeridos** | 18 times para 6v6 + 8 times para 3v3 pre-montados; clique para pre-selecionar |
+| **Draft de criaturas** | 92 criaturas com filtros (tribo, stat mínimo, passiva, ordenação) |
+| **Times Sugeridos** | 18 times para 6v6 + 8 times para 3v3 pré-montados; clique para pré-selecionar |
 | **Barra de afinidade** | Cada carta mostra % de sinergia com o time atual em tempo real |
-| **Deck stats em tempo real** | Media de stats, distribuicao de tribos e passivas do deck |
-| **Battlegear** | 29 equipamentos; recomendacao automatica + randomizacao por afinidade |
-| **Mugics** | Pre-selecao automatica das 6 mais sinergicas + botoes Recomendar e Randomizar |
-| **Tabuleiro adaptativo** | Piramide invertida (6v6/3v3) ou duelo direto (1v1) com protecao posicional |
-| **Locais** | Deck de 10 locais; define iniciativa e aplica efeitos passivos de combate; sync no multiplayer |
+| **Deck stats em tempo real** | Média de stats, distribuição de tribos e passivas do deck |
+| **Battlegear** | 29 equipamentos com imagens; recomendação automática + randomização por afinidade |
+| **Mugics** | Pré-seleção automática das 6 mais sinergicas + botões Recomendar e Randomizar |
+| **Tabuleiro adaptativo** | Pirâmide invertida (6v6/3v3) ou duelo direto (1v1) com proteção posicional |
+| **Locais** | Deck de 10 locais; define iniciativa e aplica efeitos passivos de combate |
 | **Iniciativa** | Determinada pelo atributo do Local (Coragem, Poder, Sabedoria ou Velocidade) |
-| **Draft de ataques** | Jogador monta seu deck de ataques antes da batalha (20/12/6 cartas por modo, max 2 copias da mesma) |
-| **Recomendacao de ataques** | Sistema sugere os melhores ataques considerando elementos das criaturas E elementos concedidos por battlegear |
-| **Deck de ataques** | Deck embaralhado; compra ocorre ANTES do modal (sempre escolhe entre 3 cartas como no TCG original) |
-| **Challenge de atributo** | Threshold verificado no preview E na execucao — valores sempre consistentes |
-| **Bonus elemental** | Fire / Water / Earth / Air amplificam dano de ataques compativeis |
-| **Burst Stack (LIFO)** | Janela de resposta apos cada ataque; preview de dano inimigo visivel no burst |
-| **Painel de burst** | Lista o que cada mugic fara e quem sera afetado antes de confirmar |
-| **Morte simultanea** | Se ambas as criaturas morrem no mesmo ataque o resultado e empate no duelo |
+| **Draft de ataques** | Jogador monta seu deck de ataques antes da batalha (20/12/6 cartas por modo, máx 2 cópias) |
+| **Recomendação de ataques** | Sistema sugere os melhores ataques considerando elementos das criaturas E do battlegear |
+| **Deck de ataques** | Deck embaralhado; compra ANTES do modal (sempre 3 opções como no TCG original) |
+| **Challenge de atributo** | Threshold verificado no preview E na execução — valores sempre consistentes |
+| **Bônus elemental** | Fire / Water / Earth / Air amplificam dano de ataques compatíveis |
+| **Burst Stack (LIFO)** | Janela de resposta após cada ataque; preview de dano inimigo visível no burst |
+| **Painel de burst** | Lista o que cada mugic fará e quem será afetado antes de confirmar |
+| **Morte simultânea** | Se ambas as criaturas morrem no mesmo ataque o resultado é empate no duelo |
 | **Sinergia tribal** | OverWorld +COR/SAB · UnderWorld +POD · Mipedian +VEL · Danian +Hive |
-| **IA com 3 niveis** | Facil (aleatorio) · Medio (alvo mais fraco, usa mugics) · Dificil (counter-pick, look-ahead) |
-| **IA usa battlegear** | Sacrifica equipamentos estrategicamente no burst (Medio e Dificil) |
+| **IA com 3 níveis** | Fácil (aleatório) · Médio (alvo mais fraco, usa mugics) · Difícil (counter-pick, look-ahead) |
+| **IA usa battlegear** | Sacrifica equipamentos estrategicamente no burst (Médio e Difícil) |
+| **IA comenta as jogadas** | Mensagens de personalidade no feed em Médio/Difícil (kill, heal, mugic, etc.) |
 
 ### Passivas de criaturas
 
 | Passiva | Efeito |
 |---|---|
-| **Intimidate** | Reduz stat especifico do oponente antes de checar iniciativa |
+| **Intimidate** | Reduz stat específico do oponente antes de checar iniciativa |
 | **Swift** | Adiciona velocidade efetiva para fins de iniciativa |
 | **Strike** | Causa dano extra no primeiro ataque do combate |
 | **Tough** | Reduz todo dano recebido por valor fixo |
-| **Berserk** | Ganha bonus de stat a cada ponto de dano recebido |
-| **Reckless** | Causa dano extra mas o atacante tambem se fere |
+| **Berserk** | Ganha bônus de stat a cada ponto de dano recebido |
+| **Reckless** | Causa dano extra mas o atacante também se fere |
 | **Fireproof** | Imune a dano de elemento Fire |
-| **Range** | Pode atacar criaturas nao-adjacentes |
+| **Range** | Pode atacar criaturas não-adjacentes |
 
 ### Multiplayer
 
-| Recurso | Descricao |
+| Recurso | Descrição |
 |---|---|
-| **Nome customizavel** | Cada jogador define seu nome no lobby antes de entrar |
-| **Votacao de modo** | Ambos os jogadores votam em 1v1 / 3v3 / 6v6; partida so comeca com consenso |
-| **Mugics P1 e P2** | Ambos os jogadores podem lancar mugics corretamente durante o burst |
-| **Sync de estado do tabuleiro** | Apos cada morte de criatura o estado e sincronizado entre os clientes |
-| **Sync de local** | Locais de batalha sao sincronizados entre os jogadores em tempo real |
-| **Reconexao** | Reconexao automatica com overlay de progresso; estado da partida preservado |
+| **Nome customizável** | Cada jogador define seu nome no lobby antes de entrar |
+| **Votação de modo** | Ambos os jogadores votam em 1v1 / 3v3 / 6v6; partida só começa com consenso |
+| **Mugics P1 e P2** | Ambos os jogadores podem lançar mugics corretamente durante o burst |
+| **Sync de estado do tabuleiro** | Após cada morte de criatura o estado é sincronizado entre os clientes |
+| **Sync de local** | Locais de batalha são sincronizados entre os jogadores em tempo real |
+| **Reconexão** | Reconexão automática com overlay de progresso; estado da partida preservado |
 
 ### Interface e UX
 
-| Recurso | Descricao |
+| Recurso | Descrição |
 |---|---|
-| **Preview de combate** | Overlay nas cartas inimigas: veredito, dano estimado dos dois lados, quem tem iniciativa |
-| **Banner de iniciativa** | No modal de ataque: "Voce ataca primeiro!" ou "Inimigo ataca primeiro!" com stats comparados |
-| **Stats com battlegear no modal** | Preview de dano no showAttackModal inclui modificadores de battlegear — sem surpresas |
-| **Preview de dano no burst** | Quando inimigo ataca, o burst mostra quanto dano voce vai tomar antes de decidir resposta |
-| **Tooltips de mugic** | Tooltip rico mostrando alvos exatos de cada mugic durante o burst |
-| **Painel de burst detalhado** | Lista o efeito e o alvo de cada mugic na fila antes de confirmar |
-| **Reveal de battlegear** | Battlegear revelado apenas no confirmAttack, nao na selecao de alvo |
-| **Ataque sem cancelamento** | Apos escolher atacante e alvo o ataque e comprometido — botao Cancelar removido |
-| **Feed de batalha** | Mensagens animadas classificadas por tipo (dano, cura, mugic, morte, local) |
-| **Resumo pos-combate** | Timeline de ataques, total de dano, mugics e curas por duelo |
-| **Historico da partida** | Painel lateral colapsavel com todos os combates da partida |
+| **Banner de turno animado** | "⚔️ SEU TURNO" (verde pulsante) vs "⏳ TURNO DO OPONENTE" (cinza com pontinhos) vs "🎯 ESCOLHA O ALVO!" (vermelho urgente) |
+| **Preview de combate** | Overlay nas cartas inimigas: veredito, dano estimado dos dois lados, quem tem iniciativa com stat e valores |
+| **Intimidate no preview** | Badge laranja "😨 Intimidate: COR −10" aparece no overlay quando o atacante tem a passiva |
+| **Banner de iniciativa** | No modal de ataque: "Você ataca primeiro!" ou "Inimigo ataca primeiro!" com stats comparados |
+| **Preview de dano no burst** | Quando inimigo ataca, o burst mostra quanto dano você vai tomar antes de decidir resposta |
+| **Hover de ataque no burst** | Passar o mouse no nome do ataque inimigo no burst mostra tooltip com todos os efeitos |
+| **Tooltips ricos de mugic** | Tooltip com efeito, custo real, penalidade de tribo e status de counters disponíveis |
+| **Tooltips de ataque** | Hover em cada carta de ataque mostra dano total esperado e todos os efeitos em texto legível |
+| **Tooltips de battlegear** | Hover no battlegear (board e modal de ataque) mostra imagem, bônus de stats, elemento concedido e descrição |
+| **Tooltips de criatura no board** | Hover na imagem/nome da criatura: stats completos, imagem, elementos, passivas, battlegear e sinergia |
+| **Notificação de burst na aba** | Título da aba pisca "🔔 Burst Aberto! — Chaotic Lite" quando o burst abre fora do seu turno |
+| **Overlay ambiental do local** | Efeito visual no board por tipo de local: névoa azul (Water), brasas (Fire), âmbar (Earth), brilho frio (Air), etc. |
+| **Tribe highlight do local** | Criaturas beneficiadas pelo local ganham borda dourada pulsante + badge "⭐ Local" |
+| **Counter pendente de local** | Criaturas que ganharão counter ao engajar (ex: Gigantempopolis) mostram "♪ +1" tracejado antes do combate |
+| **Counters de mugic** | Badge roxo pulsante para 2+ counters; counter pendente (tracejado) para efeitos de local |
+| **Animação de morte** | Carta explode em 20 fragmentos (grid 4×5) voando para fora com rotação, usando recortes reais da imagem |
+| **Animação de ataque** | Carta do atacante salta na direção do defensor usando posição exata (data-pos) — sem erro com criaturas de mesmo nome |
 | **Floating damage numbers** | `-35` vermelho / `+20` verde flutuando sobre a carta ao receber dano/cura |
-| **Barra de vida** | Barra colorida (verde -> amarelo -> vermelho) com pulso critico em HP < 20% |
-| **Animacao de ataque** | Carta do atacante salta na direcao do defensor + flash dourado |
-| **Animacao de entrada** | Cartas "caem" em posicao com stagger ao inicio da batalha |
-| **Animacao de morte** | Gotas de sangue animadas ao morrer |
-| **Minimizar modais** | Botao em qualquer modal; fica como pilula flutuante para restaurar depois |
-| **Filtros no draft** | Tribo / stat minimo / passiva / ordenacao com contador de resultados |
-| **Botoes de voltar** | Em todas as fases do draft: criaturas <-> battlegears <-> mugics |
+| **Drag & drop no board** | Arrastar criatura para reposicionar: slot verde = válido, vermelho = inválido |
+| **Barra de vida** | Barra colorida (verde → amarelo → vermelho) com pulso crítico em HP < 20% |
+| **Animação de entrada** | Cartas "caem" em posição com stagger ao início da batalha |
+| **Tela de fim de jogo** | Header animado com gradiente, confete (vitória), estatísticas da partida (turnos, ataques, mugics, kills, maior dano) |
+| **Resumo pós-combate** | Timeline de ataques, total de dano, mugics e curas por duelo; não aparece no combate decisivo |
+| **Minimizar modais** | Botão em qualquer modal; fica como pílula flutuante para restaurar depois |
+| **Atalhos de teclado** | Espaço = passar burst/turno · 1-3 = selecionar ataque · H = histórico · M = minimizar · Esc = restaurar |
+| **Feed de batalha** | Mensagens animadas classificadas por tipo (dano, cura, mugic, morte, local) |
+| **Histórico da partida** | Painel lateral colapsável com todos os combates da partida |
 
-### Correcoes de dados
+### Correções de dados
 
 - Stats de **92 criaturas** corrigidos com os valores oficiais do Chaotic TCG (Dawn of Perim)
 - Elementos, raridades, subtypes e habilidades atualizados
-- Preview de ataques (`showAttackModal`) usa **mesmos stats efetivos** que a execucao — sem surpresas
+- Preview de ataques (`showAttackModal`) usa **mesmos stats efetivos** que a execução — sem surpresas
 
 ---
 
@@ -149,26 +158,26 @@ chaotic_lite/
 ├── README.md
 └── src/
     ├── css/
-    │   └── style.css       <- todos os estilos e animacoes
-    ├── assets/             <- imagens das cartas e localizacoes
+    │   └── style.css       <- todos os estilos e animações
+    ├── assets/             <- imagens das cartas, battlegears e localizações
     └── js/
-        ├── engine-core.js          <- GameEngine: constructor, init, modos de jogo
-        ├── engine-helpers.js       <- utils, setupBoard, _placeCardsOnBoard
-        ├── engine-draft.js         <- fases de draft, times sugeridos, afinidade de mugics
-        ├── engine-board.js         <- renderBoard, handleCardClick, selecao de formacao
-        ├── engine-combat.js        <- executeAttack, resolveAttack, resumo de combate
+        ├── engine-core.js          <- GameEngine: constructor, init, modos de jogo, contadores de stats
+        ├── engine-helpers.js       <- utils, setupBoard, _placeCardsOnBoard, _mugicCountersHtml
+        ├── engine-draft.js         <- fases de draft, times sugeridos, afinidade, tela de ataques
+        ├── engine-board.js         <- renderBoard, handleCardClick, drag&drop, overlays de local
+        ├── engine-combat.js        <- executeAttack, resolveAttack, _getCombatPreview, resumo
         ├── engine-burst.js         <- burst stack, mugics em combate, painel de burst
-        ├── engine-ui.js            <- tooltips, animacoes, floating numbers, historico
-        ├── engine-multiplayer.js   <- Socket.IO, lobby, votacao de modo, reconexao, sync
-        ├── engine-ai.js            <- sistema de dificuldade da IA
-        ├── engine-turn.js          <- nextTurn, checkWinCondition
+        ├── engine-ui.js            <- tooltips ricos, animações, floating numbers, drag&drop handlers
+        ├── engine-multiplayer.js   <- Socket.IO, lobby, votação de modo, reconexão, sync
+        ├── engine-ai.js            <- sistema de dificuldade da IA, comentários de personalidade
+        ├── engine-turn.js          <- nextTurn, checkWinCondition, tela de fim de jogo
         └── data/
             ├── cards.js        <- 92 criaturas (stats oficiais)
             ├── attacks.js      <- deck de ataques
             ├── mugics.js       <- magias
-            ├── battlegear.js   <- 29 equipamentos
+            ├── battlegear.js   <- 29 equipamentos com imagens
             ├── locations.js    <- locais de batalha
-            ├── passives.js     <- logica de passivas
+            ├── passives.js     <- lógica de passivas
             └── teams.js        <- 18 times para 6v6 + 8 times para 3v3
 ```
 
@@ -178,10 +187,10 @@ chaotic_lite/
 
 ```
 SETUP
-  └─ Escolher Dificuldade (Facil / Medio / Dificil)
+  └─ Escolher Dificuldade (Fácil / Médio / Difícil)
   └─ Escolher Tribo da IA (Auto / OverWorld / UnderWorld / Mipedian / Danian)
 
-LOBBY MULTIPLAYER (quando aplicavel)
+LOBBY MULTIPLAYER (quando aplicável)
   └─ Definir nome do jogador
   └─ Votar no modo de jogo (1v1 / 3v3 / 6v6)
   └─ Aguardar consenso dos dois jogadores
@@ -189,41 +198,49 @@ LOBBY MULTIPLAYER (quando aplicavel)
 DRAFT
   └─ Fase 1 — Criaturas
        └─ Ver Times Sugeridos (18 para 6v6 / 8 para 3v3)
-       └─ Barra de afinidade dinamica em cada carta
+       └─ Barra de afinidade dinâmica em cada carta
        └─ Filtros + deck stats em tempo real
   └─ Fase 2 — Battlegears
-       └─ Recomendacao automatica por afinidade
+       └─ Recomendação automática por afinidade
        └─ Randomizar entre os mais indicados
   └─ Fase 3 — Mugics
-       └─ Pre-selecao automatica das mais sinergicas
-       └─ Botoes Recomendar e Randomizar
+       └─ Pré-seleção automática das mais sinérgicas
+       └─ Botões Recomendar e Randomizar
   └─ Fase 4 — Deck de Ataques
-       └─ Escolhe 20 cartas (6v6) / 12 (3v3) / 6 (1v1) — max 2 copias da mesma
-       └─ Recomendacao inteligente: considera elementos da criatura E do battlegear equipado
-       └─ Cada carta exibe descricao completa do efeito em portugues
-       └─ Filtros por elemento (Fire/Water/Earth/Air), stat do challenge e ordenacao
-       └─ Score de sinergia ⭐ visivel em cada carta
+       └─ Escolhe 20 cartas (6v6) / 12 (3v3) / 6 (1v1) — máx 2 cópias da mesma
+       └─ Recomendação inteligente: considera elementos da criatura E do battlegear
+       └─ Cada carta exibe descrição completa do efeito em português
+       └─ Filtros por elemento, stat do challenge e ordenação
+       └─ Score de sinergia ⭐ visível em cada carta
 
-FORMACAO
-  └─ Jogador posiciona suas criaturas no tabuleiro manualmente antes da batalha
+POSICIONAMENTO (pulado no 1v1)
+  └─ Jogador arranja suas criaturas no tabuleiro antes da batalha
+  └─ Drag & drop ou clique para mover durante a batalha
 
 BATALHA
+  └─ Banner de turno animado indica claramente quem está jogando
+  └─ Overlay ambiental no board reflete o local ativo (névoa, brasas, etc.)
+  └─ Tribe highlight dourado nas criaturas beneficiadas pelo local
   └─ Turno do Jogador
-       ├─ Mover criatura -> fim do turno
+       ├─ Arrastar ou clicar criatura para mover -> fim do turno
        └─ Atacar -> entra em combate
-            └─ Preview de veredito (VANTAGEM / EQUILIBRADO / DESVANTAGEM)
-            └─ Banner de iniciativa com stats comparados
+            └─ Preview de veredito com iniciativa e valores de stat
+            └─ Badge de Intimidate no preview se aplicável
             └─ Modal de ataque: dano real com battlegear + sinergia + local
             └─ Battlegear revelado apenas ao confirmar o ataque
-            └─ Compra de carta ANTES de mostrar o modal (sempre 3 opcoes)
+            └─ Compra de carta ANTES do modal (sempre 3 opções)
             └─ Burst: tooltip rico + painel mostrando efeito e alvo de cada mugic
-            └─ Preview de dano inimigo visivel antes de responder no burst
+            └─ Hover no ataque inimigo no burst mostra efeitos completos
+            └─ Preview de dano inimigo visível antes de responder no burst
+            └─ Animação de ataque com salto por posição exata (data-pos)
             └─ Dano aplicado -> floating numbers + sync de tabuleiro (multiplayer)
-            └─ Morte simultanea -> empate no duelo
-            └─ Resumo do combate ao fim de cada duelo
-  └─ Turno da IA (automatico, adapta-se a dificuldade)
+            └─ Morte -> animação de explosão em fragmentos + sync
+            └─ Morte simultânea -> empate no duelo
+            └─ Resumo do combate ao fim de cada duelo (omitido no combate decisivo)
+  └─ Turno da IA (automático, adapta-se à dificuldade + comentários de personalidade)
 
 FIM DE JOGO
-  └─ Tela de vitoria / derrota / empate
-  └─ Historico completo da partida no painel lateral
+  └─ Tela animada: confete (vitória) / visual sombrio (derrota)
+  └─ Estatísticas da partida: turnos, ataques, mugics, kills, maior dano único
+  └─ Histórico completo da partida no painel lateral
 ```

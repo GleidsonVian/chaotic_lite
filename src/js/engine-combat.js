@@ -901,9 +901,11 @@ Object.assign(GameEngine.prototype, {
         // (jogador sempre escolhe entre 3 cartas, conforme regras do Chaotic TCG)
 
         // Inicializar a Pilha (Burst)
+        // Ambos os clientes mantêm o MESMO burstPriority = attackingPlayer
+        // para que a lógica de alternância (1→2→resolve) seja consistente.
         this.burstStack = [];
         this.burstPasses = 0;
-        this.burstPriority = attackingPlayer; // Atacante tem a 1ª resposta
+        this.burstPriority = attackingPlayer;
 
         const p2Label = this.multiplayerMode ? (this.p2Name||'Jogador 2') : 'IA (Oponente)';
         this.burstStack.push({

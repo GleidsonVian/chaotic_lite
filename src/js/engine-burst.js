@@ -108,9 +108,17 @@ Object.assign(GameEngine.prototype, {
         }
 
         // Determina se é minha vez no burst
+        // Guard: em multiplayer, myPlayerNumber deve estar definido
+        // Se por algum motivo não estiver, assume P1 para não travar
+        if (this.multiplayerMode && !this.myPlayerNumber) {
+            console.warn('[BURST] myPlayerNumber indefinido em modo multiplayer — assumindo P1');
+            this.myPlayerNumber = 1;
+        }
         const isMyBurstTurn = this.multiplayerMode
             ? this.burstPriority === this.myPlayerNumber
             : this.burstPriority === 1;
+
+        console.log(`[BURST] priority=${this.burstPriority} myPN=${this.myPlayerNumber} passes=${this.burstPasses} isMyTurn=${isMyBurstTurn} mp=${this.multiplayerMode}`);
 
         let promptText;
         if (this.multiplayerMode) {
@@ -557,7 +565,10 @@ Object.assign(GameEngine.prototype, {
         if (!fromRemote) {
             this.sendAction('passBurst');
         }
-        this.log(`${this.burstPriority === 1 ? (this.p1Name||'Jogador 1') : 'IA'} passou a prioridade.`);
+        const passerLabel = this.burstPriority === 1
+            ? (this.p1Name || 'Jogador 1')
+            : (this.multiplayerMode ? (this.p2Name || 'Jogador 2') : 'IA (Oponente)');
+        this.log(`${passerLabel} passou a prioridade.`);
         this.burstPasses++;
         if (this.burstPasses >= 2) {
             this.closeBurstModal();

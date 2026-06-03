@@ -3,13 +3,134 @@ Object.assign(GameEngine.prototype, {
 
     initMultiplayer() {
         if (typeof io === 'undefined') return;
-        // Modo multiplayer: pula a tela de setup e vai direto pro lobby
         const setup = document.getElementById('setup-screen');
         const game  = document.getElementById('game-container');
         if (setup) setup.style.display = 'none';
         if (game)  game.style.display  = '';
-        this._showLobby('connecting');
         this._connectSocket();
+    },
+
+    // ─── Seleção de sala ─────────────────────────────────────────────────────
+
+    _showRoomSelect() {
+        document.getElementById('lobby-room-select').style.display  = 'block';
+        document.getElementById('lobby-public-panel').style.display = 'none';
+        document.getElementById('lobby-card').style.display         = 'none';
+    },
+
+    _openPublicLobby() {
+        document.getElementById('lobby-room-select').style.display  = 'none';
+        document.getElementById('lobby-public-panel').style.display = 'block';
+        document.getElementById('lobby-card').style.display         = 'none';
+        this._refreshPublicRooms();
+    },
+
+    _backToRoomSelect() {
+        this._showRoomSelect();
+    },
+
+    _getPlayerName() {
+        const input = document.getElementById('lobby-name-input');
+        const val   = input && input.value.trim();
+        return val || (this.myPlayerNumber === 1 ? 'Jogador 1' : 'Jogador 2');
+    },
+
+    _createRoom(type) {
+        if (!this.socket || !this.socket.connected) return;
+        const name = this._getPlayerName();
+        this.socket.emit('create_room', { type, playerName: name, name: `Sala de ${name}` });
+    },
+
+    _joinRoom() {
+        if (!this.socket || !this.socket.connected) return;
+        const codeEl = document.getElementById('lobby-code-input');
+        const errEl  = document.getElementById('lobby-join-error');
+        const code   = (codeEl && codeEl.value.trim().toUpperCase()) || '';
+        if (code.length !== 4) {
+            if (errEl) { errEl.textContent = 'Digite um código de 4 letras.'; errEl.style.display = 'block'; }
+            return;
+        }
+        if (errEl) errEl.style.display = 'none';
+        this.socket.emit('join_room', { code, playerName: this._getPlayerName() });
+    },
+
+    _refreshPublicRooms() {
+        if (!this.socket || !this.socket.connected) return;
+        this.socket.emit('get_public_rooms');
+    },
+
+    _renderPublicRooms(list) {
+        const container = document.getElementById('lobby-public-list');
+        if (!container) return;
+        if (!list || list.length === 0) {
+            container.innerHTML = `
+                <div style="text-align:center;color:#334155;font-size:13px;padding:24px 0;">
+                    <div style="font-size:28px;margin-bottom:8px;">🔍</div>
+                    Nenhuma sala aberta no momento.
+                </div>`;
+            return;
+        }
+        const modeIcon = { '6v6':'⚔️', '3v3':'⚡', '1v1':'🥊' };
+        const modeLabel = { '6v6':'6v6 Padrão', '3v3':'3v3 Rápido', '1v1':'1v1 Duelo' };
+        const ago = (ts) => {
+            const s = Math.floor((Date.now() - ts) / 1000);
+            if (s < 60) return `${s}s atrás`;
+            return `${Math.floor(s/60)}min atrás`;
+        };
+        container.innerHTML = list.map(room => `
+            <div style="display:flex;align-items:center;justify-content:space-between;
+                background:rgba(255,255,255,0.04);border:1px solid #1e293b;border-radius:10px;
+                padding:12px 14px;gap:10px;transition:border-color 0.15s;"
+                onmouseover="this.style.borderColor='rgba(34,197,94,0.4)'"
+                onmouseout="this.style.borderColor='#1e293b'">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:13px;font-weight:800;color:#f1f5f9;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${room.name}</div>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <span style="font-size:11px;color:#4ade80;font-weight:600;">● 1/2 jogadores</span>
+                        <span style="font-size:10px;color:#475569;">·</span>
+                        <span style="font-size:11px;color:#94a3b8;">${modeIcon[room.gameMode]||'🎮'} ${modeLabel[room.gameMode]||'Aguardando modo'}</span>
+                        <span style="font-size:10px;color:#334155;">· ${ago(room.createdAt)}</span>
+                    </div>
+                </div>
+                <button onclick="game._quickJoin('${room.code}')" style="
+                    background:linear-gradient(135deg,#16a34a,#22c55e);border:none;border-radius:8px;
+                    color:#000;font-size:12px;font-weight:900;padding:8px 16px;cursor:pointer;
+                    white-space:nowrap;font-family:inherit;transition:transform 0.15s;
+                " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                    Entrar →
+                </button>
+            </div>`).join('');
+    },
+
+    _quickJoin(code) {
+        const codeEl = document.getElementById('lobby-code-input');
+        if (codeEl) codeEl.value = code;
+        this._joinRoom();
+    },
+
+    _copyRoomCode() {
+        const code = this._myRoomCode;
+        if (!code) return;
+        navigator.clipboard.writeText(code).then(() => {
+            const btns = document.querySelectorAll('[onclick="game._copyRoomCode()"]');
+            btns.forEach(btn => {
+                btn.textContent = '✅ Copiado!';
+                setTimeout(() => { btn.textContent = '📋 Copiar'; }, 2000);
+            });
+        });
+    },
+
+    _showWaitingRoom(code, playerNumber) {
+        document.getElementById('lobby-room-select').style.display = 'none';
+        const card = document.getElementById('lobby-card');
+        card.style.display = 'block';
+
+        const codeDisplay = document.getElementById('lobby-code-display');
+        const codeValue   = document.getElementById('lobby-code-value');
+        if (codeDisplay) codeDisplay.style.display = 'block';
+        if (codeValue)   codeValue.textContent = code;
+
+        this._showLobby('waiting', playerNumber);
     },
 
     // ─── Lobby UI ────────────────────────────────────────────────────────────
@@ -229,7 +350,7 @@ Object.assign(GameEngine.prototype, {
         if (typeof io === 'undefined') return;
 
         this.socket = io({
-            reconnection:        true,
+            reconnection:         true,
             reconnectionAttempts: 10,
             reconnectionDelay:    1000,
             reconnectionDelayMax: 5000,
@@ -238,35 +359,65 @@ Object.assign(GameEngine.prototype, {
         this.multiplayerMode = true;
         this._reconnecting   = false;
 
-        // ── Conexão bem-sucedida ─────────────────────────────────────────────
-        this.socket.on('assigned', ({ playerNumber, publicUrl }) => {
-            this.myPlayerNumber = playerNumber;
-            if (publicUrl) this._lobbyPublicUrl = publicUrl;
-            this.log(`🌐 Modo Multiplayer ativo — Você é o Jogador ${playerNumber}`);
+        // ── Conectou ao servidor — mostra seleção de sala ───────────────────
+        this.socket.on('connect', () => {
             this._hideReconnectOverlay();
-
-            if (this._reconnecting && this.appState === 'BATTLE') {
-                this._reconnecting = false;
-                this.log('🔄 Reconectado! Solicitando sincronização de estado...');
-                this.sendAction('request_resync');
+            if (!this._reconnecting) {
+                const screen = document.getElementById('lobby-screen');
+                if (screen) screen.style.display = 'flex';
+                this._showRoomSelect();
             }
-            this._reconnecting = false;
-
-            // Pré-preenche o slot com o nome atual (ou padrão)
-            const defaultName = `Jogador ${playerNumber}`;
-            const myName = playerNumber === 1 ? this.p1Name : this.p2Name;
-            const input = document.getElementById('lobby-name-input');
-            if (input && myName === defaultName) input.placeholder = defaultName;
-
-            this._showLobby('waiting', playerNumber);
         });
 
+        // ── Sala criada com sucesso (sou P1) ─────────────────────────────────
+        this.socket.on('room_created', ({ code, playerNumber }) => {
+            this.myPlayerNumber = playerNumber;
+            this._myRoomCode    = code;
+            this.log(`🌐 Sala ${code} criada — aguardando oponente`);
+            this._showWaitingRoom(code, playerNumber);
+        });
+
+        // ── Entrou em sala com sucesso (sou P2) ───────────────────────────────
+        this.socket.on('room_joined', ({ code, playerNumber, opponentName }) => {
+            this.myPlayerNumber = playerNumber;
+            this._myRoomCode    = code;
+            this.log(`🌐 Entrou na sala ${code} — oponente: ${opponentName}`);
+
+            // Atualiza nome do P1 (oponente) no slot
+            if (this.myPlayerNumber === 2) {
+                this.p1Name = opponentName;
+                const el = document.getElementById('lobby-slot-1-name');
+                if (el) el.textContent = opponentName;
+            }
+
+            document.getElementById('lobby-room-select').style.display = 'none';
+            document.getElementById('lobby-card').style.display        = 'block';
+            document.getElementById('lobby-code-display') && (document.getElementById('lobby-code-display').style.display = 'none');
+        });
+
+        // ── Erro ao entrar em sala ─────────────────────────────────────────────
+        this.socket.on('join_error', ({ message }) => {
+            const errEl = document.getElementById('lobby-join-error');
+            if (errEl) { errEl.textContent = message; errEl.style.display = 'block'; }
+        });
+
+        // ── Lista de salas públicas ───────────────────────────────────────────
+        this.socket.on('public_rooms', (list) => {
+            this._renderPublicRooms(list);
+        });
+
+        // ── P2 entrou na sala (recebido pelo P1) ──────────────────────────────
+        this.socket.on('opponent_joined', ({ opponentName, playerNumber }) => {
+            this.p2Name = opponentName;
+            const el = document.getElementById('lobby-slot-2-name');
+            if (el) el.textContent = opponentName;
+        });
+
+        // ── Sala pronta — ambos conectados ────────────────────────────────────
         this.socket.on('room_ready', () => {
             this.log('🟢 Oponente conectado! Façam o Draft e cliquem em Iniciar Batalha.');
             this._showLobby('ready', this.myPlayerNumber);
-            // Envia meu nome ao oponente assim que a sala ficar completa
-            const input = document.getElementById('lobby-name-input');
-            const myName = (input && input.value.trim()) || (this.myPlayerNumber === 1 ? 'Jogador 1' : 'Jogador 2');
+            const myName = this._getPlayerName();
             if (this.myPlayerNumber === 1) this.p1Name = myName;
             else this.p2Name = myName;
             this.sendAction('player_name', { name: myName });
@@ -274,7 +425,6 @@ Object.assign(GameEngine.prototype, {
 
         this.socket.on('waiting', () => {
             this.log('⏳ Aguardando segundo jogador conectar...');
-            this._showLobby('waiting', this.myPlayerNumber);
         });
 
         this.socket.on('action', (data) => {

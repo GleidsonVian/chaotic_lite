@@ -184,6 +184,8 @@ Object.assign(GameEngine.prototype, {
     // ─── Burst decision ──────────────────────────────────────────────────────
 
     aiBurstDecision() {
+        // Guard: nunca rodar em modo multiplayer
+        if (this.multiplayerMode) return;
         const diff = this.aiDifficulty || 'easy';
 
         // Fácil: só passa (raramente usa mugic)

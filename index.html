@@ -82,27 +82,18 @@
     </div>
 
     <!-- Tela de Lobby Multiplayer -->
-    <div id="lobby-screen" style="display:none; position:fixed; inset:0; background:linear-gradient(-45deg,#0f172a,#1e1b4b,#020617,#172554); background-size:400% 400%; animation:gradientBG 15s ease infinite; z-index:50000; display:none; flex-direction:column; align-items:center; justify-content:center; gap:28px; padding:24px;">
+    <div id="lobby-screen" style="display:none; position:fixed; inset:0; background:linear-gradient(-45deg,#0f172a,#1e1b4b,#020617,#172554); background-size:400% 400%; animation:gradientBG 15s ease infinite; z-index:50000; display:none; flex-direction:column; align-items:center; justify-content:center; gap:20px; padding:24px; overflow-y:auto;">
 
         <!-- Logo -->
         <div style="font-size:2.2em; font-weight:900; letter-spacing:.05em; color:#f8fafc; text-shadow:0 0 30px rgba(99,102,241,0.6);">
             ⚔️ Chaotic Lite
         </div>
 
-        <!-- Card central -->
-        <div id="lobby-card" style="background:rgba(15,23,42,0.9); border:1px solid #334155; border-radius:20px; padding:36px 44px; max-width:460px; width:100%; text-align:center; box-shadow:0 25px 60px rgba(0,0,0,0.7);">
+        <!-- ═══ PAINEL 1: SELEÇÃO INICIAL ══════════════════════════════════════ -->
+        <div id="lobby-room-select" style="background:rgba(15,23,42,0.95); border:1px solid #334155; border-radius:20px; padding:32px 36px; max-width:460px; width:100%; box-shadow:0 25px 60px rgba(0,0,0,0.7);">
 
-            <!-- Ícone animado de estado -->
-            <div id="lobby-icon" style="font-size:52px; margin-bottom:16px; line-height:1;">🌐</div>
-
-            <!-- Título do estado -->
-            <div id="lobby-title" style="font-size:1.3em; font-weight:800; color:#f1f5f9; margin-bottom:8px;">Conectando ao servidor...</div>
-
-            <!-- Subtítulo -->
-            <div id="lobby-sub" style="font-size:13px; color:#64748b; margin-bottom:24px; line-height:1.6;">Aguarde um momento.</div>
-
-            <!-- Campo de nome do jogador -->
-            <div style="margin-bottom:20px;">
+            <!-- Campo de nome -->
+            <div style="margin-bottom:24px; text-align:center;">
                 <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:6px;">Seu nome</div>
                 <input id="lobby-name-input" maxlength="20" placeholder="Ex: Gleidson"
                     oninput="game._onLobbyNameChange(this.value)"
@@ -111,6 +102,140 @@
                            font-family:inherit;text-align:center;transition:border-color 0.15s;"
                     onfocus="this.style.borderColor='#3b82f6'"
                     onblur="this.style.borderColor='#334155'">
+            </div>
+
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#475569;margin-bottom:14px;text-align:center;">Como quer jogar?</div>
+
+            <!-- 3 opções principais -->
+            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:4px;">
+
+                <!-- Privada -->
+                <button onclick="game._createRoom('private')" style="
+                    display:flex;align-items:center;gap:14px;
+                    padding:14px 18px;border-radius:12px;border:2px solid #3b82f6;
+                    background:rgba(59,130,246,0.10);color:#f1f5f9;font-family:inherit;
+                    font-size:14px;font-weight:700;cursor:pointer;transition:all 0.15s;text-align:left;
+                " onmouseover="this.style.background='rgba(59,130,246,0.22)'" onmouseout="this.style.background='rgba(59,130,246,0.10)'">
+                    <span style="font-size:26px;">🔒</span>
+                    <div>
+                        <div>Sala Privada</div>
+                        <div style="font-size:11px;font-weight:400;color:#64748b;margin-top:2px;">Gera um código de 4 letras para enviar ao amigo</div>
+                    </div>
+                </button>
+
+                <!-- Pública -->
+                <button onclick="game._openPublicLobby()" style="
+                    display:flex;align-items:center;gap:14px;
+                    padding:14px 18px;border-radius:12px;border:2px solid #22c55e;
+                    background:rgba(34,197,94,0.08);color:#f1f5f9;font-family:inherit;
+                    font-size:14px;font-weight:700;cursor:pointer;transition:all 0.15s;text-align:left;
+                " onmouseover="this.style.background='rgba(34,197,94,0.20)'" onmouseout="this.style.background='rgba(34,197,94,0.08)'">
+                    <span style="font-size:26px;">🌐</span>
+                    <div>
+                        <div>Salas Públicas</div>
+                        <div style="font-size:11px;font-weight:400;color:#64748b;margin-top:2px;">Ver salas abertas ou criar uma para qualquer um entrar</div>
+                    </div>
+                </button>
+
+                <!-- Por código -->
+                <div style="background:rgba(255,255,255,0.03);border:1px solid #1e293b;border-radius:12px;padding:14px 18px;">
+                    <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;">
+                        <span style="font-size:26px;">🔑</span>
+                        <div>
+                            <div style="font-size:14px;font-weight:700;color:#f1f5f9;">Entrar com Código</div>
+                            <div style="font-size:11px;color:#64748b;margin-top:2px;">Já tem o código de 4 letras?</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <input id="lobby-code-input" maxlength="4" placeholder="KXBW"
+                            oninput="this.value=this.value.toUpperCase()"
+                            style="flex:1;background:rgba(255,255,255,0.06);border:1px solid #334155;border-radius:8px;
+                                   color:#f1f5f9;font-size:22px;font-weight:900;padding:7px 12px;outline:none;
+                                   font-family:monospace;text-align:center;letter-spacing:.25em;transition:border-color 0.15s;"
+                            onfocus="this.style.borderColor='#f59e0b'"
+                            onblur="this.style.borderColor='#334155'"
+                            onkeydown="if(event.key==='Enter') game._joinRoom()">
+                        <button onclick="game._joinRoom()" style="
+                            padding:7px 18px;border-radius:8px;border:none;
+                            background:linear-gradient(135deg,#d97706,#f59e0b);color:#000;
+                            font-family:inherit;font-size:13px;font-weight:900;cursor:pointer;
+                            transition:transform 0.15s;white-space:nowrap;
+                        " onmouseover="this.style.transform='scale(1.04)'" onmouseout="this.style.transform='scale(1)'">
+                            Entrar →
+                        </button>
+                    </div>
+                    <div id="lobby-join-error" style="display:none;color:#ef4444;font-size:11px;margin-top:6px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ PAINEL 2: SALAS PÚBLICAS ════════════════════════════════════════ -->
+        <div id="lobby-public-panel" style="display:none; background:rgba(15,23,42,0.95); border:1px solid #22c55e33; border-radius:20px; padding:28px 32px; max-width:520px; width:100%; box-shadow:0 25px 60px rgba(0,0,0,0.7);">
+
+            <!-- Header com voltar -->
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px;">
+                <button onclick="game._backToRoomSelect()" style="
+                    background:rgba(255,255,255,0.06);border:1px solid #334155;border-radius:8px;
+                    color:#94a3b8;font-size:13px;font-weight:700;padding:6px 14px;cursor:pointer;
+                    font-family:inherit;transition:all 0.15s;white-space:nowrap;
+                " onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">
+                    ← Voltar
+                </button>
+                <div>
+                    <div style="font-size:16px;font-weight:900;color:#4ade80;">🌐 Salas Públicas</div>
+                    <div style="font-size:11px;color:#475569;">Entre em uma sala aberta ou crie a sua</div>
+                </div>
+                <button onclick="game._refreshPublicRooms()" style="
+                    margin-left:auto;background:rgba(34,197,94,0.10);border:1px solid rgba(34,197,94,0.3);
+                    border-radius:8px;color:#4ade80;font-size:12px;font-weight:700;padding:6px 12px;
+                    cursor:pointer;font-family:inherit;transition:all 0.15s;
+                " onmouseover="this.style.background='rgba(34,197,94,0.22)'" onmouseout="this.style.background='rgba(34,197,94,0.10)'">
+                    ↻ Atualizar
+                </button>
+            </div>
+
+            <!-- Botão criar sala pública -->
+            <button onclick="game._createRoom('public')" style="
+                width:100%;display:flex;align-items:center;justify-content:center;gap:10px;
+                padding:13px;border-radius:12px;border:2px dashed rgba(34,197,94,0.5);
+                background:rgba(34,197,94,0.06);color:#4ade80;font-family:inherit;
+                font-size:14px;font-weight:800;cursor:pointer;transition:all 0.15s;margin-bottom:16px;
+            " onmouseover="this.style.background='rgba(34,197,94,0.18)';this.style.borderStyle='solid'" onmouseout="this.style.background='rgba(34,197,94,0.06)';this.style.borderStyle='dashed'">
+                + Criar Nova Sala Pública
+            </button>
+
+            <!-- Separador -->
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                <div style="flex:1;height:1px;background:#1e293b;"></div>
+                <div style="font-size:11px;color:#334155;text-transform:uppercase;letter-spacing:.06em;">Salas Abertas</div>
+                <div style="flex:1;height:1px;background:#1e293b;"></div>
+            </div>
+
+            <!-- Lista de salas -->
+            <div id="lobby-public-list" style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">
+                <div style="text-align:center;color:#334155;font-size:13px;padding:24px 0;">
+                    <div style="font-size:28px;margin-bottom:8px;">🔍</div>
+                    Nenhuma sala aberta no momento.
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ SALA CRIADA / AGUARDANDO ════════════════════════════════════ -->
+        <div id="lobby-card" style="display:none; background:rgba(15,23,42,0.9); border:1px solid #334155; border-radius:20px; padding:36px 44px; max-width:460px; width:100%; text-align:center; box-shadow:0 25px 60px rgba(0,0,0,0.7);">
+
+            <!-- Ícone animado de estado -->
+            <div id="lobby-icon" style="font-size:52px; margin-bottom:16px; line-height:1;">🌐</div>
+            <div id="lobby-title" style="font-size:1.3em; font-weight:800; color:#f1f5f9; margin-bottom:8px;">Aguardando...</div>
+            <div id="lobby-sub" style="font-size:13px; color:#64748b; margin-bottom:24px; line-height:1.6;"></div>
+
+            <!-- Código da sala em destaque -->
+            <div id="lobby-code-display" style="display:none;margin-bottom:20px;">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:6px;">Código da sala</div>
+                <div style="display:flex;align-items:center;justify-content:center;gap:12px;">
+                    <span id="lobby-code-value" style="font-size:42px;font-weight:900;letter-spacing:.25em;color:#f59e0b;font-family:monospace;text-shadow:0 0 20px rgba(245,158,11,0.4);"></span>
+                    <button onclick="game._copyRoomCode()" style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);border-radius:8px;color:#f59e0b;font-size:11px;font-weight:700;padding:6px 12px;cursor:pointer;font-family:inherit;">📋 Copiar</button>
+                </div>
+                <div style="font-size:11px;color:#475569;margin-top:6px;">Mande este código para seu amigo entrar</div>
             </div>
 
             <!-- Slots dos jogadores -->
@@ -128,20 +253,18 @@
                 </div>
             </div>
 
-            <!-- Link da sala -->
+            <!-- Link da sala (fallback) -->
             <div id="lobby-link-box" style="display:none; background:rgba(255,255,255,0.04); border:1px solid #334155; border-radius:10px; padding:12px 16px; margin-bottom:20px;">
-                <div style="font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px;">Compartilhe o link da sala</div>
+                <div style="font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px;">Link direto</div>
                 <div style="display:flex; gap:8px; align-items:center;">
                     <input id="lobby-link-input" readonly style="flex:1; background:transparent; border:none; color:#94a3b8; font-size:12px; font-family:monospace; outline:none; min-width:0;" value="">
                     <button id="lobby-copy-btn" onclick="game._copyLobbyLink()" style="background:#1e40af; border:none; border-radius:6px; color:white; font-size:11px; font-weight:700; padding:6px 12px; cursor:pointer; white-space:nowrap; font-family:inherit;">📋 Copiar</button>
                 </div>
             </div>
 
-            <!-- Seletor de Modo — votação entre os jogadores -->
+            <!-- Seletor de Modo -->
             <div id="lobby-mode-section" style="display:none; width:100%;">
                 <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:10px;text-align:center;">Escolha o Modo de Jogo</div>
-
-                <!-- Botões de modo -->
                 <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
                     <button class="lobby-mode-btn" id="lm-6v6" onclick="game._voteMode('6v6')"
                         style="flex:1;padding:10px 8px;border-radius:10px;border:2px solid #f59e0b;color:#f59e0b;background:rgba(245,158,11,0.15);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.15s;">
@@ -156,8 +279,6 @@
                         🥊 1v1<br><span style="font-size:9px;font-weight:400;opacity:.7;">Duelo</span>
                     </button>
                 </div>
-
-                <!-- Status dos votos -->
                 <div id="lobby-vote-status" style="background:rgba(255,255,255,0.03);border:1px solid #1e293b;border-radius:10px;padding:10px 14px;font-size:12px;text-align:center;color:#64748b;margin-bottom:12px;">
                     Escolha um modo acima...
                 </div>
@@ -167,6 +288,9 @@
             <button id="lobby-action-btn" onclick="game._lobbyAction()" style="display:none; background:linear-gradient(135deg,#1e40af,#3b82f6); border:none; border-radius:10px; color:white; font-size:14px; font-weight:800; padding:12px 32px; cursor:pointer; letter-spacing:.04em; font-family:inherit; transition:all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
                 Iniciar Draft
             </button>
+
+            <!-- Voltar para seleção -->
+            <button onclick="game._backToRoomSelect()" style="margin-top:10px;background:none;border:none;color:#475569;font-size:12px;cursor:pointer;font-family:inherit;padding:4px 8px;" onmouseover="this.style.color='#94a3b8'" onmouseout="this.style.color='#475569'">← Voltar</button>
 
             <!-- Spinner de espera -->
             <div id="lobby-spinner" style="display:flex; align-items:center; justify-content:center; gap:10px; color:#475569; font-size:13px;">
