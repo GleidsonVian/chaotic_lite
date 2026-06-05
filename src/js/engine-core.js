@@ -46,6 +46,7 @@ class GameEngine {
         // Modo de jogo
         this.gameMode      = '6v6'; // '6v6' | '3v3' | '1v1'
         this.draftedAttacks = []; // deck de ataques escolhido pelo jogador
+        this.draftedLocations = []; // deck de locais escolhido pelo jogador
 
         // Tabuleiro — shape depende do modo, inicializado em _initBoards()
         this.boardP1 = [];
@@ -101,11 +102,22 @@ class GameEngine {
         return 6;
     }
 
+    _getMugicLimit() {
+        return 3;
+    }
+
     /** Tamanho do deck de ataques conforme o modo */
     _getAttackDeckSize() {
         if (this.gameMode === '1v1') return 6;
         if (this.gameMode === '3v3') return 12;
         return 20; // 6v6 padrão
+    }
+
+    /** Tamanho do deck de locais conforme o modo */
+    _getLocationDeckSize() {
+        if (this.gameMode === '1v1') return 3;
+        if (this.gameMode === '3v3') return 5;
+        return 10; // 6v6 padrão
     }
 
     /** Formação de posicionamento no tabuleiro */

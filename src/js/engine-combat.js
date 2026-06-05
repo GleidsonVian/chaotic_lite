@@ -567,8 +567,9 @@ Object.assign(GameEngine.prototype, {
                 case 'hive_call':                      return '🐜 Hive Call: convoca Mandiblor aliado';
                 case 'shuffle_both_attack_decks':      return '🔀 Embaralha ambos os decks de Ataque';
                 case 'new_location_lose_element':      return `🌍 Revela novo Local; atacante perde ${se.element}`;
-                case 'drain_all_stats_lose_element':   return `📉 Drenagem total de stats (−${se.value}); perde elemento`;
+                case 'drain_all_stats_lose_element_temp': return `💧 Drenagem total de stats (-${se.value}); sacrifica elemento até fim do turno`;
                 case 'drain_stat':                     return `📉 Drena ${se.value} de ${statNames[se.stat]||se.stat} do defensor`;
+                case 'drain_stat_temp':                return `📉 Drena ${se.value} de ${statNames[se.stat]||se.stat} do defensor até o fim do turno`;
                 case 'lose_element':                   return `⚡ Atacante perde ${se.element} após o ataque`;
                 case 'destroy_battlegear_on_check':    return `💣 Se ${statNames[se.checkStat]||se.checkStat} ≥ ${se.checkThreshold}: destrói Battlegear`;
                 case 'lucky_shot':                     return `🎲 Lucky Shot: 50% de chance — causa ${se.value} ou 0 de dano`;
@@ -599,12 +600,12 @@ Object.assign(GameEngine.prototype, {
 
                 if (atkCard.statMode === 'challenge') {
                     met      = (atkVal - defVal) >= atkCard.statThreshold;
-                    condText = `${icon} Se ${label} superar por ${atkCard.statThreshold}+`;
+                    condText = `${icon} Desafiar ${label} ${atkCard.statThreshold}`;
                     const diff = atkVal - defVal;
                     condText  += ` (você ${diff >= 0 ? '+' : ''}${diff})`;
                 } else { // check
                     met      = atkVal >= atkCard.statThreshold;
-                    condText = `${icon} Se ${label} ≥ ${atkCard.statThreshold} (você ${atkVal})`;
+                    condText = `${icon} Checagem ${label} ${atkCard.statThreshold} (você ${atkVal})`;
                 }
 
                 if (met) {
@@ -626,10 +627,10 @@ Object.assign(GameEngine.prototype, {
                 let condText = '';
                 if (atkCard.statMode === 'challenge') {
                     met      = (atkVal - defVal) >= atkCard.statThreshold;
-                    condText = `${icon} Se ${label} superar por ${atkCard.statThreshold}+`;
+                    condText = `${icon} Desafiar ${label} ${atkCard.statThreshold}`;
                 } else {
                     met      = atkVal >= atkCard.statThreshold;
-                    condText = `${icon} Se ${label} ≥ ${atkCard.statThreshold}`;
+                    condText = `${icon} Checagem ${label} ${atkCard.statThreshold}`;
                 }
                 if (met) {
                     rows.push({ ok: true,  text: `✅ ${condText} → cura ${atkCard.statHeal}` });
@@ -661,6 +662,22 @@ Object.assign(GameEngine.prototype, {
                         rows.push({ ok: null,  text: `⚠️ ${elText}: ${efDesc}` });
                     }
                 }
+            }
+
+            // Extra Elements
+            if (atkCard.extraElements && atkCard.extraElements.length > 0) {
+                atkCard.extraElements.forEach(ee => {
+                    const hasEl = attacker.elements && attacker.elements.includes(ee.element);
+                    const elIcon = elemIcons[ee.element] || '✨';
+                    const elText = `${elIcon} Bônus ${ee.element}`;
+                    
+                    if (hasEl) {
+                        expectedDamage += ee.damage || 0;
+                        rows.push({ ok: true,  text: `✅ ${elText} → +${ee.damage} dano` });
+                    } else {
+                        rows.push({ ok: false, text: `❌ ${elText} → +${ee.damage} dano` });
+                    }
+                });
             }
 
             // Efeito especial (independente)
@@ -943,12 +960,12 @@ Object.assign(GameEngine.prototype, {
             const dv = effDef[stat] || 0;
             if (mode === 'check') {
                 passed
-                    ? this.log(`📊 Stat Check ${stat.toUpperCase()} (${av} ≥ ${threshold}): +${bonus}!`)
-                    : this.log(`📊 Stat Check ${stat.toUpperCase()} falhou (${av} < ${threshold}).`);
+                    ? this.log(`📊 Checagem ${stat.toUpperCase()} (${av} ≥ ${threshold}): +${bonus}!`)
+                    : this.log(`📊 Checagem ${stat.toUpperCase()} falhou (${av} < ${threshold}).`);
             } else {
                 passed
-                    ? this.log(`📊 Challenge ${stat.toUpperCase()} (${av} ≥ ${dv}+${threshold}): +${bonus}!`)
-                    : this.log(`📊 Challenge ${stat.toUpperCase()} falhou (${av} < ${dv}+${threshold}).`);
+                    ? this.log(`📊 Desafiar ${stat.toUpperCase()} (${av} ≥ ${dv}+${threshold}): +${bonus}!`)
+                    : this.log(`📊 Desafiar ${stat.toUpperCase()} falhou (${av} < ${dv}+${threshold}).`);
             }
         };
 
@@ -1013,14 +1030,27 @@ Object.assign(GameEngine.prototype, {
                             defender[ef.stat] = Math.max(0, (defender[ef.stat] || 0) - ef.value);
                             this.log(`🌊 ${atkCard.elementRequirement}: ${defender.name} perdeu ${ef.value} de ${ef.stat.toUpperCase()}!`);
                             break;
-                        case "drain_all_stats_lose_element":
+                        case "drain_stat_temp": {
+                            if (!defender._tempStats) defender._tempStats = { courage:0, power:0, wisdom:0, speed:0 };
+                            const oldStat = defender[ef.stat] || 0;
+                            defender[ef.stat] = Math.max(0, oldStat - ef.value);
+                            defender._tempStats[ef.stat] += (oldStat - defender[ef.stat]);
+                            this.log(`📉 ${atkCard.elementRequirement}: ${defender.name} perdeu ${ef.value} de ${ef.stat.toUpperCase()} até o fim do turno!`);
+                            break;
+                        }
+                        case "drain_all_stats_lose_element_temp":
+                            if (!defender._tempStats) defender._tempStats = { courage:0, power:0, wisdom:0, speed:0 };
                             ['courage','power','wisdom','speed'].forEach(s => {
-                                defender[s] = Math.max(0, (defender[s] || 0) - ef.value);
+                                const old = defender[s] || 0;
+                                defender[s] = Math.max(0, old - ef.value);
+                                defender._tempStats[s] += (old - defender[s]);
                             });
-                            this.log(`💧 Degenervate: ${defender.name} perdeu ${ef.value} em todos os atributos!`);
-                            if (attacker.elements) {
-                                attacker.elements = attacker.elements.filter(e => e !== 'Water');
-                                this.log(`💧 ${attacker.name} perdeu o elemento Water.`);
+                            this.log(`💧 Degenervate: ${defender.name} perdeu ${ef.value} em todos os atributos até o fim do turno!`);
+                            if (attacker.elements && atkCard.elementRequirement) {
+                                if (!attacker._tempElementsLost) attacker._tempElementsLost = [];
+                                attacker._tempElementsLost.push(atkCard.elementRequirement);
+                                attacker.elements = attacker.elements.filter(e => e !== atkCard.elementRequirement);
+                                this.log(`💧 ${attacker.name} sacrificou o elemento ${atkCard.elementRequirement} até o fim do turno.`);
                             }
                             break;
                         case "lose_element":
@@ -1056,6 +1086,17 @@ Object.assign(GameEngine.prototype, {
             } else {
                 this.log(`❄️ Sem elemento ${atkCard.elementRequirement} — bônus elemental não ativado.`);
             }
+        }
+
+        // ─── Elementos Extras ─────────────────────────────────────────────────
+        if (atkCard.extraElements && atkCard.extraElements.length > 0) {
+            atkCard.extraElements.forEach(ee => {
+                const hasEl = (attacker.elements || []).includes(ee.element);
+                if (hasEl) {
+                    totalDamage += ee.damage || 0;
+                    this.log(`🌋 Bônus Elemental Extra (${ee.element}): +${ee.damage} dano!`);
+                }
+            });
         }
 
         // ─── Efeitos especiais da carta ───────────────────────────────────────

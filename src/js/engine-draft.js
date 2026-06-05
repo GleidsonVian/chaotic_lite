@@ -743,7 +743,7 @@ Object.assign(GameEngine.prototype, {
     autoSelectMugics() {
         this.draftedMugics = [];
         const recs = this._recommendMugics();
-        const mgLim = this._getDraftLimit();
+        const mgLim = this._getMugicLimit();
         for (const { mg } of recs) {
             if (this.draftedMugics.length >= mgLim) break;
             const typeCount = this.draftedMugics.filter(m => m.effectType === mg.effectType).length;
@@ -765,14 +765,14 @@ Object.assign(GameEngine.prototype, {
         const topScore = recs[0]?.score || 1;
         const pool   = recs.filter(r => r.score >= topScore * 0.5).slice(0, 12);
         const picked = [];
-        while (picked.length < this._getDraftLimit() && pool.length > 0) {
+        while (picked.length < this._getMugicLimit() && pool.length > 0) {
             const i   = Math.floor(Math.random() * pool.length);
             const { mg } = pool.splice(i, 1)[0];
             const typeCount = picked.filter(m => m.effectType === mg.effectType).length;
             if (typeCount < 2) picked.push(mg);
         }
         // Completa se necessário
-        const lim = this._getDraftLimit();
+        const lim = this._getMugicLimit();
         for (const { mg } of recs) {
             if (picked.length >= lim) break;
             if (!picked.includes(mg)) picked.push(mg);
@@ -835,7 +835,7 @@ Object.assign(GameEngine.prototype, {
 
         // Atualiza título com limite correto
         const titleEl = document.getElementById('mugic-draft-title');
-        if (titleEl) titleEl.textContent = `Componha seu Arsenal Mugic (${this._getDraftLimit()} Cartas)`;
+        if (titleEl) titleEl.textContent = `Componha seu Arsenal Mugic (${this._getMugicLimit()} Cartas)`;
 
         // Pré-seleciona automaticamente se a mão ainda está vazia
         if (this.draftedMugics.length === 0) this.autoSelectMugics();
@@ -939,7 +939,7 @@ Object.assign(GameEngine.prototype, {
         mgListContainer.innerHTML = mgHtml;
 
         let draftedHtml = '';
-        for (let i = 0; i < this._getDraftLimit(); i++) {
+        for (let i = 0; i < this._getMugicLimit(); i++) {
             if (i < this.draftedMugics.length) {
                 const mg = this.draftedMugics[i];
                 const dtc = mg.tribe === 'OverWorld' ? '#3498db' : mg.tribe === 'UnderWorld' ? '#e74c3c' : mg.tribe === 'Mipedian' ? '#f39c12' : mg.tribe === 'Danian' ? '#27ae60' : '#9b59b6';
@@ -972,7 +972,7 @@ Object.assign(GameEngine.prototype, {
         }
         draftedContainer.innerHTML = draftedHtml;
 
-        const mgLimit = this._getDraftLimit();
+        const mgLimit = this._getMugicLimit();
         counter.innerText = `${this.draftedMugics.length} / ${mgLimit} Escolhidas`;
 
         const saveMg = document.getElementById('btn-save-deck-mg');
@@ -988,7 +988,7 @@ Object.assign(GameEngine.prototype, {
     },
 
     draftMugic(index) {
-        const mgLim = this._getDraftLimit();
+        const mgLim = this._getMugicLimit();
         if (this.draftedMugics.length >= mgLim) {
             this.showAlert("🎶 Mão Completa", `Você já escolheu ${mgLim} Mugics!`);
             return;
@@ -1006,11 +1006,139 @@ Object.assign(GameEngine.prototype, {
 
     // ─── Draft de Ataques ────────────────────────────────────────────────────
 
+    
+    openLocationDraftScreen() {
+        this.draftState = 'LOCATIONS';
+        this.draftedLocations = [];
+        
+        const mgScreen  = document.getElementById('mugic-draft-screen');
+        const locScreen = document.getElementById('location-draft-screen');
+        if (mgScreen)  mgScreen.style.display  = 'none';
+        if (locScreen) locScreen.style.display = 'block';
+        
+        const titleEl = document.getElementById('loc-draft-title');
+        if (titleEl) titleEl.textContent = `Escolha as Cartas de Localização (${this._getLocationDeckSize()})`;
+        
+        this.renderLocationDraft();
+    },
+
+    backToMugicDraftFromLocation() {
+        const locScreen = document.getElementById('location-draft-screen');
+        const mgScreen  = document.getElementById('mugic-draft-screen');
+        if (locScreen) locScreen.style.display = 'none';
+        if (mgScreen)  mgScreen.style.display  = 'block';
+    },
+
+    renderLocationDraft() {
+        const locListContainer = document.getElementById('loc-selection-pool');
+        const draftedContainer = document.getElementById('loc-deck-list');
+        const counter = document.getElementById('loc-counter');
+        const finishBtn = document.getElementById('btn-confirm-location-draft');
+        
+        if (!locListContainer || !draftedContainer) return;
+
+        let availableHtml = '';
+        this.locationsData.forEach((loc, index) => {
+            const alreadyDrafted = this.draftedLocations.some(l => l.name === loc.name);
+            availableHtml += `
+                <div onclick="game.draftLocation(${index})"
+                     style="background: #1e293b; border: 2px solid ${alreadyDrafted ? '#6366f1' : '#334155'};
+                            border-radius: 8px; padding: 10px; cursor: pointer; text-align: center;
+                            transition: transform 0.2s;"
+                     onmouseover="this.style.transform='scale(1.05)'"
+                     onmouseout="this.style.transform='scale(1)'">
+                    <h4 style="color:#e2e8f0;font-size:12px;margin-bottom:5px">${loc.name}</h4>
+                    <div style="height:80px;background:#0f172a;margin-bottom:5px;border-radius:4px;overflow:hidden;">
+                        ${loc.image ? `<img src="${loc.image}" style="width:100%;height:100%;object-fit:cover;">` : `<span style="color:#64748b;font-size:24px;line-height:80px;">🌍</span>`}
+                    </div>
+                </div>
+            `;
+        });
+        locListContainer.innerHTML = availableHtml;
+
+        let draftedHtml = '';
+        const limit = this._getLocationDeckSize();
+        for (let i = 0; i < limit; i++) {
+            if (i < this.draftedLocations.length) {
+                const loc = this.draftedLocations[i];
+                draftedHtml += `
+                    <div onclick="game.removeDraftedLocation(${i})"
+                         title="Clique para remover"
+                         style="background: rgba(46,204,113,0.15); border: 2px solid #2ecc71; border-radius: 8px;
+                                padding: 10px; cursor: pointer; text-align: center; display:flex; flex-direction:column; justify-content:center; align-items:center;"
+                         onmouseover="this.style.background='rgba(231,76,60,0.2)';this.style.borderColor='#e74c3c'"
+                         onmouseout="this.style.background='rgba(46,204,113,0.15)';this.style.borderColor='#2ecc71'">
+                        <span style="color:#2ecc71;font-size:11px;font-weight:bold">${loc.name}</span>
+                    </div>
+                `;
+            } else {
+                draftedHtml += `
+                    <div style="background: rgba(255,255,255,0.05); border: 2px dashed #475569; border-radius: 8px;
+                                display:flex; align-items:center; justify-content:center; height:60px;">
+                        <span style="color:#475569;font-size:10px;">Vazio</span>
+                    </div>
+                `;
+            }
+        }
+        draftedContainer.innerHTML = draftedHtml;
+
+        if (counter) counter.innerText = `${this.draftedLocations.length} / ${limit} Escolhidas`;
+
+        if (this.draftedLocations.length === limit) {
+            if (finishBtn) {
+                finishBtn.disabled = false;
+                finishBtn.style.opacity = '1';
+                finishBtn.style.cursor = 'pointer';
+                finishBtn.style.background = '#10b981';
+                finishBtn.style.color = '#ffffff';
+            }
+        } else {
+            if (finishBtn) {
+                finishBtn.disabled = true;
+                finishBtn.style.opacity = '0.5';
+                finishBtn.style.cursor = 'not-allowed';
+                finishBtn.style.background = 'rgba(16,185,129,0.3)';
+                finishBtn.style.color = '#6ee7b7';
+            }
+        }
+    },
+
+    confirmLocationDraft() {
+        if (this.draftedLocations.length < this._getLocationDeckSize()) return;
+        this.openAttackDraftScreen();
+    },
+
+    randomizeLocations() {
+        this.draftedLocations = [];
+        const pool = JSON.parse(JSON.stringify(this.locationsData));
+        const limit = this._getLocationDeckSize();
+        while (this.draftedLocations.length < limit && pool.length > 0) {
+            const i = Math.floor(Math.random() * pool.length);
+            this.draftedLocations.push(pool.splice(i, 1)[0]);
+        }
+        this.renderLocationDraft();
+    },
+
+    draftLocation(index) {
+        const limit = this._getLocationDeckSize();
+        if (this.draftedLocations.length >= limit) {
+            this.showAlert('✋ Deck Completo', `Você já escolheu ${limit} Localizações!`);
+            return;
+        }
+        this.draftedLocations.push(this.locationsData[index]);
+        this.renderLocationDraft();
+    },
+
+    removeDraftedLocation(index) {
+        this.draftedLocations.splice(index, 1);
+        this.renderLocationDraft();
+    },
+
     openAttackDraftScreen() {
         // Esconde mugic draft, mostra attack draft
-        const mgScreen  = document.getElementById('mugic-draft-screen');
+        const locScreen  = document.getElementById('location-draft-screen');
         const atkScreen = document.getElementById('attack-draft-screen');
-        if (mgScreen)  mgScreen.style.display  = 'none';
+        if (locScreen)  locScreen.style.display  = 'none';
         if (atkScreen) atkScreen.style.display = 'block';
 
         // Atualiza label de tamanho
@@ -1730,12 +1858,12 @@ Object.assign(GameEngine.prototype, {
 
         // Jogador P1 recebe as 6 Mugics draftadas na mão
         this.playerMugics = [];
-        if (this.draftedMugics && this.draftedMugics.length === this._getDraftLimit()) {
+        if (this.draftedMugics && this.draftedMugics.length === this._getMugicLimit()) {
             this.playerMugics = JSON.parse(JSON.stringify(this.draftedMugics));
         } else {
             // Fallback caso as mugics não existam (ex: pulou o draft no dev mode)
             if (this.mugics && this.mugics.length > 0) {
-                for (let i = 0; i < this._getDraftLimit(); i++) {
+                for (let i = 0; i < this._getMugicLimit(); i++) {
                     const randIndex = Math.floor(Math.random() * this.mugics.length);
                     this.playerMugics.push(JSON.parse(JSON.stringify(this.mugics[randIndex])));
                 }
@@ -1744,6 +1872,7 @@ Object.assign(GameEngine.prototype, {
 
         // IA P2 monta deck de acordo com a dificuldade
         const diff = this.aiDifficulty || 'easy';
+        const aiMgLimit = this._getMugicLimit();
         let aiCards = [];
         let aiBg    = [];
         let aiMugics = [];
@@ -1831,7 +1960,7 @@ Object.assign(GameEngine.prototype, {
         // Mugics: fácil=aleatório, médio=heals+dano, difícil=melhor combo
         if (this.mugics && this.mugics.length > 0) {
             if (diff === 'easy') {
-                for (let i = 0; i < aiLimit; i++) {
+                for (let i = 0; i < aiMgLimit; i++) {
                     aiMugics.push(JSON.parse(JSON.stringify(
                         this.mugics[Math.floor(Math.random() * this.mugics.length)]
                     )));
@@ -1844,13 +1973,43 @@ Object.assign(GameEngine.prototype, {
                 const sorted    = [...usePool].sort((a, b) =>
                     (priority[b.effectType] || 0) - (priority[a.effectType] || 0)
                 );
-                for (let i = 0; i < aiLimit; i++) {
+                for (let i = 0; i < aiMgLimit; i++) {
                     aiMugics.push(JSON.parse(JSON.stringify(sorted[i % sorted.length])));
                 }
             }
         }
 
         this.p2Mugics = aiMugics;
+
+        // Location Deck Setup
+        if (this.draftedLocations && this.draftedLocations.length > 0) {
+            this.p1LocationDeck = [...this.draftedLocations].sort(() => Math.random() - 0.5);
+        } else {
+            this.p1LocationDeck = [];
+            const limit = this._getLocationDeckSize();
+            if (this.locationsData && this.locationsData.length > 0) {
+                for (let i = 0; i < limit; i++) {
+                    const r = Math.floor(Math.random() * this.locationsData.length);
+                    this.p1LocationDeck.push(this.locationsData[r]);
+                }
+            }
+        }
+
+        this.p2LocationDeck = [];
+        const locLimit = this._getLocationDeckSize();
+        if (this.locationsData && this.locationsData.length > 0) {
+            for (let i = 0; i < locLimit; i++) {
+                const r = Math.floor(Math.random() * this.locationsData.length);
+                this.p2LocationDeck.push(this.locationsData[r]);
+            }
+        }
+
+        // Initialize active location if none is set
+        if (this.p1LocationDeck.length > 0 && this.p2LocationDeck.length > 0 && !this.activeLocation) {
+            // First turn location comes from P1's deck
+            this.activeLocation = this.p1LocationDeck.shift();
+            this.activeLocationOwner = 'p1';
+        }
 
         // Inicializa Decks de Ataque (20 cartas cada)
         if (this.attacksData && this.attacksData.length > 0) {

@@ -6,7 +6,7 @@
 
 const attacksDatabase = [
     // ── 0 Build Points ──────────────────────────────────────────────────────
-    { id:"a1", image:"src/assets/attacks/a1.jpg",  name:"Degenervate",    bp:0, baseDamage:0,  elementRequirement:"Water", elementDamage:0,  elementEffect:{type:"drain_all_stats_lose_element", value:25}, rarity:"Rare" },
+    { id:"a1", image:"src/assets/attacks/a1.jpg",  name:"Degenervate",    bp:0, baseDamage:0,  elementRequirement:"Water", elementDamage:0,  elementEffect:{type:"drain_all_stats_lose_element_temp", value:25}, rarity:"Rare" },
     { id:"a2", image:"src/assets/attacks/a2.jpg",  name:"Delerium",       bp:0, baseDamage:0,  statRequirement:"wisdom",  statMode:"check",     statThreshold:50, statDamage:5,  rarity:"Common" },
     { id:"a3", image:"src/assets/attacks/a3.jpg",  name:"Ektospasm",      bp:0, baseDamage:0,  statRequirement:"power",   statMode:"check",     statThreshold:50, statDamage:5,  rarity:"Common" },
     { id:"a4", image:"src/assets/attacks/a4.jpg",  name:"Evaporize",      bp:0, baseDamage:0,  statRequirement:"courage", statMode:"challenge", statThreshold:15, statDamage:0,  statHeal:10, rarity:"Rare" },
@@ -23,8 +23,8 @@ const attacksDatabase = [
     { id:"a15", image:"src/assets/attacks/a15.jpg", name:"Incinerase",     bp:0, baseDamage:0,  elementRequirement:"Fire", elementDamage:10, elementEffect:{type:"lose_element", element:"Fire"}, rarity:"Rare" },
 
     // ── 1 Build Point ───────────────────────────────────────────────────────
-    { id:"a16", image:"src/assets/attacks/a16.jpg", name:"Ash Torrent",    bp:1, baseDamage:0,  statRequirement:"power",   statMode:"challenge", statThreshold:15, statDamage:10, rarity:"Uncommon" },
-    { id:"a17", image:"src/assets/attacks/a17.jpg", name:"Ember Swarm",    bp:1, baseDamage:5,  elementRequirement:"Fire", elementDamage:0,  elementEffect:{type:"drain_stat", stat:"wisdom", value:25}, rarity:"Uncommon" },
+    { id:"a16", image:"src/assets/attacks/a16.jpg", name:"Ash Torrent",    bp:1, baseDamage:0, elementRequirement:"Fire", elementDamage:5, extraElements:[{element:"Earth", damage:5}], statRequirement:"power",   statMode:"challenge", statThreshold:15, statDamage:10, rarity:"Uncommon" },
+    { id:"a17", image:"src/assets/attacks/a17.jpg", name:"Ember Swarm",    bp:1, baseDamage:5,  elementRequirement:"Fire", elementDamage:0,  elementEffect:{type:"drain_stat_temp", stat:"wisdom", value:25}, rarity:"Uncommon" },
     { id:"a18", image:"src/assets/attacks/a18.jpg", name:"Flash Kick",     bp:1, baseDamage:5,  specialEffect:{type:"peek_location_deck"}, rarity:"Uncommon" },
     { id:"a19", image:"src/assets/attacks/a19.jpg", name:"Inferno Gust",   bp:1, baseDamage:0,  elementRequirement:"Fire", elementDamage:5,  statRequirement:"speed",   statMode:"challenge", statThreshold:15, statDamage:10, rarity:"Uncommon" },
     { id:"a20", image:"src/assets/attacks/a20.jpg", name:"Iron Balls",     bp:1, baseDamage:0,  specialEffect:{type:"no_tribal_mugic_this_attack"}, rarity:"Super Rare" },
@@ -39,7 +39,7 @@ const attacksDatabase = [
     { id:"a29", image:"src/assets/attacks/a29.jpg", name:"Windslash",      bp:1, baseDamage:5,  specialEffect:{type:"reveal_battlegear"}, rarity:"Uncommon" },
 
     // ── 2 Build Points ──────────────────────────────────────────────────────
-    { id:"a30", image:"src/assets/attacks/a30.jpg", name:"Fearocity",      bp:2, baseDamage:5,  statRequirement:"courage", statMode:"check",     statThreshold:75, statDamage:10, rarity:"Super Rare" },
+    { id:"a30", image:"src/assets/attacks/a30.jpg", name:"Fearocity",      bp:2, baseDamage:5,  elementRequirement:"Air", elementDamage:5, statRequirement:"courage", statMode:"check",     statThreshold:75, statDamage:10, rarity:"Super Rare" },
     { id:"a31", image:"src/assets/attacks/a31.jpg", name:"Flame Orb",      bp:2, baseDamage:5,  elementRequirement:"Fire", elementDamage:5,  statRequirement:"power",   statMode:"check",     statThreshold:75, statDamage:10, rarity:"Super Rare" },
     { id:"a32", image:"src/assets/attacks/a32.jpg", name:"Frost Blight",   bp:2, baseDamage:5,  statRequirement:"speed",   statMode:"check",     statThreshold:75, statDamage:10, rarity:"Super Rare" },
     { id:"a33", image:"src/assets/attacks/a33.jpg", name:"Paral-Eyes",     bp:2, baseDamage:10, statRequirement:"speed",   statMode:"challenge", statThreshold:15, statDamage:10, rarity:"Rare" },
@@ -53,7 +53,7 @@ const attacksDatabase = [
     // ── 3 Build Points ──────────────────────────────────────────────────────
     { id:"a40", image:"src/assets/attacks/a40.jpg", name:"Coil Crush",     bp:3, baseDamage:5,  statRequirement:"power",   statMode:"check",     statThreshold:75, statDamage:0, specialEffect:{type:"destroy_battlegear_on_check", checkStat:"power", checkThreshold:75}, rarity:"Super Rare" },
     { id:"a41", image:"src/assets/attacks/a41.jpg", name:"Hail Storm",     bp:3, baseDamage:10, elementRequirement:"Water",elementDamage:5,  statRequirement:"speed",   statMode:"challenge", statThreshold:5, statDamage:5, rarity:"Super Rare" },
-    { id:"a42", image:"src/assets/attacks/a42.jpg", name:"Lavalanche",     bp:3, baseDamage:10, elementRequirement:"Fire", elementDamage:10, statRequirement:"power",   statMode:"challenge", statThreshold:5, statDamage:5, rarity:"Super Rare" },
+    { id:"a42", image:"src/assets/attacks/a42.jpg", name:"Lavalanche",     bp:3, baseDamage:10, elementRequirement:"Fire", elementDamage:5, extraElements:[{element:"Earth", damage:5}], rarity:"Super Rare" },
     { id:"a43", image:"src/assets/attacks/a43.jpg", name:"Sludge Gush",    bp:3, baseDamage:10, elementRequirement:"Earth",elementDamage:5,  statRequirement:"wisdom",  statMode:"challenge", statThreshold:5, statDamage:5, rarity:"Super Rare" },
     { id:"a44", image:"src/assets/attacks/a44.jpg", name:"Telekinetic Bolt",bp:3,baseDamage:10, specialEffect:{type:"double_challenge", checks:[{stat:"courage",threshold:15},{stat:"wisdom",threshold:15}], bonusDamage:10, bonusHeal:10}, rarity:"Super Rare" },
     { id:"a45", image:"src/assets/attacks/a45.jpg", name:"Toxic Gust",     bp:3, baseDamage:10, elementRequirement:"Air",  elementDamage:5,  statRequirement:"power",   statMode:"challenge", statThreshold:5, statDamage:5, rarity:"Super Rare" },
@@ -62,11 +62,11 @@ const attacksDatabase = [
     // ── 4+ Build Points ─────────────────────────────────────────────────────
     { id:"a47", image:"src/assets/attacks/a47.jpg", name:"Lucky Shot",     bp:4, baseDamage:0,  specialEffect:{type:"lucky_shot", value:40}, rarity:"Ultra Rare" },
     { id:"a48", image:"src/assets/attacks/a48.jpg", name:"Megaroar",       bp:4, baseDamage:0,  specialEffect:{type:"megaroar", threshold:70, value:10}, rarity:"Ultra Rare" },
-    { id:"a49", image:"src/assets/attacks/a49.jpg", name:"Allmageddon",    bp:5, baseDamage:10, statRequirement:"courage", statMode:"challenge", statThreshold:10, statDamage:10,
-                extraChecks:[
-                    {stat:"power",   mode:"challenge", threshold:10, damage:10},
-                    {stat:"wisdom",  mode:"challenge", threshold:10, damage:10},
-                    {stat:"speed",   mode:"challenge", threshold:10, damage:10}
+    { id:"a49", image:"src/assets/attacks/a49.jpg", name:"Allmageddon",    bp:5, baseDamage:10, elementRequirement:"Fire", elementDamage:10,
+                extraElements:[
+                    {element:"Earth", damage:10},
+                    {element:"Air",   damage:10},
+                    {element:"Water", damage:10}
                 ], rarity:"Super Rare" },
 ];
 

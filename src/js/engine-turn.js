@@ -11,7 +11,20 @@ Object.assign(GameEngine.prototype, {
             if (card._invisibility && card._invisibilityTurn !== undefined && card._invisibilityTurn < this.turn) {
                 delete card._invisibility;
                 delete card._invisibilityTurn;
-                this.log(`👁️ ${card.name} não está mais invisível.`);
+                this.log(`👻 ${card.name} não está mais invisível.`);
+            }
+            if (card._tempStats) {
+                for (const stat in card._tempStats) {
+                    card[stat] += card._tempStats[stat];
+                }
+                delete card._tempStats;
+                this.log(`🔄 Status de ${card.name} foram restaurados.`);
+            }
+            if (card._tempElementsLost) {
+                if (!card.elements) card.elements = [];
+                card._tempElementsLost.forEach(el => card.elements.push(el));
+                delete card._tempElementsLost;
+                this.log(`🔄 ${card.name} recuperou seus elementos sacrificados.`);
             }
             delete card._cannotMove;
         };
@@ -23,9 +36,26 @@ Object.assign(GameEngine.prototype, {
         this.turn = this.turn === 1 ? 2 : 1;
         if (this._stats) this._stats.turns++;
 
+        // Mecânica do Deck de Locais (Loop)
+        if (this.p1LocationDeck && this.p2LocationDeck) {
+            if (this.activeLocationOwner === 'p1') {
+                this.p1LocationDeck.push(this.activeLocation);
+                this.activeLocation = this.p2LocationDeck.shift();
+                this.activeLocationOwner = 'p2';
+            } else {
+                this.p2LocationDeck.push(this.activeLocation);
+                this.activeLocation = this.p1LocationDeck.shift();
+                this.activeLocationOwner = 'p1';
+            }
+            const ownerLabel = this.activeLocationOwner === 'p1' ? 'Sua vez' : 'IA';
+            this.log(`🌍 Novo Local Revelado (${ownerLabel}): ${this.activeLocation.name}! (${this.activeLocation.description})`);
+            this.showLocationToast(this.activeLocation, false);
+        }
+
         this.log(`---------- Turno do Jogador ${this.turn} ----------`);
         this.renderBoard();
         this.renderMugics();
+        this.renderLocation();
 
         // Em multiplayer: só envia nextTurn quem estava no turno que acabou
         // (evita que os dois clientes enviem e causem flip duplo)
