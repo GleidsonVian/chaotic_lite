@@ -97,6 +97,9 @@ Object.assign(GameEngine.prototype, {
                       winner === 0;
         const isDraw = winner === 0;
 
+        if      (isDraw)  { /* sem som */ }
+        else if (isWin)   setTimeout(() => this.sfxVictory && this.sfxVictory(), 400);
+        else              setTimeout(() => this.sfxDefeat  && this.sfxDefeat(),  400);
         this._showWinScreen(isWin, isDraw, winner);
         return true;
     },

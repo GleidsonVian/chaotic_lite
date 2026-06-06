@@ -7,6 +7,7 @@ Object.assign(GameEngine.prototype, {
             this.resolveBurst();
             return;
         }
+        this.sfxBurstOpen && this.sfxBurstOpen();
 
         // Pisca o título da aba quando o burst abre e o jogador pode não estar olhando
         // (multiplayer: sempre; solo: só quando for turno da IA, i.e. não é a vez do jogador)
@@ -566,6 +567,7 @@ Object.assign(GameEngine.prototype, {
         if (this.isSpectator && !fromRemote) return;
         if (!fromRemote) {
             this.sendAction('passBurst');
+            this.sfxPass && this.sfxPass();
         }
         const passerLabel = this.burstPriority === 1
             ? (this.p1Name || 'Jogador 1')
@@ -595,6 +597,7 @@ Object.assign(GameEngine.prototype, {
         const bg  = myCard.battlegear;
         const eff = bg.sacrificeEffect;
         this.log(`⚔️ ${myCard.name} sacrificou [${bg.name}]!`);
+        this.sfxSacrifice && this.sfxSacrifice();
 
         switch (eff.type) {
             case 'grant_element':
@@ -767,6 +770,10 @@ Object.assign(GameEngine.prototype, {
 
         // Contador de mugics para a tela de fim de jogo
         if (this._stats) this._stats.mugics++;
+
+        // Som de mugic
+        if (mg.effectType === 'negate_mugic') this.sfxMugicNegate && this.sfxMugicNegate();
+        else this.sfxMugic && this.sfxMugic();
 
         switch (mg.effectType) {
 

@@ -29,7 +29,7 @@ const attacksDatabase = [
     { id:"a19", image:"src/assets/attacks/a19.jpg", name:"Inferno Gust",   bp:1, baseDamage:0,  elementRequirement:"Fire", elementDamage:5,  statRequirement:"speed",   statMode:"challenge", statThreshold:15, statDamage:10, rarity:"Uncommon" },
     { id:"a20", image:"src/assets/attacks/a20.jpg", name:"Iron Balls",     bp:1, baseDamage:0,  specialEffect:{type:"no_tribal_mugic_this_attack"}, rarity:"Super Rare" },
     { id:"a21", image:"src/assets/attacks/a21.jpg", name:"Lightning Burst",bp:1, baseDamage:5,  elementRequirement:"Air",  elementDamage:0,  elementEffect:{type:"drain_stat", stat:"power", value:25}, rarity:"Uncommon" },
-    { id:"a22", image:"src/assets/attacks/a22.jpg", name:"Pebblestorm",    bp:1, baseDamage:5,  elementRequirement:"Earth",elementDamage:5,  statRequirement:"speed",   statMode:"challenge", statThreshold:5,  statDamage:5, rarity:"Common" },
+    { id:"a22", image:"src/assets/attacks/a22.jpg", name:"Pebblestorm",    bp:1, baseDamage:5,  elementBonuses:[{element:"Earth",damage:5},{element:"Air",damage:5}], statRequirement:"speed", statMode:"challenge", statThreshold:5, statDamage:5, rarity:"Common" },
     { id:"a23", image:"src/assets/attacks/a23.jpg", name:"Rip Tide",       bp:1, baseDamage:5,  elementRequirement:"Water",elementDamage:0,  elementEffect:{type:"drain_stat", stat:"courage", value:25}, rarity:"Uncommon" },
     { id:"a24", image:"src/assets/attacks/a24.jpg", name:"Rustoxic",       bp:1, baseDamage:0,  statRequirement:"courage", statMode:"challenge", statThreshold:15, statDamage:10, rarity:"Uncommon" },
     { id:"a25", image:"src/assets/attacks/a25.jpg", name:"Squeeze Play",   bp:1, baseDamage:5,  specialEffect:{type:"peek_attack_deck"}, rarity:"Uncommon" },

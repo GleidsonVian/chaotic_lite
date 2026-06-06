@@ -1108,6 +1108,62 @@ Object.assign(GameEngine.prototype, {
         this.openAttackDraftScreen();
     },
 
+    autoSelectLocations() {
+        const limit = this._getLocationDeckSize();
+        const locations = this.locationsData || [];
+        if (!locations.length) return;
+
+        // Reutiliza o mesmo scoring de showLocationRecommendations
+        const effTeam = this.draftedCards.map((c, i) => {
+            const bg  = this.draftedBattlegears && this.draftedBattlegears[i];
+            const mod = (bg && bg.modifiers) ? bg.modifiers : {};
+            const elems = new Set([
+                ...(c.elements || []),
+                ...(bg && bg.elementGranted ? [bg.elementGranted] : []),
+                ...(bg && bg.tribalElement && c.tribe === bg.tribalElement.tribe ? [bg.tribalElement.element] : []),
+            ]);
+            return {
+                tribe: c.tribe,
+                courage: (c.courage||0)+(mod.courage||0),
+                power:   (c.power  ||0)+(mod.power  ||0),
+                wisdom:  (c.wisdom ||0)+(mod.wisdom ||0),
+                speed:   (c.speed  ||0)+(mod.speed  ||0),
+                elements: elems,
+            };
+        });
+
+        const avgStat = s => effTeam.length
+            ? Math.round(effTeam.reduce((sum,c)=>sum+(c[s]||0),0)/effTeam.length) : 50;
+        const teamTribes = new Set(effTeam.map(c=>c.tribe));
+        const teamElems  = new Set(effTeam.flatMap(c=>[...c.elements]));
+
+        const scored = locations.map(loc => {
+            let score = avgStat(loc.initiative) * 0.3;
+            const ef = loc.effect || {};
+            switch (ef.type) {
+                case 'elemental_modifiers':
+                    Object.entries(ef.bonuses||{}).forEach(([el,v]) => { if(teamElems.has(el)) score += v*2; else score -= v*0.5; });
+                    Object.entries(ef.penalties||{}).forEach(([el,v]) => { if(teamElems.has(el)) score -= v*1.5; else score += v*0.5; });
+                    break;
+                case 'tribe_energy_bonus':        if(teamTribes.has(ef.tribe)) score += ef.value*1.5; break;
+                case 'first_attack_tribe_bonus':  if(teamTribes.has(ef.tribe)) score += ef.value; break;
+                case 'combat_start_mugic_counter_tribe': if(teamTribes.has(ef.tribe)) score += 8; break;
+                case 'mugic_discount_tribe_first': if(teamTribes.has(ef.tribe)) score += 6; break;
+                case 'extra_mugic_cost_tribe':    score += teamTribes.has(ef.tribe) ? -5 : 5; break;
+                case 'combat_start_energy':       score += ef.value * (ef.target==='both'?0.5:1.2); break;
+                case 'heal_on_water_attack':      if(teamElems.has('Water')) score += 8; break;
+                case 'no_mugic':                  score -= 10; break;
+                case 'combat_start_mugic_counter_higher_wisdom': if(avgStat('wisdom')>60) score += 7; break;
+            }
+            return { loc, score };
+        }).sort((a,b) => b.score - a.score);
+
+        // Seleciona os melhores até o limite
+        this.draftedLocations = scored.slice(0, limit).map(s => s.loc);
+        this.renderLocationDraft();
+        this.log(`🗺️ ${limit} locais recomendados para seu time selecionados automaticamente!`);
+    },
+
     randomizeLocations() {
         this.draftedLocations = [];
         const pool = JSON.parse(JSON.stringify(this.locationsData));
@@ -1169,7 +1225,15 @@ Object.assign(GameEngine.prototype, {
         if (atk.baseDamage > 0)  lines.push(`💥 ${atk.baseDamage} de dano base.`);
         else if (!atk.baseDamage) lines.push(`💥 0 de dano base.`);
 
-        // Elemento
+        // Múltiplos elementos (elementBonuses)
+        if (atk.elementBonuses && atk.elementBonuses.length > 0) {
+            atk.elementBonuses.forEach(eb => {
+                const icon = elemIcons[eb.element] || '';
+                lines.push(`${icon} Se tiver ${eb.element}: +${eb.damage} de dano.`);
+            });
+        }
+
+        // Elemento legado
         if (atk.elementRequirement) {
             const icon = elemIcons[atk.elementRequirement] || '';
             if (atk.elementDamage)  lines.push(`${icon} Se tiver ${atk.elementRequirement}: +${atk.elementDamage} de dano.`);
@@ -1369,6 +1433,191 @@ Object.assign(GameEngine.prototype, {
     removeAttackCard(deckIndex) {
         this.draftedAttacks.splice(deckIndex, 1);
         this.renderAttackDraft();
+    },
+
+    showLocationRecommendations() {
+        const locations = this.locationsData || [];
+        if (!locations.length) { alert('Nenhum local disponível.'); return; }
+
+        // Stats efetivos do time (base + battlegear)
+        const effTeam = this.draftedCards.map((c, i) => {
+            const bg  = this.draftedBattlegears && this.draftedBattlegears[i];
+            const mod = (bg && bg.modifiers) ? bg.modifiers : {};
+            const elems = new Set([
+                ...(c.elements || []),
+                ...(bg && bg.elementGranted ? [bg.elementGranted] : []),
+                ...(bg && bg.tribalElement && c.tribe === bg.tribalElement.tribe ? [bg.tribalElement.element] : []),
+            ]);
+            return {
+                name:    c.name,
+                tribe:   c.tribe,
+                courage: (c.courage || 0) + (mod.courage || 0),
+                power:   (c.power   || 0) + (mod.power   || 0),
+                wisdom:  (c.wisdom  || 0) + (mod.wisdom  || 0),
+                speed:   (c.speed   || 0) + (mod.speed   || 0),
+                elements: elems,
+            };
+        });
+
+        const avgStat = s => effTeam.length
+            ? Math.round(effTeam.reduce((sum, c) => sum + (c[s] || 0), 0) / effTeam.length)
+            : 50;
+
+        const teamTribes = new Set(effTeam.map(c => c.tribe));
+        const teamElems  = new Set(effTeam.flatMap(c => [...c.elements]));
+        const mainTribe  = (() => {
+            const cnt = {}; effTeam.forEach(c => { cnt[c.tribe] = (cnt[c.tribe]||0)+1; });
+            return Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]?.[0];
+        })();
+
+        // Pontua cada local para o time atual
+        const scored = locations.map(loc => {
+            let score = 0;
+            const reasons = [];
+            const ef = loc.effect || {};
+            const initStat = loc.initiative;
+
+            // Bônus de iniciativa: quanto maior o stat no time, melhor
+            const avg = avgStat(initStat);
+            score += avg * 0.3;
+            reasons.push(`📊 Iniciativa ${initStat.toUpperCase()} (seu time: ${avg})`);
+
+            // Efeitos benéficos analisados
+            switch (ef.type) {
+                case 'elemental_modifiers':
+                    if (ef.bonuses) {
+                        Object.entries(ef.bonuses).forEach(([elem, val]) => {
+                            if (teamElems.has(elem)) {
+                                score += val * 2;
+                                reasons.push(`✅ +${val} dano ${elem} — seu time tem ${elem}`);
+                            }
+                        });
+                    }
+                    if (ef.penalties) {
+                        Object.entries(ef.penalties).forEach(([elem, val]) => {
+                            if (teamElems.has(elem)) {
+                                score -= val * 1.5;
+                                reasons.push(`⚠️ −${val} dano ${elem} — seu time usa ${elem}`);
+                            } else {
+                                score += val * 0.5;
+                                reasons.push(`✅ −${val} dano ${elem} penaliza o inimigo`);
+                            }
+                        });
+                    }
+                    break;
+                case 'tribe_energy_bonus':
+                    if (teamTribes.has(ef.tribe)) {
+                        score += ef.value * 1.5;
+                        reasons.push(`✅ +${ef.value} HP para ${ef.tribe} — você tem essa tribo`);
+                    }
+                    break;
+                case 'first_attack_tribe_bonus':
+                    if (teamTribes.has(ef.tribe)) {
+                        score += ef.value;
+                        reasons.push(`✅ +${ef.value} no 1º ataque para ${ef.tribe}`);
+                    }
+                    break;
+                case 'combat_start_mugic_counter_tribe':
+                    if (teamTribes.has(ef.tribe)) {
+                        score += 8;
+                        reasons.push(`✅ +1 ♪ para ${ef.tribe} ao engajar`);
+                    }
+                    break;
+                case 'mugic_discount_tribe_first':
+                    if (teamTribes.has(ef.tribe)) {
+                        score += 6;
+                        reasons.push(`✅ Mugic mais barata para ${ef.tribe}`);
+                    }
+                    break;
+                case 'combat_start_mugic_counter_higher_wisdom':
+                    if (avgStat('wisdom') > 60) {
+                        score += 7;
+                        reasons.push(`✅ Alta Sabedoria (${avgStat('wisdom')}) → +1 ♪`);
+                    }
+                    break;
+                case 'combat_start_energy':
+                    score += ef.value * (ef.target === 'both' ? 0.5 : 1.2);
+                    reasons.push(`✅ +${ef.value} HP no início do combate`);
+                    break;
+                case 'extra_mugic_cost_tribe':
+                    if (!teamTribes.has(ef.tribe)) {
+                        score += 5;
+                        reasons.push(`✅ Mugics ${ef.tribe} custam +1 (não afeta você)`);
+                    } else {
+                        score -= 5;
+                        reasons.push(`⚠️ Suas mugics ${ef.tribe} custam +1`);
+                    }
+                    break;
+                case 'no_mugic':
+                    score -= 10;
+                    reasons.push(`❌ Mugics bloqueadas aqui`);
+                    break;
+                case 'heal_on_water_attack':
+                    if (teamElems.has('Water')) {
+                        score += 8;
+                        reasons.push(`✅ Cura +${ef.value} em ataques Water`);
+                    }
+                    break;
+            }
+
+            return { loc, score: Math.round(score), reasons };
+        }).sort((a, b) => b.score - a.score);
+
+        // Exibe top 5 em modal dedicado (mais largo que o showAlert padrão)
+        const top = scored.slice(0, 5);
+        const initIcons = { courage:'⚔️', power:'💪', wisdom:'🧠', speed:'⚡' };
+
+        const rows = top.map((item, idx) => {
+            const medal = ['🥇','🥈','🥉','4️⃣','5️⃣'][idx];
+            const reasonsHtml = item.reasons.slice(0, 4).map(r =>
+                `<div style="font-size:11px;color:#94a3b8;margin-top:3px;">${r}</div>`
+            ).join('');
+            return `
+            <div style="background:rgba(255,255,255,0.05);border:1px solid #1e293b;border-radius:10px;
+                        padding:12px 16px;display:flex;gap:14px;align-items:flex-start;text-align:left;">
+                <div style="font-size:24px;flex-shrink:0;line-height:1;">${medal}</div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:14px;font-weight:800;color:#f1f5f9;margin-bottom:3px;">${item.loc.name}</div>
+                    <div style="font-size:11px;color:#64748b;margin-bottom:5px;">
+                        ${initIcons[item.loc.initiative]||''} Iniciativa: <strong style="color:#e2e8f0;">${item.loc.initiative.toUpperCase()}</strong>
+                        &nbsp;·&nbsp; Score: <strong style="color:#fbbf24;">${item.score}</strong>
+                    </div>
+                    ${reasonsHtml}
+                </div>
+            </div>`;
+        }).join('');
+
+        // Modal dedicado — mais largo e sem white-space:pre-line
+        let modal = document.getElementById('loc-rec-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'loc-rec-modal';
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div style="background:#0f172a;border:1px solid #334155;border-radius:16px;
+                            padding:28px 32px;width:560px;max-width:94vw;max-height:85vh;
+                            overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,0.85);color:#f1f5f9;text-align:center;">
+                    <div style="font-size:20px;font-weight:900;color:#fbbf24;margin-bottom:6px;">🗺️ Melhores Locais para seu Time</div>
+                    <div id="loc-rec-team-info" style="font-size:11px;color:#64748b;margin-bottom:16px;"></div>
+                    <div id="loc-rec-rows" style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;"></div>
+                    <div style="font-size:10px;color:#334155;margin-bottom:16px;">
+                        O deck é embaralhado — use isso para saber quais locais favorecem seu time.
+                    </div>
+                    <button onclick="document.getElementById('loc-rec-modal').classList.add('hidden');document.getElementById('loc-rec-modal').classList.remove('flex-modal')"
+                        style="background:linear-gradient(135deg,#1e40af,#3b82f6);border:none;border-radius:8px;
+                               color:#fff;font-size:14px;font-weight:700;padding:10px 32px;cursor:pointer;font-family:inherit;">
+                        Fechar
+                    </button>
+                </div>`;
+            document.body.appendChild(modal);
+        }
+
+        document.getElementById('loc-rec-team-info').innerHTML =
+            `Time principal: <strong style="color:#f1f5f9;">${mainTribe}</strong> &nbsp;·&nbsp;
+             Elementos: <strong style="color:#fbbf24;">${[...teamElems].join(', ') || 'nenhum'}</strong>`;
+        document.getElementById('loc-rec-rows').innerHTML = rows;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex-modal');
     },
 
     confirmAttackDraft() {
@@ -1822,6 +2071,7 @@ Object.assign(GameEngine.prototype, {
 
     startBattle() {
         this.appState = 'BATTLE';
+        this._initAudio(); // inicializa contexto de áudio na primeira interação do usuário
 
         // Modo multiplayer: troca de drafts
         if (this.multiplayerMode) {

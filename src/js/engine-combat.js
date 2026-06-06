@@ -332,7 +332,12 @@ Object.assign(GameEngine.prototype, {
                     const met = atk.statMode === 'challenge' ? (av - dv) >= (atk.statThreshold||0) : av >= (atk.statThreshold||0);
                     if (met) dmg += atk.statDamage || 0;
                 }
-                if (atk.elementRequirement && (attacker.elements||[]).includes(atk.elementRequirement)) {
+                // Multi-elemento
+                if (atk.elementBonuses) {
+                    atk.elementBonuses.forEach(eb => {
+                        if ((attacker.elements||[]).includes(eb.element)) dmg += eb.damage || 0;
+                    });
+                } else if (atk.elementRequirement && (attacker.elements||[]).includes(atk.elementRequirement)) {
                     dmg += atk.elementDamage || 0;
                 }
                 if (dmg > best) best = dmg;
@@ -639,7 +644,21 @@ Object.assign(GameEngine.prototype, {
                 }
             }
 
-            // Requisito de elemento
+            // Múltiplos elementos (elementBonuses)
+            if (atkCard.elementBonuses && atkCard.elementBonuses.length > 0) {
+                atkCard.elementBonuses.forEach(eb => {
+                    const hasEl = attacker.elements && attacker.elements.includes(eb.element);
+                    const icon  = elemIcons[eb.element] || '✨';
+                    if (hasEl) {
+                        expectedDamage += eb.damage || 0;
+                        rows.push({ ok: true,  text: `✅ ${icon} Se tiver ${eb.element}: +${eb.damage} dano` });
+                    } else {
+                        rows.push({ ok: false, text: `❌ ${icon} Se tiver ${eb.element}: +${eb.damage} dano` });
+                    }
+                });
+            }
+
+            // Requisito de elemento (legado)
             if (atkCard.elementRequirement) {
                 const hasEl  = attacker.elements && attacker.elements.includes(atkCard.elementRequirement);
                 const elIcon = elemIcons[atkCard.elementRequirement] || '✨';
@@ -936,6 +955,7 @@ Object.assign(GameEngine.prototype, {
         this.log(`🔔 BURST ABERTO: ${attackingPlayer === 1 ? 'Jogador 1' : p2Label} atacou com ${atkCard.name}`);
 
         // Animação de salto — usa posição exata (atkR,atkC) para não errar com criaturas de mesmo nome
+        this.sfxAttack && this.sfxAttack();
         this._playAttackAnimation(attacker, attackingPlayer, atkR, atkC).then(() => {
             this.openBurstModal();
         });
@@ -1015,8 +1035,26 @@ Object.assign(GameEngine.prototype, {
         }
 
         // ─── Elemento ─────────────────────────────────────────────────────────
+        // ── Bônus elemental (suporta múltiplos elementos via elementBonuses) ──
+        const _elemIcons = { Fire:'🔥', Water:'💧', Earth:'🪨', Air:'🌪️' };
+        const _attElems  = new Set([
+            ...(attacker.elements || []),
+            ...(attacker.bgRevealed && attacker.battlegear?.elementGranted ? [attacker.battlegear.elementGranted] : []),
+        ]);
+
+        // Formato novo: elementBonuses: [{element, damage}]
+        if (atkCard.elementBonuses && atkCard.elementBonuses.length > 0) {
+            atkCard.elementBonuses.forEach(eb => {
+                if (_attElems.has(eb.element) && eb.damage) {
+                    totalDamage += eb.damage;
+                    this.log(`${_elemIcons[eb.element]||'✨'} Bônus ${eb.element}: +${eb.damage} dano!`);
+                }
+            });
+        }
+
+        // Formato legado: elementRequirement + elementDamage (mantém retrocompatibilidade)
         if (atkCard.elementRequirement) {
-            const hasEl = (attacker.elements || []).includes(atkCard.elementRequirement);
+            const hasEl = _attElems.has(atkCard.elementRequirement);
             if (hasEl) {
                 if (atkCard.elementDamage) {
                     totalDamage += atkCard.elementDamage;
@@ -1330,11 +1368,16 @@ Object.assign(GameEngine.prototype, {
 
         this.log(`💥 ${attacker.name} usou ${atkCard.name} e causou ${totalDamage} de dano a ${defender.name}! (Vida restante: ${Math.max(0, defender.energy)})`);
 
+        // Sons de dano
+        if (totalDamage >= 25)     this.sfxHitCritical && this.sfxHitCritical();
+        else if (totalDamage > 0)  this.sfxHit         && this.sfxHit();
+
         // Cura do atacante (Evaporize, Flash Mend, Telekinetic Bolt)
         if (totalHeal > 0) {
             attacker.energy = Math.min(attacker.maxEnergy || attacker.energy + 999, attacker.energy + totalHeal);
             this.log(`💚 ${attacker.name} curou ${totalHeal} de Energia!`);
             if (this.activeCombat) this.activeCombat.healHistory.push({ targetName: attacker.name, amount: totalHeal, source: atkCard.name });
+            this.sfxHeal && this.sfxHeal();
         }
 
         // Penalidade de Reckless — atacante sofre dano próprio
@@ -1354,6 +1397,7 @@ Object.assign(GameEngine.prototype, {
         if (defender.energy <= 0) {
             this.log(`💀 ${defender.name} foi derrotado!`);
             if (this._stats) this._stats.kills++;
+            setTimeout(() => this.sfxDeath && this.sfxDeath(), 80);
         }
     },
 

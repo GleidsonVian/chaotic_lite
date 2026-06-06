@@ -341,6 +341,7 @@ Object.assign(GameEngine.prototype, {
         board[fromR][fromC] = null;
 
         this.log(`🚶‍♂️ ${card.name} se moveu para uma nova posição estratégica!`);
+        this.sfxMove && this.sfxMove();
 
         if (!fromRemote) {
             this.sendAction('move', { player, fromR, fromC, toR, toC });
