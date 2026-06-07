@@ -458,6 +458,11 @@ Object.assign(GameEngine.prototype, {
 
     showAttackModal(attacker, defender, atkR, atkC, defR, defC, attackingPlayer) {
 
+        // Atualiza indicador de iniciativa no HUD
+        if (typeof this._chudUpdateInitiative === 'function') {
+            this._chudUpdateInitiative(attackingPlayer);
+        }
+
         const modal = document.getElementById("attack-modal");
         const container = document.getElementById("attack-cards-container");
         if (!modal || !container) {
@@ -503,8 +508,9 @@ Object.assign(GameEngine.prototype, {
                 elementsHtml += `</div>`;
             }
 
+            const cardId = label === 'Atacante' ? 'modal-card-atk' : 'modal-card-def';
             return `
-            <div class="combat-card ${label === 'Atacante' ? 'combat-card--attacker' : 'combat-card--defender'}">
+            <div class="combat-card ${label === 'Atacante' ? 'combat-card--attacker' : 'combat-card--defender'}" id="${cardId}" style="position:relative;">
                 <h3 class="${label === 'Atacante' ? 'attacker-label' : 'defender-label'}">${label}</h3>
                 <div class="card-rarity-icon rarity-${(card.rarity || 'Common').toLowerCase().replace(/\s+/g, '-')}" title="${card.rarity || 'Common'}">${card.rarity === 'Ultra Rare' ? '💎' : card.rarity === 'Super Rare' ? '🔷' : card.rarity === 'Rare' ? '🔶' : card.rarity === 'Legendary' ? '🌟' : '⚪'}</div>
                 <div class="card-tribe">${card.tribe}</div>
@@ -533,14 +539,14 @@ Object.assign(GameEngine.prototype, {
                             padding:8px 12px;${isCritical?'animation:criticalPulse 1.2s ease-in-out infinite;':''}">
                     <!-- Número de vida em destaque -->
                     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;">
-                        <span style="font-size:22px;font-weight:900;color:${hpTextColor};line-height:1;text-shadow:0 2px 8px ${hpTextColor}66;">
+                        <span ${label!=='Atacante'?'id="modal-def-hp-val"':''} style="font-size:22px;font-weight:900;color:${hpTextColor};line-height:1;text-shadow:0 2px 8px ${hpTextColor}66;">
                             ${isCritical ? '💀' : '❤️'} ${Math.max(0, effEnergy)}
                         </span>
                         <span style="font-size:11px;color:#64748b;font-weight:600;">/ ${maxEnergy}</span>
                     </div>
                     <!-- Barra de vida -->
-                    <div style="height:8px;background:#1e293b;border-radius:4px;overflow:hidden;border:1px solid rgba(0,0,0,0.4);">
-                        <div style="width:${Math.max(0,hpPct*100)}%;height:100%;background:${hpBarColor};
+                    <div ${label!=='Atacante'?'id="modal-def-hp-track"':''} style="position:relative;height:8px;background:#1e293b;border-radius:4px;overflow:hidden;border:1px solid rgba(0,0,0,0.4);">
+                        <div ${label!=='Atacante'?'id="modal-def-hp-fill"':''} style="width:${Math.max(0,hpPct*100)}%;height:100%;background:${hpBarColor};
                                     border-radius:4px;transition:width 0.5s,background 0.5s;
                                     ${isCritical?'box-shadow:0 0 6px #ef444488;':''}"></div>
                     </div>
@@ -1441,18 +1447,37 @@ Object.assign(GameEngine.prototype, {
         if (totalDamage >= 25)     this.sfxHitCritical && this.sfxHitCritical();
         else if (totalDamage > 0)  this.sfxHit         && this.sfxHit();
 
+        // Float de dano no HUD
+        if (typeof this._chudShowDamageFloat === 'function') {
+            const myPN = this.multiplayerMode ? this.myPlayerNumber : 1;
+            const defIsEnemy = (attackingPlayer === myPN); // defender é o inimigo quando atacante é eu
+            if (totalDamage > 0) this._chudShowDamageFloat(defIsEnemy, totalDamage, false);
+        }
+
         // Cura do atacante (Evaporize, Flash Mend, Telekinetic Bolt)
         if (totalHeal > 0) {
             attacker.energy = Math.min(attacker.maxEnergy || attacker.energy + 999, attacker.energy + totalHeal);
             this.log(`💚 ${attacker.name} curou ${totalHeal} de Energia!`);
             if (this.activeCombat) this.activeCombat.healHistory.push({ targetName: attacker.name, amount: totalHeal, source: atkCard.name });
             this.sfxHeal && this.sfxHeal();
+            // Float de cura no HUD
+            if (typeof this._chudShowDamageFloat === 'function') {
+                const myPN = this.multiplayerMode ? this.myPlayerNumber : 1;
+                const atkIsEnemy = (attackingPlayer !== myPN);
+                this._chudShowDamageFloat(atkIsEnemy, totalHeal, true);
+            }
         }
 
         // Penalidade de Reckless — atacante sofre dano próprio
         if (attacker._recklessPenalty && attacker._recklessPenalty > 0) {
             attacker.energy -= attacker._recklessPenalty;
             this.log(`💢 ${attacker.name} [Reckless]: sofre ${attacker._recklessPenalty} de dano por usar ataque imprudente!`);
+            // Float de dano por reckless
+            if (typeof this._chudShowDamageFloat === 'function') {
+                const myPN = this.multiplayerMode ? this.myPlayerNumber : 1;
+                const atkIsEnemy = (attackingPlayer !== myPN);
+                this._chudShowDamageFloat(atkIsEnemy, attacker._recklessPenalty, false);
+            }
             attacker._recklessPenalty = 0;
         }
 

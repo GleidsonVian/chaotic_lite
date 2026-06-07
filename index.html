@@ -1397,6 +1397,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="chud-turn-label" id="chud-turn-label"></div>
                 <!-- Barra de energia comparativa -->
                 <div class="chud-energy-bars" id="chud-energy-bars"></div>
+                <!-- Local ativo -->
+                <div class="chud-location-info" id="chud-location-info"></div>
+                <div class="chud-initiative-arrow" id="chud-initiative-arrow"></div>
             </div>
 
             <!-- Criatura inimiga (direita) -->
@@ -1434,6 +1437,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
         </div>
     </div><!-- /combat-hud -->
+
+    <!-- ── Painel lateral de Battlegear (HUD) ── -->
+    <div id="chud-bg-panel" class="chud-bg-panel hidden">
+        <button class="chud-bg-panel-close" onclick="game._chudCloseBgPanel()">✕</button>
+        <div class="chud-bg-panel-img-wrap">
+            <img id="chud-bg-panel-img" src="" alt="" class="chud-bg-panel-img">
+            <div class="chud-bg-panel-rarity" id="chud-bg-panel-rarity"></div>
+        </div>
+        <div class="chud-bg-panel-name" id="chud-bg-panel-name"></div>
+        <div class="chud-bg-panel-desc" id="chud-bg-panel-desc"></div>
+        <div class="chud-bg-panel-mods" id="chud-bg-panel-mods"></div>
+        <div class="chud-bg-panel-extras" id="chud-bg-panel-extras"></div>
+    </div>
+    <!-- ── Backdrop do painel BG ── -->
+    <div id="chud-bg-backdrop" class="chud-bg-backdrop hidden" onclick="game._chudCloseBgPanel()"></div>
 
     <!-- ── Tooltip do fighter inimigo no HUD ── -->
     <div id="chud-fighter-tooltip" class="hidden">

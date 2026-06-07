@@ -1007,13 +1007,19 @@ Object.assign(GameEngine.prototype, {
                 `<span class="chud-elem-badge">${eIcons[e]||''} ${e}</span>`).join('')}</div>`
             : '';
 
-        // Battlegear — mostra nome + efeito/descrição se revelado
+        // Battlegear — mostra nome + efeito/descrição se revelado; clicável para painel lateral
         let bgHtml = '';
         if (card.battlegear && card.bgRevealed) {
             const bg = card.battlegear;
             const bgEffect = bg.effect || bg.description || bg.text || '';
-            bgHtml = `<div class="chud-fighter-bg-block">
-                <div class="chud-fighter-bg-name">🛡️ ${bg.name}</div>
+            // Armazena no cache para o onclick acessar sem serializar HTML
+            if (!window._chudBgCache) window._chudBgCache = {};
+            const cacheKey = bg.id || bg.name || 'bg';
+            window._chudBgCache[cacheKey] = bg;
+            bgHtml = `<div class="chud-fighter-bg-block chud-fighter-bg-clickable"
+                    title="Clique para ver detalhes"
+                    onclick="game._chudShowBgPanel(window._chudBgCache['${cacheKey}'])">
+                <div class="chud-fighter-bg-name">🛡️ ${bg.name} <span class="chud-bg-expand-hint">↗</span></div>
                 ${bgEffect ? `<div class="chud-fighter-bg-effect">${bgEffect}</div>` : ''}
             </div>`;
         } else if (card.battlegear && !card.bgRevealed) {
@@ -1043,18 +1049,39 @@ Object.assign(GameEngine.prototype, {
             if (pills) passivesHtml = `<div class="chud-passives-row">${pills}</div>`;
         }
 
+        // Mugic counters
+        const mugicTotal   = card.mugicCounters ?? 0;
+        const mugicCurrent = card._mugicCounters  ?? mugicTotal;
+        const mugicHtml = mugicTotal > 0
+            ? `<div class="chud-mugic-counter">
+                ${Array.from({length: mugicTotal}, (_, i) =>
+                    `<span class="chud-mugic-pip${i < mugicCurrent ? '' : ' spent'}">♪</span>`
+                ).join('')}
+               </div>`
+            : '';
+
+        // Habilidade da criatura
+        const abilityText = card.ability || '';
+        const abilityHtml = abilityText
+            ? `<div class="chud-fighter-ability">${abilityText}</div>`
+            : '';
+
         return `
             <div class="chud-fighter-top">
                 ${img}
                 <div class="chud-fighter-info">
-                    <div class="chud-fighter-name">${card.name}</div>
+                    <div class="chud-fighter-name-row">
+                        <div class="chud-fighter-name">${card.name}</div>
+                        ${mugicHtml}
+                    </div>
                     <div class="chud-fighter-tribe">${card.tribe || ''}</div>
                     ${elemsHtml}
-                    <div class="chud-hp-row" style="margin-top:6px;">
+                    <div class="chud-hp-row" style="margin-top:4px;">
                         <span class="chud-hp-label">❤️</span>
                         <div class="chud-hp-track"><div class="chud-hp-fill${hpCls}" style="width:${pct.toFixed(1)}%;"></div></div>
                         <span class="chud-hp-val" style="color:${hpCol};">${hp}/${maxHp}</span>
                     </div>
+                    ${abilityHtml}
                 </div>
             </div>
             ${statsHtml}
@@ -1128,6 +1155,37 @@ Object.assign(GameEngine.prototype, {
         // Round label
         const rl = document.getElementById('chud-round-label');
         if (rl) rl.textContent = ac.rounds > 0 ? `Rodada ${ac.rounds}` : 'Início';
+
+        // Local ativo — elementos e efeitos no VS column
+        const locEl = document.getElementById('chud-location-info');
+        if (locEl) {
+            const loc = this.activeLocation;
+            if (loc) {
+                const eIcons = { Fire:'🔥', Water:'💧', Earth:'🪨', Air:'🌪️' };
+                const elems  = (loc.elements || []);
+                const ef     = loc.effect || {};
+                // Pílulas de elemento do local
+                const elemPills = elems.map(e =>
+                    `<span class="chud-loc-elem">${eIcons[e]||''} ${e}</span>`
+                ).join('');
+                // Efeito de stat bônus (se houver)
+                let effectLine = '';
+                if (ef.type === 'stat_bonus' && ef.stat && ef.amount) {
+                    const statIcon = {courage:'💪',power:'⚡',wisdom:'🧠',speed:'💨'}[ef.stat] || '';
+                    const sign = ef.amount > 0 ? '+' : '';
+                    effectLine = `<div class="chud-loc-effect">${statIcon} ${sign}${ef.amount} ${ef.stat}</div>`;
+                } else if (ef.type === 'element_damage' && ef.element) {
+                    const sign = ef.bonus > 0 ? '+' : '';
+                    effectLine = `<div class="chud-loc-effect">${eIcons[ef.element]||''} ${sign}${ef.bonus} dano</div>`;
+                }
+                locEl.innerHTML = `
+                    <div class="chud-loc-name">${loc.name}</div>
+                    ${elemPills ? `<div class="chud-loc-elems">${elemPills}</div>` : ''}
+                    ${effectLine}`;
+            } else {
+                locEl.innerHTML = '';
+            }
+        }
     },
 
     // Atualiza painel de decisões no HUD
@@ -1297,9 +1355,9 @@ Object.assign(GameEngine.prototype, {
                 : (atk.elementBonuses ? atk.elementBonuses.map(e=>`<span style="font-size:11px">${eIcons[e.element]||''}</span>`).join('') : '');
             return `<div class="chud-atk-row"
                         onclick="game.confirmAttack(${i})"
-                        onmouseenter="game._chudShowAtkTooltip(event, ${i})"
+                        onmouseenter="game._chudShowAtkTooltip(event,${i});game._chudPreviewDamage(${dmg})"
                         onmousemove="game._chudMoveAtkTooltip(event)"
-                        onmouseleave="game._chudHideAtkTooltip()">
+                        onmouseleave="game._chudHideAtkTooltip();game._chudClearDamagePreview()">
                 <span class="chud-atk-num">${i+1}</span>
                 <div class="chud-atk-info">
                     <div class="chud-atk-name">${elemTag} ${atk.name}</div>
@@ -1693,12 +1751,221 @@ Object.assign(GameEngine.prototype, {
         const el = document.getElementById('chud-log-entries');
         if (!el) return;
         const entry = document.createElement('div');
-        entry.className = `chud-log-entry ${type || 'info'}`;
+
+        // Detecta tipo automaticamente pela mensagem se não foi passado
+        let autoType = type || 'info';
+        if (!type) {
+            const t = text.toLowerCase();
+            if (t.includes('dano') || t.includes('causou') || t.includes('perdeu') || t.includes('vida restante'))
+                autoType = 'damage';
+            else if (t.includes('cura') || t.includes('ganhou') || t.includes('heal'))
+                autoType = 'heal';
+            else if (t.includes('mugic') || t.includes('♪') || t.includes('conjurou'))
+                autoType = 'mugic';
+            else if (t.includes('passiva') || t.includes('intimidate') || t.includes('reckless') ||
+                     t.includes('swift') || t.includes('berserk') || t.includes('🔥') && t.includes('poder'))
+                autoType = 'passive';
+            else if (t.includes('iniciativa') || t.includes('combate iniciado') || t.includes('novo combate'))
+                autoType = 'header';
+        }
+
+        entry.className = `chud-log-entry log-${autoType}`;
         entry.textContent = text;
         el.appendChild(entry);
         el.scrollTop = el.scrollHeight;
-        // Limita a 30 entradas
         while (el.children.length > 30) el.removeChild(el.firstChild);
+    },
+
+    // Animação de dano flutuante no fighter card do HUD
+    _chudShowDamageFloat(isEnemy, amount, isHeal) {
+        // Prioriza o modal de ataque se estiver aberto/visível
+        const modal = document.getElementById('attack-modal');
+        const modalOpen = modal && modal.style.display !== 'none' && modal.style.display !== '';
+
+        let container;
+        if (modalOpen) {
+            // isEnemy=true → defender (quem leva o dano normal); isEnemy=false → atacante
+            container = modal.querySelector(isEnemy ? '#modal-card-def' : '#modal-card-atk');
+        }
+        if (!container) {
+            const targetId = isEnemy ? 'chud-enemy' : 'chud-mine';
+            container = document.getElementById(targetId);
+        }
+        if (!container) return;
+
+        const float = document.createElement('div');
+        float.className = 'chud-dmg-float' + (isHeal ? ' heal' : '');
+        float.textContent = isHeal ? `+${amount} ❤️` : `-${amount} 💥`;
+        container.style.position = 'relative';
+        container.appendChild(float);
+
+        // Remove após animação
+        setTimeout(() => float.remove(), 1200);
+    },
+
+    // Preview de dano na barra de HP do inimigo (hover no ataque)
+    _chudPreviewDamage(dmg) {
+        const ac  = this.activeCombat;
+        const myPN = this.multiplayerMode ? this.myPlayerNumber : 1;
+        const enemyCard = myPN === 1 ? ac?.p2Card : ac?.p1Card;
+        if (!enemyCard) return;
+
+        const maxHp  = enemyCard.maxEnergy || 1;
+        const curHp  = enemyCard.energy || 0;
+        const newHp  = Math.max(0, curHp - dmg);
+        const curPct = (curHp / maxHp) * 100;
+        const newPct = (newHp / maxHp) * 100;
+
+        // Tenta o modal primeiro; fallback para o HUD
+        const modal  = document.getElementById('attack-modal');
+        const modalOpen = modal && modal.style.display !== 'none' && modal.style.display !== '';
+        const track  = modalOpen ? document.getElementById('modal-def-hp-track')
+                                 : document.querySelector('#chud-enemy .chud-hp-track');
+        const val    = modalOpen ? document.getElementById('modal-def-hp-val')
+                                 : document.querySelector('#chud-enemy .chud-hp-val');
+        if (!track) return;
+
+        // Garante que o track não corte o overlay
+        track.style.overflow = 'visible';
+        track.style.position = 'relative';
+
+        let preview = track.querySelector('.chud-hp-preview');
+        if (!preview) {
+            preview = document.createElement('div');
+            preview.className = 'chud-hp-preview';
+            track.appendChild(preview);
+        }
+        preview.style.width = `${curPct - newPct}%`;
+        preview.style.left  = `${newPct}%`;
+
+        if (val) {
+            val.textContent = modalOpen
+                ? `❤️ ${newHp}  (-${dmg})`
+                : `${newHp}/${maxHp} (-${dmg})`;
+            val.style.color = '#ef4444';
+        }
+    },
+
+    _chudClearDamagePreview() {
+        const ac  = this.activeCombat;
+        const myPN = this.multiplayerMode ? this.myPlayerNumber : 1;
+        const enemyCard = myPN === 1 ? ac?.p2Card : ac?.p1Card;
+
+        // Limpa modal
+        const modalTrack = document.getElementById('modal-def-hp-track');
+        if (modalTrack) { const p = modalTrack.querySelector('.chud-hp-preview'); if (p) p.remove(); }
+        const modalVal = document.getElementById('modal-def-hp-val');
+        if (modalVal && enemyCard) {
+            const pct = (enemyCard.energy / (enemyCard.maxEnergy||1)) * 100;
+            const col = pct > 50 ? '#4ade80' : pct > 25 ? '#fbbf24' : '#ef4444';
+            modalVal.textContent = `${pct < 20 ? '💀' : '❤️'} ${Math.max(0, enemyCard.energy)}`;
+            modalVal.style.color = col;
+        }
+
+        // Limpa HUD
+        const hudEnemy = document.getElementById('chud-enemy');
+        if (hudEnemy) {
+            const p = hudEnemy.querySelector('.chud-hp-preview');
+            if (p) p.remove();
+            if (enemyCard) {
+                const val = hudEnemy.querySelector('.chud-hp-val');
+                if (val) {
+                    const pct = (enemyCard.energy / (enemyCard.maxEnergy||1)) * 100;
+                    const col = pct > 50 ? '#4ade80' : pct > 25 ? '#fbbf24' : '#ef4444';
+                    val.textContent = `${enemyCard.energy}/${enemyCard.maxEnergy}`;
+                    val.style.color = col;
+                }
+            }
+        }
+    },
+
+    // Atualiza indicador de iniciativa no VS column
+    _chudUpdateInitiative(strikerPlayer) {
+        const el = document.getElementById('chud-initiative-arrow');
+        if (!el) return;
+        const myPN = this.multiplayerMode ? this.myPlayerNumber : 1;
+        const isMine = strikerPlayer === myPN;
+        el.className = 'chud-initiative-arrow ' + (isMine ? 'mine' : 'enemy');
+        el.textContent = isMine ? '⚔️ Sua vez de atacar' : '⚔️ Vez do inimigo';
+    },
+
+    // ── Painel lateral de Battlegear ─────────────────────────────────────
+    _chudShowBgPanel(bg) {
+        const panel    = document.getElementById('chud-bg-panel');
+        const backdrop = document.getElementById('chud-bg-backdrop');
+        if (!panel || !bg) return;
+
+        // Imagem
+        const imgEl = document.getElementById('chud-bg-panel-img');
+        if (imgEl) {
+            imgEl.src = bg.image || '';
+            imgEl.style.display = bg.image ? 'block' : 'none';
+        }
+
+        // Raridade com cor
+        const rarityEl = document.getElementById('chud-bg-panel-rarity');
+        if (rarityEl) {
+            const rarityIcon = { 'Legendary':'🌟','Ultra Rare':'💎','Super Rare':'🔷','Rare':'🔶','Common':'⚪' };
+            const rarityColor = { 'Legendary':'#f59e0b','Ultra Rare':'#818cf8','Super Rare':'#38bdf8','Rare':'#fb923c','Common':'#94a3b8' };
+            const r = bg.rarity || 'Common';
+            rarityEl.textContent = `${rarityIcon[r]||'⚪'} ${r}`;
+            rarityEl.style.color = rarityColor[r] || '#94a3b8';
+        }
+
+        // Nome
+        const nameEl = document.getElementById('chud-bg-panel-name');
+        if (nameEl) nameEl.textContent = bg.name || '—';
+
+        // Descrição completa
+        const descEl = document.getElementById('chud-bg-panel-desc');
+        if (descEl) descEl.textContent = bg.description || bg.effect || bg.text || '';
+
+        // Modificadores de stat
+        const modsEl = document.getElementById('chud-bg-panel-mods');
+        if (modsEl) {
+            const m = bg.modifiers || {};
+            const statIcons = { courage:'⚔️', power:'💪', wisdom:'🧠', speed:'⚡', energy:'❤️' };
+            const statNames = { courage:'COR', power:'POD', wisdom:'SAB', speed:'VEL', energy:'HP' };
+            const rows = Object.entries(m)
+                .filter(([, v]) => v !== 0)
+                .map(([k, v]) => `<span class="chud-bg-mod-pill ${v>0?'pos':'neg'}">${statIcons[k]||''} ${statNames[k]||k} ${v>0?'+':''}${v}</span>`)
+                .join('');
+            modsEl.innerHTML = rows ? `<div class="chud-bg-mod-row">${rows}</div>` : '';
+        }
+
+        // Extras: elemento concedido, passivas concedidas, efeito de sacrifício
+        const extEl = document.getElementById('chud-bg-panel-extras');
+        if (extEl) {
+            const eIcons = { Fire:'🔥', Water:'💧', Earth:'🪨', Air:'🌪️' };
+            let extras = '';
+            if (bg.elementGranted) {
+                extras += `<div class="chud-bg-extra-row">✨ Concede elemento: <strong>${eIcons[bg.elementGranted]||''} ${bg.elementGranted}</strong></div>`;
+            }
+            if (bg.passivesGranted && bg.passivesGranted.length && window.passivesDatabase) {
+                bg.passivesGranted.forEach(p => {
+                    const def = window.passivesDatabase[p.id];
+                    if (def) extras += `<div class="chud-bg-extra-row">${def.icon||'⚡'} <strong>${def.name}</strong>${def.description ? ': ' + def.description(p) : ''}</div>`;
+                });
+            }
+            if (bg.sacrificeEffect) {
+                extras += `<div class="chud-bg-extra-row">🔥 <strong>Sacrifício:</strong> ${bg.sacrificeEffect.type?.replace(/_/g,' ')} ${bg.sacrificeEffect.value ? '(' + bg.sacrificeEffect.value + ')' : ''}</div>`;
+            }
+            if (bg.combatStartEffect) {
+                extras += `<div class="chud-bg-extra-row">⚔️ <strong>Início de combate:</strong> ${bg.combatStartEffect.type?.replace(/_/g,' ')}</div>`;
+            }
+            extEl.innerHTML = extras;
+        }
+
+        panel.classList.remove('hidden');
+        panel.classList.add('open');
+        if (backdrop) { backdrop.classList.remove('hidden'); backdrop.classList.add('open'); }
+    },
+
+    _chudCloseBgPanel() {
+        const panel    = document.getElementById('chud-bg-panel');
+        const backdrop = document.getElementById('chud-bg-backdrop');
+        if (panel)    { panel.classList.remove('open');    panel.classList.add('hidden'); }
+        if (backdrop) { backdrop.classList.remove('open'); backdrop.classList.add('hidden'); }
     },
 
     // Atualiza log do HUD a partir do log principal
