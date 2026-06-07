@@ -545,6 +545,23 @@ Object.assign(GameEngine.prototype, {
 
         this.logElement.appendChild(entry);
         this.logElement.scrollTop = this.logElement.scrollHeight;
+
+        // Espelha no painel de log do burst (se estiver aberto)
+        if (this._burstLogEl) {
+            const bEntry = document.createElement('div');
+            bEntry.className = `burst-log-entry ${type}`;
+            bEntry.textContent = entry.textContent;
+            this._burstLogEl.appendChild(bEntry);
+            this._burstLogEl.scrollTop = this._burstLogEl.scrollHeight;
+            while (this._burstLogEl.children.length > 20) {
+                this._burstLogEl.removeChild(this._burstLogEl.firstChild);
+            }
+        }
+
+        // Espelha no log do HUD de combate (sempre que ativo)
+        if (typeof this._addCombatHudLog === 'function') {
+            this._addCombatHudLog(entry.textContent, type);
+        }
     },
 
     // ── Funções do painel de log ─────────────────────────────────────────────
@@ -804,6 +821,9 @@ Object.assign(GameEngine.prototype, {
         const deck = player === 1 ? this.p1AttackDeck : this.p2AttackDeck;
         const discard = player === 1 ? this.p1AttackDiscard : this.p2AttackDiscard;
         const hand = player === 1 ? this.p1AttackHand : this.p2AttackHand;
+
+        // Mão máxima = 3 cartas (regra do Chaotic TCG)
+        if (hand.length >= 3) return;
 
         if (deck.length === 0 && discard.length > 0) {
             // Reciclar descarte

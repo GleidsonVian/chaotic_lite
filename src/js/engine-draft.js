@@ -1866,7 +1866,7 @@ Object.assign(GameEngine.prototype, {
         return [
             {r:0,c:0,label:'Frente E'}, {r:0,c:1,label:'Frente C'}, {r:0,c:2,label:'Frente D'},
             {r:1,c:0,label:'Meio E'},   {r:1,c:1,label:'Meio D'},
-            {r:2,c:0,label:'Trás'},
+            {r:2,c:0,label:'Retaguarda'},
         ];
     },
 
@@ -1893,7 +1893,7 @@ Object.assign(GameEngine.prototype, {
         });
 
         let boardHtml = `<div style="display:flex;flex-direction:column;gap:8px;align-items:center;">`;
-        Object.keys(rows).sort((a,b) => b-a).forEach(rowKey => { // trás→frente (de cima pra baixo)
+        Object.keys(rows).sort((a,b) => a-b).forEach(rowKey => { // frente→trás (de cima pra baixo: frente no topo)
             boardHtml += `<div style="display:flex;gap:8px;justify-content:center;">`;
             rows[rowKey].forEach(({ slotIndex, label }) => {
                 const card     = slots[slotIndex];

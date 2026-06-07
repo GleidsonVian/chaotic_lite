@@ -2112,3 +2112,498 @@ header h1 {
     display: none !important;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   LAYOUT ARENA — Lado-a-lado (P1 esquerda, P2 direita)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Boards wrapper: linha (lado-a-lado) */
+.boards-wrapper {
+    flex-direction: row !important;
+    align-items: stretch !important;
+    justify-content: center !important;
+    gap: 0 !important;
+    transform: none !important;
+    margin-top: 8px !important;
+    margin-bottom: 0 !important;
+}
+
+/* Colunas de profundidade: lado a lado */
+.board-columns {
+    flex-direction: row !important;
+    gap: 8px !important;
+    align-items: center !important;
+}
+
+/* Cada coluna de profundidade: cartas empilhadas verticalmente */
+.board-col {
+    flex-direction: column !important;
+    gap: 8px !important;
+    justify-content: center !important;
+}
+
+/* Divisória vertical entre P1 e P2 */
+.board-divider {
+    width: 4px !important;
+    height: auto !important;
+    align-self: stretch !important;
+    background: linear-gradient(180deg, rgba(239,68,68,0.6), rgba(59,130,246,0.6)) !important;
+    border-radius: 2px !important;
+    margin: 0 8px !important;
+    flex-shrink: 0 !important;
+}
+
+/* ── Barras de info dos jogadores ──────────────────────────────────────── */
+.player-info-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 10px; border-radius: 7px;
+    background: rgba(0,0,0,0.4); font-size: 11px; color: #e2e8f0;
+    margin: 0 0 4px 0;
+}
+.player-info-bar .pinfo-name    { font-weight: 700; font-size: 12px; }
+.player-info-bar .pinfo-details { display: flex; align-items: center; gap: 8px; font-size: 10px; color: #94a3b8; }
+.player-info-p1 { border: 1px solid rgba(41,128,185,0.35); border-bottom: 2px solid rgba(41,128,185,0.5); }
+.player-info-p2 { border: 1px solid rgba(192,57,43,0.35);  border-top: 2px solid rgba(192,57,43,0.5); margin: 4px 0 0 0; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   COMBAT HIGHLIGHT — glow pulsante nas criaturas em combate
+   ══════════════════════════════════════════════════════════════════════ */
+.card.card-in-combat-attacker {
+    border: 2px solid #ef4444 !important;
+    box-shadow: 0 0 20px rgba(239,68,68,0.9), 0 0 8px rgba(239,68,68,0.6), inset 0 0 8px rgba(239,68,68,0.2) !important;
+    animation: combat-pulse-atk 1.1s ease-in-out infinite !important;
+    z-index: 10;
+}
+.card.card-in-combat-defender {
+    border: 2px solid #3b82f6 !important;
+    box-shadow: 0 0 20px rgba(59,130,246,0.9), 0 0 8px rgba(59,130,246,0.6), inset 0 0 8px rgba(59,130,246,0.2) !important;
+    animation: combat-pulse-def 1.1s ease-in-out infinite !important;
+    z-index: 10;
+}
+@keyframes combat-pulse-atk {
+    0%,100% { box-shadow: 0 0 20px rgba(239,68,68,0.9), 0 0 8px rgba(239,68,68,0.6); }
+    50%      { box-shadow: 0 0 34px rgba(239,68,68,1),   0 0 18px rgba(239,68,68,1); }
+}
+@keyframes combat-pulse-def {
+    0%,100% { box-shadow: 0 0 20px rgba(59,130,246,0.9), 0 0 8px rgba(59,130,246,0.6); }
+    50%      { box-shadow: 0 0 34px rgba(59,130,246,1),   0 0 18px rgba(59,130,246,1); }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   COMBAT HUD — tela imersiva de combate
+   ════════════════════════════════════════════════════════════════════════ */
+#combat-hud {
+    position: fixed;
+    inset: 0;
+    z-index: 1800;
+    display: grid;
+    grid-template-rows: clamp(280px, 42vh, 380px) 1fr;
+    gap: 10px;
+    background: rgba(3,5,14,0.94);
+    backdrop-filter: blur(2px);
+    padding: 12px 16px 10px;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+#combat-hud.hidden { display: none !important; }
+
+/* ── Topo: stage dos combatentes ─────────────────────────────────── */
+.chud-stage {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 12px;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* ── Card de cada fighter ────────────────────────────────────────── */
+.chud-fighter {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: rgba(20,30,60,0.8);
+    border: 1px solid rgba(59,130,246,0.35);
+    border-radius: 16px;
+    padding: 14px 16px;
+    gap: 10px;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+.chud-fighter-right {
+    border-color: rgba(239,68,68,0.35);
+    background: rgba(40,10,10,0.8);
+}
+
+.chud-fighter-top {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    flex-shrink: 0;
+}
+.chud-fighter-img {
+    width: 150px; height: 150px; border-radius: 14px;
+    object-fit: cover; flex-shrink: 0;
+    border: 2px solid rgba(59,130,246,0.6);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.7);
+}
+.chud-fighter-right .chud-fighter-img { border-color: rgba(239,68,68,0.6); }
+.chud-fighter-img-placeholder {
+    width: 150px; height: 150px; border-radius: 14px; flex-shrink: 0;
+    background: rgba(255,255,255,0.05); display: flex; align-items: center;
+    justify-content: center; font-size: 48px;
+    border: 2px solid rgba(255,255,255,0.1);
+}
+
+.chud-fighter-info { flex: 1; min-width: 0; }
+.chud-fighter-name {
+    font-size: 20px; font-weight: 900; color: #f1f5f9;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    margin-bottom: 4px;
+}
+.chud-fighter-tribe {
+    font-size: 10px; color: #64748b; text-transform: uppercase;
+    letter-spacing: .08em; margin-bottom: 6px;
+}
+.chud-fighter-bg {
+    font-size: 10px; color: #94a3b8; font-style: italic;
+    margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chud-fighter-elements { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
+.chud-elem-badge {
+    font-size: 11px; padding: 2px 7px; border-radius: 6px;
+    background: rgba(255,255,255,0.09); border: 1px solid rgba(255,255,255,0.14);
+    color: #e2e8f0;
+}
+
+/* HP bar */
+.chud-hp-row { display: flex; align-items: center; gap: 8px; }
+.chud-hp-label { font-size: 11px; color: #94a3b8; flex-shrink: 0; }
+.chud-hp-track { flex: 1; height: 12px; background: rgba(255,255,255,0.08); border-radius: 6px; overflow: hidden; }
+.chud-hp-fill  { height: 100%; border-radius: 6px; transition: width .4s ease; background: linear-gradient(90deg,#4ade80,#22c55e); }
+.chud-hp-fill.low  { background: linear-gradient(90deg,#fbbf24,#f59e0b); }
+.chud-hp-fill.crit { background: linear-gradient(90deg,#ef4444,#dc2626); }
+.chud-hp-val { font-size: 13px; font-weight: 700; color: #f1f5f9; flex-shrink: 0; min-width: 65px; text-align: right; }
+
+/* Grid de stats — novo estilo pills */
+.chud-stats-row {
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 4px; flex-shrink: 0;
+}
+.chud-stat-pill {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 10px; padding: 6px 8px;
+    display: flex; align-items: center; gap: 6px;
+    transition: background .12s;
+}
+.chud-stat-pill:hover { background: rgba(255,255,255,0.11); }
+.chud-stat-pill-icon { font-size: 16px; flex-shrink: 0; }
+.chud-stat-pill-lbl  { font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: .05em; line-height: 1; }
+.chud-stat-pill-val  { font-size: 16px; font-weight: 900; line-height: 1.1; }
+
+/* Battlegear block no fighter */
+/* Passivas da criatura */
+.chud-passives-row {
+    display: flex; flex-wrap: wrap; gap: 5px; flex-shrink: 0;
+}
+.chud-passive-pill {
+    display: flex; align-items: baseline; gap: 4px;
+    background: rgba(251,191,36,0.08);
+    border: 1px solid rgba(251,191,36,0.28);
+    border-radius: 8px; padding: 3px 7px;
+    cursor: default;
+}
+.chud-passive-icon { font-size: 12px; }
+.chud-passive-name { font-size: 10px; font-weight: 800; color: #fde68a; }
+.chud-passive-desc { font-size: 9px; color: #94a3b8; }
+
+.chud-fighter-bg-block {
+    margin-top: 6px; padding: 6px 10px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-left: 3px solid rgba(139,92,246,0.7);
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+.chud-fighter-bg-block.chud-fighter-bg-hidden { border-left-color: rgba(100,116,139,0.5); }
+.chud-fighter-bg-name   { font-size: 11px; font-weight: 700; color: #c4b5fd; }
+.chud-fighter-bg-effect {
+    font-size: 10px; color: #94a3b8; line-height: 1.5;
+    margin-top: 3px; max-height: 50px; overflow-y: auto;
+}
+
+/* HP row — apenas uma definição abaixo */
+
+/* ── VS center column ────────────────────────────────────────────── */
+.chud-vs-col {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 10px; padding: 0 12px;
+    flex-shrink: 0; min-width: 130px;
+}
+.chud-vs-badge {
+    font-size: 24px; font-weight: 900;
+    background: linear-gradient(135deg,#ef4444,#3b82f6);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; letter-spacing: .12em;
+}
+.chud-round-label {
+    font-size: 11px; font-weight: 700; color: #fbbf24;
+    background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.35);
+    border-radius: 20px; padding: 3px 14px;
+    text-transform: uppercase; letter-spacing: .06em;
+}
+.chud-turn-label {
+    font-size: 10px; color: #94a3b8; text-align: center;
+    max-width: 120px; line-height: 1.5;
+}
+.chud-energy-bars {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 5px; width: 100%;
+}
+.chud-en-row { display: flex; align-items: center; gap: 6px; width: 100%; font-size: 10px; }
+.chud-en-track { flex: 1; height: 6px; background: rgba(255,255,255,0.07); border-radius: 3px; overflow: hidden; }
+.chud-en-fill-blue { height: 100%; background: #3b82f6; border-radius: 3px; transition: width .3s; }
+.chud-en-fill-red  { height: 100%; background: #ef4444; border-radius: 3px; transition: width .3s; }
+.chud-en-val { font-size: 10px; font-weight: 700; color: #f1f5f9; min-width: 32px; text-align: right; }
+
+/* ── Base: 3 painéis ─────────────────────────────────────────────── */
+.chud-base {
+    display: grid;
+    /* Attack | Decisão (50/50) | Histórico */
+    grid-template-columns: 1fr 1fr 260px;
+    gap: 10px;
+    min-height: 0;
+    overflow: hidden;
+}
+.chud-panel {
+    background: rgba(10,14,30,0.96);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px; padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 6px;
+    overflow: hidden; min-height: 0;
+}
+.chud-panel-title {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .08em; color: #64748b; flex-shrink: 0;
+    padding-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.chud-panel-attacks   { border-color: rgba(99,102,241,0.4); }
+.chud-panel-decisions { border-color: rgba(241,196,15,0.4); }
+.chud-panel-log       { border-color: rgba(255,255,255,0.1); }
+
+/* ── Ataques ─────────────────────────────────────────────────────── */
+#chud-attack-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+.chud-atk-row {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2);
+    border-radius: 10px; padding: 8px 10px; cursor: pointer;
+    transition: background .12s, border-color .12s, transform .1s;
+}
+.chud-atk-row:hover { background: rgba(99,102,241,0.22); border-color: rgba(99,102,241,0.7); transform: translateX(3px); }
+.chud-atk-num  { font-size: 18px; font-weight: 900; color: #fbbf24; width: 24px; text-align: center; flex-shrink: 0; }
+.chud-atk-info { flex: 1; min-width: 0; }
+.chud-atk-name { font-size: 12px; font-weight: 700; color: #f1f5f9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chud-atk-sub  { font-size: 10px; color: #64748b; margin-top: 1px; }
+.chud-atk-dmg  { font-size: 17px; font-weight: 900; flex-shrink: 0; }
+.chud-atk-bonus {
+    font-size: 9px; color: #64748b; margin-top: 2px; line-height: 1.4;
+    white-space: normal; word-break: break-word;
+}
+
+/* ── Tooltip do fighter inimigo ──────────────────────────────────── */
+#chud-fighter-tooltip {
+    position: fixed; z-index: 3001; pointer-events: none;
+    background: rgba(40,10,10,0.97);
+    border: 1px solid rgba(239,68,68,0.5);
+    border-radius: 14px; padding: 14px 16px;
+    min-width: 220px; max-width: 300px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(239,68,68,0.1);
+    backdrop-filter: blur(6px);
+}
+#chud-fighter-tooltip.hidden { display: none !important; }
+.chud-ftt-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+}
+.chud-ftt-img {
+    width: 52px; height: 52px; border-radius: 8px; object-fit: cover;
+    border: 2px solid rgba(239,68,68,0.5); flex-shrink: 0;
+}
+.chud-ftt-name  { font-size: 14px; font-weight: 900; color: #f1f5f9; }
+.chud-ftt-tribe { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: .06em; margin-top: 2px; }
+.chud-ftt-stats {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px;
+}
+.chud-ftt-stat {
+    background: rgba(255,255,255,0.05); border-radius: 8px;
+    padding: 5px 8px; display: flex; align-items: center; gap: 6px;
+}
+.chud-ftt-stat-icon { font-size: 14px; }
+.chud-ftt-stat-lbl  { font-size: 9px; color: #64748b; text-transform: uppercase; }
+.chud-ftt-stat-val  { font-size: 14px; font-weight: 900; }
+.chud-ftt-extra { font-size: 10px; color: #94a3b8; line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 6px; }
+
+/* ── Tooltip flutuante de ataque ─────────────────────────────────── */
+#chud-atk-tooltip {
+    position: fixed;
+    z-index: 3000;
+    background: rgba(8, 12, 28, 0.97);
+    border: 1px solid rgba(99,102,241,0.6);
+    border-radius: 14px;
+    padding: 14px 16px;
+    min-width: 240px;
+    max-width: 320px;
+    pointer-events: none;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(99,102,241,0.15);
+    backdrop-filter: blur(6px);
+}
+#chud-atk-tooltip.hidden { display: none !important; }
+.chud-tt-name {
+    font-size: 15px; font-weight: 900; color: #f1f5f9;
+    margin-bottom: 4px;
+}
+.chud-tt-meta {
+    font-size: 10px; color: #64748b; margin-bottom: 8px;
+    text-transform: uppercase; letter-spacing: .06em;
+}
+.chud-tt-hr {
+    border: none; border-top: 1px solid rgba(255,255,255,0.08);
+    margin: 6px 0;
+}
+.chud-tt-line {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 11px; padding: 3px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    gap: 8px;
+}
+.chud-tt-line-label { color: #94a3b8; flex: 1; }
+.chud-tt-line-val   { font-weight: 700; color: #f1f5f9; flex-shrink: 0; }
+.chud-tt-line-met   { color: #4ade80; font-size: 13px; }
+.chud-tt-line-fail  { color: #f87171; font-size: 13px; }
+.chud-tt-total {
+    margin-top: 8px; font-size: 18px; font-weight: 900; text-align: center;
+    padding: 6px; border-radius: 8px;
+    background: rgba(255,255,255,0.05);
+}
+.chud-tt-desc {
+    font-size: 10px; color: #64748b; font-style: italic;
+    margin-top: 6px; line-height: 1.5;
+}
+
+/* Inimigo jogou ataque — badge no painel */
+.chud-enemy-atk {
+    background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 10px; padding: 8px 10px; font-size: 11px; color: #fca5a5;
+    display: flex; align-items: center; gap: 8px;
+}
+.chud-enemy-atk-icon { font-size: 18px; flex-shrink: 0; }
+.chud-enemy-atk-name { font-weight: 700; font-size: 13px; color: #f87171; }
+.chud-enemy-atk-sub  { font-size: 10px; color: #64748b; }
+
+/* ── Burst items com hover ───────────────────────────────────────── */
+.chud-burst-item {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 10px; padding: 4px 6px;
+    border-radius: 6px; cursor: default;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    transition: background .1s;
+}
+.chud-burst-item:hover { background: rgba(255,255,255,0.06); }
+.chud-burst-item-num  { color: #475569; flex-shrink: 0; min-width: 14px; }
+.chud-burst-item-icon { font-size: 13px; flex-shrink: 0; }
+.chud-burst-item-label{ font-weight: 700; color: #e2e8f0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chud-burst-item-src  { color: #64748b; font-size: 9px; flex-shrink: 0; }
+
+/* ── Caster picker ───────────────────────────────────────────────── */
+.chud-caster-row {
+    background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.25);
+    border-radius: 9px; padding: 8px 10px; cursor: pointer; margin-bottom: 5px;
+    transition: background .12s, border-color .12s;
+}
+.chud-caster-row:hover { background: rgba(59,130,246,0.22); border-color: rgba(59,130,246,0.6); }
+.chud-caster-disabled {
+    opacity: 0.45; cursor: not-allowed;
+    background: rgba(100,116,139,0.08); border-color: rgba(100,116,139,0.2);
+}
+.chud-caster-disabled:hover { background: rgba(100,116,139,0.08); border-color: rgba(100,116,139,0.2); }
+.chud-caster-name { font-size: 12px; font-weight: 700; }
+.chud-caster-sub  { font-size: 10px; color: #64748b; margin-top: 2px; }
+
+/* ── Mugic selector inline ───────────────────────────────────────── */
+.chud-mugic-row {
+    background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.25);
+    border-radius: 9px; padding: 8px 10px; cursor: pointer; margin-bottom: 5px;
+    transition: background .12s, border-color .12s;
+}
+.chud-mugic-row:hover { background: rgba(139,92,246,0.22); border-color: rgba(139,92,246,0.6); }
+.chud-mugic-name { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+.chud-mugic-eff  { font-size: 9px; color: #94a3b8; line-height: 1.4; }
+
+/* ── Decisões ────────────────────────────────────────────────────── */
+#chud-burst-summary { font-size: 10px; color: #94a3b8; line-height: 1.5; flex: 1; overflow-y: auto; }
+#chud-decision-btns { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.chud-btn {
+    width: 100%; padding: 10px 12px; border: none; border-radius: 10px;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    transition: opacity .15s, transform .1s; letter-spacing: .03em;
+}
+.chud-btn:hover    { opacity: 0.85; transform: scale(0.98); }
+.chud-btn-pass     { background: rgba(239,68,68,0.85); color: #fff; }
+.chud-btn-mugic    { background: rgba(139,92,246,0.85); color: #fff; }
+.chud-btn-sacrifice{ background: rgba(234,179,8,0.85);  color: #000; }
+
+.chud-waiting { font-size: 11px; color: #475569; text-align: center; font-style: italic; padding: 6px 0; }
+
+/* ── Log ─────────────────────────────────────────────────────────── */
+#chud-log-entries {
+    flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;
+    scrollbar-width: thin; scrollbar-color: #1e293b transparent;
+}
+.chud-log-entry { font-size: 10px; color: #94a3b8; padding: 2px 0; line-height: 1.4; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.chud-log-entry.damage    { color: #f87171; }
+.chud-log-entry.death     { color: #dc2626; font-weight: 700; }
+.chud-log-entry.heal      { color: #4ade80; }
+.chud-log-entry.mugic     { color: #c4b5fd; }
+.chud-log-entry.passive   { color: #60a5fa; }
+.chud-log-entry.combat    { color: #fb923c; }
+.chud-log-entry.initiative{ color: #fbbf24; }
+.chud-log-entry.info      { color: #64748b; }
+
+/* ── Quando HUD ativo: JS aplica position:fixed diretamente no body
+   (evita flash de scroll — o CSS overflow:hidden sozinho não reseta scrollY) ── */
+
+/* ── Suprime tooltips e painéis antigos quando HUD está ativo ────── */
+body.chud-active .creature-tooltip,
+body.chud-active #mugic-tooltip,
+body.chud-active #combat-spotlight,
+/* Painéis laterais antigos: ocultos por padrão, visíveis só com .visible */
+#attack-hand-panel,
+#burst-side-panel,
+#burst-log-panel { display: none; }
+
+#attack-hand-panel.visible,
+#burst-side-panel.visible,
+#burst-log-panel.visible { display: block; }
+
+body.chud-active #attack-hand-panel,
+body.chud-active #burst-side-panel,
+body.chud-active #burst-log-panel { display: none !important; }
+
+/* Tooltip de criatura usa visibility/opacity — precisamos suprimir de forma diferente */
+body.chud-active #creature-tooltip {
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+/* Burst modal compacto quando HUD ativo */
+body.chud-active #burst-modal:not(.hidden) {
+    background: transparent;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 8px;
+    pointer-events: none;
+}
+body.chud-active .burst-modal-content { pointer-events: all; }
+/* Attack modal oculto quando HUD ativo */
+body.chud-active #attack-modal { display: none !important; }

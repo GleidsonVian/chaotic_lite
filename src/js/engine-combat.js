@@ -73,6 +73,8 @@ Object.assign(GameEngine.prototype, {
         this._applyLocationCombatStartEffect();
         this.log(`⚔️ COMBATE INICIADO! Iniciativa: Jogador ${firstStriker} ataca primeiro (${initStat.toUpperCase()}).`);
         this.renderBoard();
+        // Mostra o HUD de combate imersivo
+        if (typeof this._showCombatHud === 'function') this._showCombatHud();
         this._showInitiativeBanner(firstStriker, initStat);
         setTimeout(() => this.processCombatTurn(), COMBAT_DELAY.COMBAT_START);
     },
@@ -809,6 +811,41 @@ Object.assign(GameEngine.prototype, {
         });
         handHtml += `</div></div>`;
 
+        // ── Painel lateral de mão de ataque ──────────────────────────────────
+        const _handPanel      = document.getElementById('attack-hand-panel');
+        const _handPanelCards = document.getElementById('attack-hand-cards');
+        if (_handPanel && _handPanelCards) {
+            const _eIcons = { Fire:'🔥', Water:'💧', Earth:'🪨', Air:'🌪️' };
+            _handPanelCards.innerHTML = hand.map((atk, i) => {
+                // Calcula dano esperado (igual ao modal)
+                let _expDmg = atk.baseDamage || 0;
+                if (atk.elementRequirement && attacker.elements && attacker.elements.includes(atk.elementRequirement))
+                    _expDmg += atk.elementDamage || 0;
+                if (atk.elementBonuses) atk.elementBonuses.forEach(eb => {
+                    if (attacker.elements && attacker.elements.includes(eb.element)) _expDmg += eb.damage || 0;
+                });
+                if (atk.statRequirement) {
+                    const _sk = atk.statRequirement.toLowerCase();
+                    const _av = effAtk[_sk] || 0, _dv = effDef[_sk] || 0;
+                    const _met = atk.statMode === 'challenge' ? (_av-_dv) >= atk.statThreshold : _av >= atk.statThreshold;
+                    if (_met) _expDmg += atk.statDamage || 0;
+                }
+                const _elemLabel = atk.elementRequirement ? _eIcons[atk.elementRequirement] || '' :
+                    (atk.elementBonuses ? atk.elementBonuses.map(e => _eIcons[e.element]||'').join('') : '');
+                const _dmgColor = _expDmg >= 20 ? '#4ade80' : _expDmg >= 10 ? '#fbbf24' : '#f87171';
+                return `<div class="attack-mini-row" onclick="game.confirmAttack(${i})">
+                    <span class="attack-mini-num">${i+1}</span>
+                    <div class="attack-mini-info">
+                        <div class="attack-mini-name">${atk.name}</div>
+                        <div class="attack-mini-sub">${_elemLabel} ⚡${atk.bp}BP</div>
+                    </div>
+                    <span class="attack-mini-dmg" style="color:${_dmgColor};">💥${_expDmg}</span>
+                </div>`;
+            }).join('');
+            _handPanel.classList.add('visible');
+            if (typeof this._positionPanels === 'function') this._positionPanels();
+        }
+
         // ── Banner de Iniciativa ───────────────────────────────────────────────
         const initStat = (this.activeLocation && this.activeLocation.initiative)
             ? this.activeLocation.initiative.toLowerCase() : 'speed';
@@ -900,6 +937,16 @@ Object.assign(GameEngine.prototype, {
         const existingCancelBtn = document.getElementById('cancel-attack-btn');
         if (existingCancelBtn) existingCancelBtn.remove();
 
+        // ── Popula o HUD de combate com as cartas de ataque ──────────────────
+        if (typeof this._updateCombatHudAttacks === 'function') {
+            this._updateCombatHudAttacks(hand, attacker, defender, effAtk, effDef);
+        }
+        // HUD de turno: mostra que é minha vez de atacar
+        const _hudTurn = document.getElementById('chud-turn-label');
+        if (_hudTurn) _hudTurn.textContent = '🎯 Escolha um ataque';
+
+        // Se o HUD está ativo, não precisa abrir o modal visual
+        // (o CSS body.chud-active já esconde o modal)
         modal.classList.remove('hidden');
         modal.classList.add('flex-modal');
     },
@@ -912,6 +959,13 @@ Object.assign(GameEngine.prototype, {
             modal.classList.remove('flex-modal', 'modal-minimized');
         }
         this.restoreModal && this.restoreModal('attack-modal'); // limpa pílula se existir
+        // Esconde painel lateral de mão de ataque
+        const _ahp = document.getElementById('attack-hand-panel');
+        if (_ahp) _ahp.classList.remove('visible');
+        // Limpa ataques do HUD e atualiza turno
+        if (typeof this._clearCombatHudAttacks === 'function') this._clearCombatHudAttacks();
+        const _hudTL = document.getElementById('chud-turn-label');
+        if (_hudTL) _hudTL.textContent = '⚔️ Resolvendo...';
 
         if (!fromRemote) {
             this.sendAction('confirmAttack', { cardIndex });
@@ -945,12 +999,27 @@ Object.assign(GameEngine.prototype, {
         this.burstPriority = attackingPlayer;
 
         const p2Label = this.multiplayerMode ? (this.p2Name||'Jogador 2') : 'IA (Oponente)';
+        const defPlayer = attackingPlayer === 1 ? 2 : 1;
+        const _effAtk = this._effectiveStats(attacker, attackingPlayer, atkR, atkC);
+        const _effDef = this._effectiveStats(defender, defPlayer, defR, defC);
         this.burstStack.push({
             type: 'attack',
             source: attackingPlayer === 1 ? (this.p1Name||'Jogador 1') : p2Label,
             attacker, defender, atkR, atkC, defR, defC, attackingPlayer, atkCard,
+            effAtk: _effAtk, effDef: _effDef,
             description: `Ataque Declarado: ${atkCard.name}`
         });
+        if (typeof this._syncBurstSidePanel === 'function') this._syncBurstSidePanel();
+
+        // Mostra ataque do inimigo no painel de ataques do HUD (quando não sou eu que ataquei)
+        const myP = this.multiplayerMode ? this.myPlayerNumber : 1;
+        if (attackingPlayer !== myP && typeof this._chudShowEnemyAttack === 'function') {
+            // Calcula stats efetivos do inimigo para mostrar dano correto
+            const defPlayer = attackingPlayer === 1 ? 2 : 1;
+            const effAtk = this._effectiveStats(attacker, attackingPlayer, atkR, atkC);
+            const effDef = this._effectiveStats(defender, defPlayer, defR, defC);
+            this._chudShowEnemyAttack(atkCard, attacker, defender, effAtk, effDef);
+        }
 
         this.log(`🔔 BURST ABERTO: ${attackingPlayer === 1 ? 'Jogador 1' : p2Label} atacou com ${atkCard.name}`);
 
@@ -1474,7 +1543,10 @@ Object.assign(GameEngine.prototype, {
 
         modal.classList.remove('hidden');
         modal.classList.add('flex-modal');
-        setTimeout(() => modal.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+        // Não rola a página quando o HUD de combate está ativo (evita pular a tela)
+        if (!document.body.classList.contains('chud-active')) {
+            setTimeout(() => modal.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+        }
     },
 
     endCombatTurn() {
@@ -1516,6 +1588,7 @@ Object.assign(GameEngine.prototype, {
                 this.boardP1[p1R][p1C] = null;
                 this.boardP2[p2R][p2C] = null;
                 this.activeCombat = null;
+                if (typeof this._hideCombatHud === 'function') this._hideCombatHud();
                 this.selectedAttacker = null;
                 this._revealNextLocation();
                 _syncBoard();
@@ -1534,6 +1607,7 @@ Object.assign(GameEngine.prototype, {
                 this._discardCreature(p1Card);
                 this.boardP1[p1R][p1C] = null;
                 this.activeCombat = null;
+                if (typeof this._hideCombatHud === 'function') this._hideCombatHud();
                 this.selectedAttacker = null;
                 this._revealNextLocation();
                 _syncBoard();
@@ -1554,6 +1628,7 @@ Object.assign(GameEngine.prototype, {
                 this._discardCreature(p2Card);
                 this.boardP2[p2R][p2C] = null;
                 this.activeCombat = null;
+                if (typeof this._hideCombatHud === 'function') this._hideCombatHud();
                 this.selectedAttacker = null;
                 this._revealNextLocation();
                 _syncBoard();
@@ -1632,9 +1707,12 @@ Object.assign(GameEngine.prototype, {
             modal.classList.remove('flex-modal', 'modal-minimized');
         }
         this.restoreModal && this.restoreModal('attack-modal');
+        const _ahpC = document.getElementById('attack-hand-panel');
+        if (_ahpC) _ahpC.classList.remove('visible');
         this.selectedAttacker = null;
         this.gameState = 'IDLE';
         this.activeCombat = null;
+                if (typeof this._hideCombatHud === 'function') this._hideCombatHud();
 
         // Mantém o Local ativo intacto para quando o ataque real ocorrer
 
@@ -1738,6 +1816,7 @@ Object.assign(GameEngine.prototype, {
             setTimeout(() => {
                 targetBoard[defR][defC] = null; // Retira do tabuleiro após animação
                 this.activeCombat = null;
+                if (typeof this._hideCombatHud === 'function') this._hideCombatHud();
                 this.pendingCombat = null;
                 this.selectedAttacker = null;
                 this.gameState = 'IDLE';

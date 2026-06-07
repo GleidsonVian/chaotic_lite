@@ -634,9 +634,7 @@
                 <button onclick="game.autoSelectLocations()" class="btn" style="background:rgba(245,158,11,0.15);border:1px solid #f59e0b;color:#fcd34d;font-size:13px;padding:7px 18px;border-radius:8px;cursor:pointer;">
                     ⭐ Recomendar
                 </button>
-                <button onclick="game.showLocationRecommendations()" class="btn" style="background:rgba(14,165,233,0.15);border:1px solid #0ea5e9;color:#7dd3fc;font-size:13px;padding:7px 18px;border-radius:8px;cursor:pointer;">
-                    🗺️ Melhores Locais
-                </button>
+
                 <button onclick="game.randomizeLocations()" class="btn" style="background:rgba(139,92,246,0.15);border:1px solid #8b5cf6;color:#c4b5fd;font-size:13px;padding:7px 18px;border-radius:8px;cursor:pointer;">
                     🎲 Aleatório
                 </button>
@@ -794,6 +792,24 @@
         </div>
 
         <div id="battle-screen" class="hidden">
+
+            <!-- ── Painel de Mão de Ataque (bottom-left) ── -->
+            <div id="attack-hand-panel">
+                <div class="attack-hand-header">⚔️ Mão de Ataque</div>
+                <div id="attack-hand-cards"></div>
+            </div>
+
+            <!-- ── Painel lateral de Burst (bottom-right) ── -->
+            <div id="burst-side-panel">
+                <div class="burst-side-header">🔔 Pilha de Burst</div>
+                <div id="burst-side-stack"></div>
+            </div>
+
+            <!-- ── Painel de Log do Burst (far-right, aparece junto com burst) ── -->
+            <div id="burst-log-panel">
+                <div class="burst-log-header">📋 Log</div>
+                <div id="burst-log-entries"></div>
+            </div>
 
             <!-- Botão flutuante de chat (só multiplayer) -->
             <button id="chat-toggle-btn" onclick="game.toggleChat()" style="
@@ -1075,6 +1091,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const game = new GameEngine(cards, mugics, attacks, locations, battlegears);
     game.init();
     window.game = game;
+
+    // Reposiciona painéis flutuantes quando a janela redimensiona
+    window.addEventListener('resize', () => {
+        if (window.game && typeof window.game._positionPanels === 'function') {
+            window.game._positionPanels();
+        }
+    });
 });
     </script>
 
@@ -1355,5 +1378,84 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
         </div>
     </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         COMBAT HUD — fora do game-container para position:fixed funcionar
+         (backdrop-filter no game-container quebraria o fixed se estivesse dentro)
+         ═══════════════════════════════════════════════════════════════ -->
+    <div id="combat-hud" class="hidden">
+
+        <!-- ── Topo: os dois combatentes em destaque ── -->
+        <div class="chud-stage">
+            <!-- Minha criatura (esquerda) -->
+            <div class="chud-fighter" id="chud-mine"></div>
+
+            <!-- Centro: VS + rodada + info de turno -->
+            <div class="chud-vs-col">
+                <div class="chud-vs-badge">⚔️ VS ⚔️</div>
+                <div class="chud-round-label" id="chud-round-label">Rodada 1</div>
+                <div class="chud-turn-label" id="chud-turn-label"></div>
+                <!-- Barra de energia comparativa -->
+                <div class="chud-energy-bars" id="chud-energy-bars"></div>
+            </div>
+
+            <!-- Criatura inimiga (direita) -->
+            <div class="chud-fighter chud-fighter-right" id="chud-enemy"></div>
+        </div>
+
+        <!-- ── Base: 3 painéis inferiores ── -->
+        <div class="chud-base">
+
+            <!-- PAINEL ESQUERDO: cartas de ataque -->
+            <div class="chud-panel chud-panel-attacks">
+                <div class="chud-panel-title">⚔️ Cartas de Ataque</div>
+                <div id="chud-attack-list">
+                    <div class="chud-waiting">Aguardando combate...</div>
+                </div>
+            </div>
+
+            <!-- PAINEL CENTRAL: decisões do burst -->
+            <div class="chud-panel chud-panel-decisions">
+                <div class="chud-panel-title" id="chud-decisions-title">🔔 Burst</div>
+                <div id="chud-burst-summary"></div>
+                <div id="chud-decision-btns" style="display:none;">
+                    <button class="chud-btn chud-btn-pass"     onclick="game.passBurst()">✋ Passar</button>
+                    <button class="chud-btn chud-btn-mugic" id="chud-btn-mugic"  onclick="game._hudOpenMugicSelector()">🎶 Jogar Mugic</button>
+                    <button class="chud-btn chud-btn-sacrifice" id="chud-btn-sacrifice" style="display:none" onclick="game.sacrificeBattlegear()">🗡️ Sacrificar BG</button>
+                </div>
+                <div id="chud-waiting-msg" class="chud-waiting"></div>
+            </div>
+
+            <!-- PAINEL DIREITO: histórico de ações -->
+            <div class="chud-panel chud-panel-log">
+                <div class="chud-panel-title">📋 Histórico</div>
+                <div id="chud-log-entries"></div>
+            </div>
+
+        </div>
+    </div><!-- /combat-hud -->
+
+    <!-- ── Tooltip do fighter inimigo no HUD ── -->
+    <div id="chud-fighter-tooltip" class="hidden">
+        <div class="chud-ftt-header">
+            <img id="chud-ftt-img" class="chud-ftt-img" src="" alt="">
+            <div>
+                <div class="chud-ftt-name" id="chud-ftt-name"></div>
+                <div class="chud-ftt-tribe" id="chud-ftt-tribe"></div>
+            </div>
+        </div>
+        <div class="chud-ftt-stats" id="chud-ftt-stats"></div>
+        <div class="chud-ftt-extra" id="chud-ftt-extra"></div>
+    </div>
+
+    <!-- ── Tooltip flutuante dos ataques no HUD ── -->
+    <div id="chud-atk-tooltip" class="hidden">
+        <div class="chud-tt-name" id="chud-tt-name"></div>
+        <div class="chud-tt-meta" id="chud-tt-meta"></div>
+        <hr class="chud-tt-hr">
+        <div id="chud-tt-lines"></div>
+        <div class="chud-tt-desc" id="chud-tt-desc"></div>
+    </div>
+
 </body>
 </html>

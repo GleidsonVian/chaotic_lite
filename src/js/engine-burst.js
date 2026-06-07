@@ -88,6 +88,46 @@ Object.assign(GameEngine.prototype, {
         });
         container.innerHTML = html;
 
+        // ── Atualiza o HUD de combate ─────────────────────────────────────────
+        if (typeof this._updateCombatHudFighters    === 'function') this._updateCombatHudFighters();
+        if (typeof this._updateCombatHudBurstSummary === 'function') this._updateCombatHudBurstSummary();
+
+        // ── Reposiciona painéis flutuantes dentro do board ────────────────────
+        if (typeof this._positionPanels === 'function') this._positionPanels();
+
+        // ── Sincroniza painel lateral de burst ──────────────────────────────
+        const _bsp = document.getElementById('burst-side-panel');
+        const _bss = document.getElementById('burst-side-stack');
+        if (_bsp && _bss) {
+            this._syncBurstSidePanel();
+            _bsp.classList.add('visible');
+        }
+
+        // ── Painel de log do burst ───────────────────────────────────────────
+        const _blp = document.getElementById('burst-log-panel');
+        const _ble = document.getElementById('burst-log-entries');
+        if (_blp && _ble) {
+            // Copia as últimas 15 entradas do log de combate
+            const _srcEntries = this.logElement
+                ? Array.from(this.logElement.querySelectorAll('.log-entry, .log-combat-header, .log-round-header, .log-turn-sep')).slice(-15)
+                : [];
+            _ble.innerHTML = '';
+            _srcEntries.forEach(el => {
+                const clone = el.cloneNode(true);
+                // Transforma em burst-log-entry style
+                const typeMatch = [...el.classList].find(c => c.startsWith('log-entry-'));
+                const type = typeMatch ? typeMatch.replace('log-entry-', '') : 'info';
+                const entry = document.createElement('div');
+                entry.className = `burst-log-entry ${type}`;
+                entry.textContent = el.textContent;
+                _ble.appendChild(entry);
+            });
+            _ble.scrollTop = _ble.scrollHeight;
+            _blp.classList.add('visible');
+            // Guarda referência para atualizações em tempo real
+            this._burstLogEl = _ble;
+        }
+
         // Controle de Prioridade
         const passBtn      = document.getElementById('btn-burst-pass');
         const playBtn      = document.getElementById('btn-burst-play');
@@ -141,6 +181,20 @@ Object.assign(GameEngine.prototype, {
             }
         }
         document.getElementById('burst-prompt').innerText = promptText;
+
+        // ── Atualiza painel de decisões do HUD ────────────────────────────────
+        if (typeof this._updateCombatHudDecisions === 'function') {
+            const noBgAb = this.activeLocation?.effect?.type === 'no_battlegear_abilities';
+            const myCardHud = this.activeCombat
+                ? (this.burstPriority === 1 ? this.activeCombat.p1Card : this.activeCombat.p2Card)
+                : null;
+            const hasSacHud = !noBgAb && myCardHud && myCardHud.battlegear
+                && myCardHud.bgRevealed && myCardHud.battlegear.sacrificeEffect;
+            this._updateCombatHudDecisions(isMyBurstTurn, hasSacHud);
+            // Atualiza turno label
+            const _tl = document.getElementById('chud-turn-label');
+            if (_tl) _tl.textContent = isMyBurstTurn ? '🔔 Sua decisão' : '⏳ Aguardando...';
+        }
 
         if (isMyBurstTurn) {
             passBtn.disabled = false;
@@ -242,10 +296,12 @@ Object.assign(GameEngine.prototype, {
         modal.classList.remove('hidden');
         modal.classList.add('flex-modal');
 
-        // Auto-scroll para o modal de combate ficar visível no centro da tela
-        setTimeout(() => {
-            modal.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 50);
+        // Auto-scroll apenas se o HUD de combate NÃO estiver ativo
+        if (!document.body.classList.contains('chud-active')) {
+            setTimeout(() => {
+                modal.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 50);
+        }
     },
 
     showBurstMugicSelection() {
@@ -410,6 +466,7 @@ Object.assign(GameEngine.prototype, {
                 caster:    null,
                 description: `Mugic Cast: ${mg.name} (por ?)`
             });
+            if (typeof this._syncBurstSidePanel === 'function') this._syncBurstSidePanel();
             this._discardMugic(2, this.p2Mugics, index);
             this.burstPasses   = 0;
             this.burstPriority = 1;
@@ -448,6 +505,7 @@ Object.assign(GameEngine.prototype, {
                     caster:    casterCard,
                     description: `Mugic Cast: ${remoteMg.name} (por ${casterCard.name})`
                 });
+                if (typeof this._syncBurstSidePanel === 'function') this._syncBurstSidePanel();
                 // Descarta da mão do caster remoto
                 if (casterPN === 1) this._discardMugic(1, this.playerMugics, this.pendingMugicIndex || 0);
                 // (P2's mugic já foi descartada no lado do P2 antes de enviar)
@@ -534,6 +592,7 @@ Object.assign(GameEngine.prototype, {
             caster:    card,
             description: `Mugic Cast: ${mg.name} (por ${card.name})`
         });
+        if (typeof this._syncBurstSidePanel === 'function') this._syncBurstSidePanel();
 
         // Remove da mão correta → discard pile
         this._discardMugic(localPlayerNum, this.playerMugics, this.pendingMugicIndex);
@@ -652,7 +711,41 @@ Object.assign(GameEngine.prototype, {
         this._stopTabFlash(); // para o pisca-pisca ao fechar
     },
 
+    /** Atualiza o painel lateral de burst stack (side panel) */
+    _syncBurstSidePanel() {
+        const _bss = document.getElementById('burst-side-stack');
+        if (!_bss) return;
+        _bss.innerHTML = [...this.burstStack].reverse().map((item, idx) => {
+            const neg = item.negated ? ' <span style="color:#e74c3c;font-size:9px;font-weight:700;">🚫 NEGADA</span>' : '';
+            const isAtk = item.type === 'attack';
+            const icon = isAtk ? '⚔️' : '🎶';
+            const label = isAtk ? (item.atkCard ? item.atkCard.name : item.description)
+                                : (item.mugic?.name || item.description || '?');
+            const img = isAtk && item.atkCard?.image
+                ? `<img src="${item.atkCard.image}" style="width:32px;height:42px;object-fit:cover;border-radius:4px;flex-shrink:0;border:1px solid #334155;" alt="">`
+                : (item.mugic?.image ? `<img src="${item.mugic.image}" style="width:32px;height:42px;object-fit:cover;border-radius:4px;flex-shrink:0;border:1px solid #7c3aed44;" alt="">` : `<div style="width:32px;height:42px;background:#1e293b;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">${icon}</div>`);
+            const typeLabel = isAtk ? 'ATAQUE' : 'MUGIC';
+            const typeColor = isAtk ? '#f59e0b' : '#a855f7';
+            return `<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);${item.negated?'opacity:0.5;':''}">
+                ${img}
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:8px;font-weight:700;color:${typeColor};text-transform:uppercase;letter-spacing:.08em;">${typeLabel}${neg}</div>
+                    <div style="font-size:11px;font-weight:700;color:#f1f5f9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${label}</div>
+                    <div style="font-size:9px;color:#64748b;">${item.source || ''}</div>
+                </div>
+                <div style="font-size:10px;font-weight:900;color:#f1c40f;flex-shrink:0;">${this.burstStack.length - idx}</div>
+            </div>`;
+        }).join('') || '<div style="font-size:11px;color:#475569;padding:6px 0;">Pilha vazia</div>';
+    },
+
     async resolveBurst() {
+        // Esconde painéis laterais de burst
+        const _bspEl = document.getElementById('burst-side-panel');
+        if (_bspEl) _bspEl.classList.remove('visible');
+        const _blpEl = document.getElementById('burst-log-panel');
+        if (_blpEl) _blpEl.classList.remove('visible');
+        this._burstLogEl = null;
+
         this.log(`🔔 BURST FECHADO: Resolvendo pilha em ordem reversa!`);
 
         // Loop pela pilha de trás pra frente (LIFO)

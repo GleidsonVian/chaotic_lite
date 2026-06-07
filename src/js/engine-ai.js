@@ -237,6 +237,7 @@ Object.assign(GameEngine.prototype, {
             caster:    casterCard,
             description: `Mugic Cast: ${mg.name} (por ${casterCard.name})`
         });
+        if (typeof this._syncBurstSidePanel === 'function') this._syncBurstSidePanel();
         this._discardMugic(2, this.p2Mugics, idx);
         this.burstPasses    = 0;
         this.burstPriority  = 1;

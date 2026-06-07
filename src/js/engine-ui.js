@@ -327,6 +327,9 @@ Object.assign(GameEngine.prototype, {
     // ── Tooltip de Criatura no Board ─────────────────────────────────────────
 
     _showCreatureTooltip(event, player, r, c) {
+        // Não mostra tooltip de criatura enquanto o HUD de combate está ativo
+        if (document.body.classList.contains('chud-active')) return;
+
         const board = player === 1 ? this.boardP1 : this.boardP2;
         if (!board || !board[r]) return;
         const card = board[r][c];
@@ -916,10 +919,12 @@ Object.assign(GameEngine.prototype, {
             setTimeout(() => pill.remove(), 250);
         }
 
-        // Scroll suave de volta ao modal
-        setTimeout(() => {
-            if (modal) modal.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 50);
+        // Scroll suave de volta ao modal (desativado quando HUD de combate está ativo)
+        if (!document.body.classList.contains('chud-active')) {
+            setTimeout(() => {
+                if (modal) modal.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 50);
+        }
     },
 
     // ── Visualizador de Descarte ─────────────────────────────────────────────
