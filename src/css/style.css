@@ -2527,19 +2527,79 @@ header h1 {
 .chud-panel-log       { border-color: rgba(255,255,255,0.1); }
 
 /* ── Ataques ─────────────────────────────────────────────────────── */
-#chud-attack-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
-.chud-atk-row {
-    display: flex; align-items: center; gap: 8px;
-    background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2);
-    border-radius: 10px; padding: 8px 10px; cursor: pointer;
-    transition: background .12s, border-color .12s, transform .1s;
+/* ── Attack card com imagem ── */
+#chud-attack-list {
+    flex: 1; overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 8px;
+    padding: 4px 2px;
+    align-content: start;
 }
-.chud-atk-row:hover { background: rgba(99,102,241,0.22); border-color: rgba(99,102,241,0.7); transform: translateX(3px); }
-.chud-atk-num  { font-size: 18px; font-weight: 900; color: #fbbf24; width: 24px; text-align: center; flex-shrink: 0; }
-.chud-atk-info { flex: 1; min-width: 0; }
-.chud-atk-name { font-size: 12px; font-weight: 700; color: #f1f5f9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chud-atk-sub  { font-size: 10px; color: #64748b; margin-top: 1px; }
-.chud-atk-dmg  { font-size: 17px; font-weight: 900; flex-shrink: 0; }
+.chud-atk-row {
+    position: relative;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    height: 200px; border-radius: 12px; cursor: pointer; overflow: hidden;
+    border: 2px solid rgba(99,102,241,0.3);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    transition: border-color .15s, transform .12s, box-shadow .15s;
+    background: #0f172a;
+}
+.chud-atk-row:hover {
+    border-color: rgba(99,102,241,0.9);
+    transform: translateY(-4px) scale(1.03);
+    box-shadow: 0 8px 28px rgba(99,102,241,0.4);
+    z-index: 2;
+}
+/* Imagem de fundo da carta */
+.chud-atk-img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%; object-fit: cover;
+    transition: transform .2s;
+}
+.chud-atk-row:hover .chud-atk-img { transform: scale(1.06); }
+/* Gradiente escuro na parte inferior para legibilidade */
+.chud-atk-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(
+        to bottom,
+        rgba(0,0,0,0.0)  0%,
+        rgba(0,0,0,0.15) 40%,
+        rgba(0,0,0,0.80) 72%,
+        rgba(0,0,0,0.95) 100%
+    );
+}
+/* Badge de dano no canto superior direito */
+.chud-atk-dmg-badge {
+    position: absolute; top: 6px; right: 6px;
+    font-size: 13px; font-weight: 900;
+    background: rgba(0,0,0,0.72);
+    border-radius: 20px; padding: 2px 7px;
+    line-height: 1.4;
+    border: 1px solid rgba(255,255,255,0.12);
+}
+/* Número sequencial */
+.chud-atk-num {
+    position: absolute; top: 6px; left: 8px;
+    font-size: 11px; font-weight: 900; color: #fbbf24;
+    background: rgba(0,0,0,0.6); border-radius: 50%;
+    width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
+}
+/* Info na parte inferior da carta */
+.chud-atk-info {
+    position: relative; z-index: 1;
+    padding: 6px 7px 7px;
+}
+.chud-atk-name {
+    font-size: 11px; font-weight: 800; color: #f1f5f9;
+    line-height: 1.25;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+    word-break: break-word;
+}
+.chud-atk-sub {
+    font-size: 9px; color: #94a3b8; margin-top: 2px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+}
 .chud-atk-bonus {
     font-size: 9px; color: #64748b; margin-top: 2px; line-height: 1.4;
     white-space: normal; word-break: break-word;
@@ -2610,29 +2670,102 @@ header h1 {
     border-bottom: 1px solid rgba(255,255,255,0.04);
     gap: 8px;
 }
+.chud-tt-line-base {
+    font-size: 12px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 5px;
+    padding: 4px 5px;
+    margin-bottom: 2px;
+}
 .chud-tt-line-label { color: #94a3b8; flex: 1; }
 .chud-tt-line-val   { font-weight: 700; color: #f1f5f9; flex-shrink: 0; }
 .chud-tt-line-met   { color: #4ade80; font-size: 13px; }
-.chud-tt-line-fail  { color: #f87171; font-size: 13px; }
+.chud-tt-line-fail  { color: #ef4444; font-size: 13px; }
+.chud-tt-sep {
+    border-top: 1px solid rgba(255,255,255,0.12);
+    margin: 6px 0 4px;
+}
 .chud-tt-total {
-    margin-top: 8px; font-size: 18px; font-weight: 900; text-align: center;
-    padding: 6px; border-radius: 8px;
+    margin-top: 4px; font-size: 20px; font-weight: 900; text-align: center;
+    padding: 8px; border-radius: 10px;
     background: rgba(255,255,255,0.05);
+    line-height: 1.3;
 }
 .chud-tt-desc {
     font-size: 10px; color: #64748b; font-style: italic;
     margin-top: 6px; line-height: 1.5;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding-top: 6px;
 }
 
-/* Inimigo jogou ataque — badge no painel */
-.chud-enemy-atk {
-    background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3);
-    border-radius: 10px; padding: 8px 10px; font-size: 11px; color: #fca5a5;
-    display: flex; align-items: center; gap: 8px;
+/* ── Inimigo jogou — card visual com imagem ── */
+@keyframes chudEnemyReveal {
+    from { opacity:0; transform: scale(0.88) translateY(10px); }
+    to   { opacity:1; transform: scale(1)    translateY(0); }
 }
-.chud-enemy-atk-icon { font-size: 18px; flex-shrink: 0; }
-.chud-enemy-atk-name { font-weight: 700; font-size: 13px; color: #f87171; }
-.chud-enemy-atk-sub  { font-size: 10px; color: #64748b; }
+.chud-enemy-reveal-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .08em; color: #f87171;
+    margin-bottom: 8px;
+}
+.chud-enemy-card {
+    position: relative; border-radius: 14px; overflow: hidden;
+    border: 2px solid rgba(239,68,68,0.6);
+    box-shadow: 0 6px 28px rgba(239,68,68,0.25), 0 0 0 1px rgba(239,68,68,0.1);
+    background: #0f172a;
+    animation: chudEnemyReveal 0.3s cubic-bezier(.22,.68,0,1.2) forwards;
+    min-height: 180px; display: flex; flex-direction: column; justify-content: flex-end;
+}
+.chud-enemy-card-img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%; object-fit: cover;
+}
+.chud-enemy-card-img-fallback {
+    background: linear-gradient(135deg, #3b1f1f, #0f172a);
+}
+.chud-enemy-card-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(
+        to bottom,
+        rgba(0,0,0,0.05) 0%,
+        rgba(0,0,0,0.2)  35%,
+        rgba(0,0,0,0.82) 68%,
+        rgba(0,0,0,0.97) 100%
+    );
+}
+.chud-enemy-card-dmg {
+    position: absolute; top: 10px; right: 10px;
+    font-size: 17px; font-weight: 900;
+    background: rgba(0,0,0,0.75);
+    border-radius: 20px; padding: 3px 10px;
+    border: 1px solid rgba(239,68,68,0.4);
+}
+.chud-enemy-card-body {
+    position: relative; z-index: 1;
+    padding: 8px 10px 10px;
+}
+.chud-enemy-card-name {
+    font-size: 14px; font-weight: 900; color: #fca5a5;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.9);
+    margin-bottom: 2px;
+}
+.chud-enemy-card-bp {
+    font-size: 10px; color: #94a3b8;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+    margin-bottom: 5px;
+}
+/* Breakdown de bônus */
+.chud-enemy-breakdown {
+    border-top: 1px solid rgba(255,255,255,0.08);
+    padding-top: 5px; display: flex; flex-direction: column; gap: 2px;
+}
+.chud-enemy-breakdown-line {
+    display: flex; align-items: center; gap: 5px; font-size: 10px;
+}
+.chud-enemy-bl-label { color: #94a3b8; flex: 1; }
+.chud-enemy-bl-val   { font-weight: 700; flex-shrink: 0; }
+
+/* ── Burst items com hover ───────────────────────────────────────── */
 
 /* ── Burst items com hover ───────────────────────────────────────── */
 .chud-burst-item {
@@ -2664,6 +2797,7 @@ header h1 {
 .chud-caster-sub  { font-size: 10px; color: #64748b; margin-top: 2px; }
 
 /* ── Mugic selector inline ───────────────────────────────────────── */
+/* legado — mantido caso haja outras referências */
 .chud-mugic-row {
     background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.25);
     border-radius: 9px; padding: 8px 10px; cursor: pointer; margin-bottom: 5px;
@@ -2672,6 +2806,66 @@ header h1 {
 .chud-mugic-row:hover { background: rgba(139,92,246,0.22); border-color: rgba(139,92,246,0.6); }
 .chud-mugic-name { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
 .chud-mugic-eff  { font-size: 9px; color: #94a3b8; line-height: 1.4; }
+
+/* ── Mugic card grid com imagem ── */
+.chud-mugic-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+}
+.chud-mugic-card {
+    display: flex; flex-direction: column;
+    border-radius: 11px; overflow: hidden; cursor: pointer;
+    border: 2px solid rgba(139,92,246,0.4);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    background: #0f172a;
+    transition: transform .12s, box-shadow .15s, border-color .15s;
+}
+.chud-mugic-card:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 28px rgba(139,92,246,0.4);
+    border-color: rgba(139,92,246,0.95);
+    z-index: 2;
+}
+/* Imagem no topo — altura fixa */
+.chud-mugic-card-img-wrap {
+    position: relative; height: 110px; overflow: hidden; flex-shrink: 0;
+}
+.chud-mugic-card-img {
+    width: 100%; height: 100%; object-fit: cover;
+    transition: transform .2s; display: block;
+}
+.chud-mugic-card:hover .chud-mugic-card-img { transform: scale(1.06); }
+.chud-mugic-card-img-fallback {
+    width: 100%; height: 100%;
+    background: linear-gradient(135deg,#2d1b4e,#0f172a);
+}
+/* Badge de custo ♪ sobre a imagem */
+.chud-mugic-card-cost {
+    position: absolute; top: 6px; right: 7px;
+    font-size: 12px; font-weight: 900; color: #c4b5fd;
+    background: rgba(0,0,0,0.78); border-radius: 20px;
+    padding: 2px 7px; border: 1px solid rgba(139,92,246,0.45);
+    line-height: 1.4;
+}
+/* Gradiente de transição imagem → texto */
+.chud-mugic-card-fade {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 36px;
+    background: linear-gradient(to bottom, transparent, #0f172a);
+}
+/* Área de texto abaixo da imagem — altura automática */
+.chud-mugic-card-body {
+    padding: 7px 9px 9px;
+    background: #0f172a;
+    flex: 1;
+}
+.chud-mugic-card-name {
+    font-size: 12px; font-weight: 800; line-height: 1.25;
+    margin-bottom: 4px;
+}
+.chud-mugic-card-desc {
+    font-size: 10px; color: #94a3b8; line-height: 1.5;
+}
 
 /* ── Decisões ────────────────────────────────────────────────────── */
 #chud-burst-summary { font-size: 10px; color: #94a3b8; line-height: 1.5; flex: 1; overflow-y: auto; }

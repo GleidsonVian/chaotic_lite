@@ -1322,6 +1322,9 @@ Object.assign(GameEngine.prototype, {
             return;
         }
 
+        // Restaura grid multi-coluna para os ataques do jogador
+        listEl.style.gridTemplateColumns = '';
+
         // Guarda referências para o tooltip poder acessar os dados completos
         this._chudAtkHand    = hand;
         this._chudAtkAtk     = attacker;
@@ -1350,75 +1353,98 @@ Object.assign(GameEngine.prototype, {
 
         listEl.innerHTML = cards.map(({ atk, i, dmg }) => {
             const dc = dmg >= 20 ? '#4ade80' : dmg >= 10 ? '#fbbf24' : '#f87171';
-            const elemTag = atk.elementRequirement
-                ? `<span style="font-size:11px">${eIcons[atk.elementRequirement]||''}</span>`
-                : (atk.elementBonuses ? atk.elementBonuses.map(e=>`<span style="font-size:11px">${eIcons[e.element]||''}</span>`).join('') : '');
+            const elemIcons = [
+                ...(atk.elementRequirement ? [eIcons[atk.elementRequirement]||''] : []),
+                ...(atk.elementBonuses     ? atk.elementBonuses.map(e => eIcons[e.element]||'') : []),
+            ].join('');
+            const imgTag = atk.image
+                ? `<img class="chud-atk-img" src="${atk.image}" alt="${atk.name}" draggable="false" onerror="this.style.display='none'">`
+                : `<div class="chud-atk-img" style="background:linear-gradient(135deg,#1e293b,#0f172a);"></div>`;
             return `<div class="chud-atk-row"
                         onclick="game.confirmAttack(${i})"
                         onmouseenter="game._chudShowAtkTooltip(event,${i});game._chudPreviewDamage(${dmg})"
                         onmousemove="game._chudMoveAtkTooltip(event)"
                         onmouseleave="game._chudHideAtkTooltip();game._chudClearDamagePreview()">
+                ${imgTag}
+                <div class="chud-atk-overlay"></div>
                 <span class="chud-atk-num">${i+1}</span>
+                <div class="chud-atk-dmg-badge" style="color:${dc};">💥${dmg}</div>
                 <div class="chud-atk-info">
-                    <div class="chud-atk-name">${elemTag} ${atk.name}</div>
+                    <div class="chud-atk-name">${elemIcons} ${atk.name}</div>
                     <div class="chud-atk-sub">⚡${atk.bp}BP · base ${atk.baseDamage||0}</div>
                 </div>
-                <span class="chud-atk-dmg" style="color:${dc};">💥${dmg}</span>
             </div>`;
         }).join('');
     },
 
-    // Exibe ataque do inimigo no painel
+    // Exibe ataque do inimigo no painel — card visual com imagem
     _chudShowEnemyAttack(atkCard, attacker, defender, effAtk, effDef) {
         const listEl = document.getElementById('chud-attack-list');
         if (!listEl || !atkCard) return;
 
-        // Calcula dano real usando os stats efetivos do inimigo (igual ao engine)
+        const eIcons     = { Fire:'🔥', Water:'💧', Earth:'🪨', Air:'🌪️' };
+        const statLabels = { courage:'COR', power:'POD', wisdom:'SAB', speed:'VEL' };
+        const statIcons  = { courage:'⚔️', power:'💪', wisdom:'🧠', speed:'⚡' };
+
+        // Calcula dano e monta linhas de breakdown
         let dmg = atkCard.baseDamage || 0;
-        const eIcons = { Fire:'🔥', Water:'💧', Earth:'🪨', Air:'🌪️' };
-        const statLabels = { courage:'Coragem', power:'Poder', wisdom:'Sabedoria', speed:'Velocidade' };
-        const bonusLines = [];
+        const lines = [];
 
         if (atkCard.elementRequirement && attacker) {
-            const hasElem = attacker.elements?.includes(atkCard.elementRequirement);
-            const bonus   = atkCard.elementDamage || 0;
-            if (hasElem) dmg += bonus;
-            bonusLines.push(`${eIcons[atkCard.elementRequirement]||''}${atkCard.elementRequirement}: +${bonus} ${hasElem ? '✅' : '❌'}`);
+            const has   = attacker.elements?.includes(atkCard.elementRequirement);
+            const bonus = atkCard.elementDamage || 0;
+            if (has && bonus) dmg += bonus;
+            if (bonus) lines.push({ label: `${eIcons[atkCard.elementRequirement]||''} ${atkCard.elementRequirement}`, val: `+${bonus}`, met: has });
         }
         if (atkCard.elementBonuses && attacker) {
             atkCard.elementBonuses.forEach(eb => {
-                const hasElem = attacker.elements?.includes(eb.element);
-                if (hasElem) dmg += eb.damage || 0;
-                bonusLines.push(`${eIcons[eb.element]||''}${eb.element}: +${eb.damage||0} ${hasElem ? '✅' : '❌'}`);
+                const has = attacker.elements?.includes(eb.element);
+                if (has) dmg += eb.damage || 0;
+                lines.push({ label: `${eIcons[eb.element]||''} ${eb.element}`, val: `+${eb.damage||0}`, met: has });
             });
         }
         if (atkCard.statRequirement && effAtk && effDef) {
             const sk  = atkCard.statRequirement.toLowerCase();
             const av  = effAtk[sk] || 0, dv = effDef[sk] || 0;
-            const met = atkCard.statMode === 'challenge'
-                ? (av - dv) >= (atkCard.statThreshold || 0)
-                : av >= (atkCard.statThreshold || 0);
+            const thr = atkCard.statThreshold || 0;
+            const met = atkCard.statMode === 'challenge' ? (av-dv) >= thr : av >= thr;
             if (met) dmg += atkCard.statDamage || 0;
-            const lbl = statLabels[sk] || atkCard.statRequirement;
+            const icon = statIcons[sk]||'';
+            const lbl  = statLabels[sk] || sk.toUpperCase();
             const cond = atkCard.statMode === 'challenge'
-                ? `${lbl} ${av}−${dv}≥${atkCard.statThreshold||0}`
-                : `${lbl} ${av}≥${atkCard.statThreshold||0}`;
-            bonusLines.push(`${cond}: +${atkCard.statDamage||0} ${met ? '✅' : '❌'}`);
+                ? `${icon} ${lbl} ${av}−${dv}=${av-dv} vs ≥${thr}`
+                : `${icon} ${lbl} ${av} ≥ ${thr}`;
+            lines.push({ label: cond, val: `+${atkCard.statDamage||0}`, met });
         }
 
-        const dc = dmg >= 20 ? '#4ade80' : dmg >= 10 ? '#fbbf24' : '#f87171';
-        const bonusHtml = bonusLines.length
-            ? `<div style="font-size:9px;color:#64748b;margin-top:3px;">${bonusLines.join(' · ')}</div>`
-            : '';
+        const dc       = dmg >= 20 ? '#4ade80' : dmg >= 10 ? '#fbbf24' : '#f87171';
+        const elemBadge = [
+            ...(atkCard.elementRequirement ? [eIcons[atkCard.elementRequirement]||''] : []),
+            ...(atkCard.elementBonuses     ? atkCard.elementBonuses.map(e => eIcons[e.element]||'') : []),
+        ].join('');
+
+        const linesHtml = lines.map(l => `
+            <div class="chud-enemy-breakdown-line">
+                <span class="chud-enemy-bl-label">${l.label}</span>
+                <span class="chud-enemy-bl-val" style="color:${l.met===false?'#475569':l.met?'#4ade80':'#f1f5f9'}">${l.val}</span>
+                <span>${l.met ? '✅' : '❌'}</span>
+            </div>`).join('');
+
+        // Volta para layout de coluna única quando mostra o card do inimigo
+        listEl.style.gridTemplateColumns = '1fr';
 
         listEl.innerHTML = `
-            <div class="chud-waiting" style="color:#94a3b8;font-style:normal;margin-bottom:6px;">Inimigo jogou:</div>
-            <div class="chud-enemy-atk">
-                <span class="chud-enemy-atk-icon">⚔️</span>
-                <div style="flex:1;min-width:0;">
-                    <div class="chud-enemy-atk-name">${atkCard.name}</div>
-                    <div class="chud-enemy-atk-sub">⚡${atkCard.bp||0}BP · base ${atkCard.baseDamage||0} → <span style="color:${dc};font-weight:700;">💥${dmg}</span></div>
-                    ${bonusHtml}
+            <div class="chud-enemy-reveal-label">⚔️ Inimigo jogou</div>
+            <div class="chud-enemy-card">
+                ${atkCard.image
+                    ? `<img class="chud-enemy-card-img" src="${atkCard.image}" alt="${atkCard.name}">`
+                    : `<div class="chud-enemy-card-img chud-enemy-card-img-fallback"></div>`}
+                <div class="chud-enemy-card-overlay"></div>
+                <div class="chud-enemy-card-dmg" style="color:${dc};">💥 ${dmg}</div>
+                <div class="chud-enemy-card-body">
+                    <div class="chud-enemy-card-name">${elemBadge} ${atkCard.name}</div>
+                    <div class="chud-enemy-card-bp">⚡ ${atkCard.bp||0} BP · base ${atkCard.baseDamage||0}</div>
+                    ${linesHtml ? `<div class="chud-enemy-breakdown">${linesHtml}</div>` : ''}
                 </div>
             </div>`;
     },
@@ -1427,75 +1453,169 @@ Object.assign(GameEngine.prototype, {
     _chudShowAtkTooltip(event, idx) {
         const tt = document.getElementById('chud-atk-tooltip');
         if (!tt || !this._chudAtkHand) return;
-        const atk     = this._chudAtkHand[idx];
+        const atk      = this._chudAtkHand[idx];
         const attacker = this._chudAtkAtk;
         const defender = this._chudAtkDef;
-        const effAtk  = this._chudAtkEffAtk || {};
-        const effDef  = this._chudAtkEffDef || {};
+        const effAtk   = this._chudAtkEffAtk || {};
+        const effDef   = this._chudAtkEffDef || {};
         if (!atk) return;
 
-        const eIcons    = { Fire:'🔥', Water:'💧', Earth:'🪨', Air:'🌪️' };
+        const eIcons     = { Fire:'🔥', Water:'💧', Earth:'🪨', Air:'🌪️' };
         const statLabels = { courage:'Coragem', power:'Poder', wisdom:'Sabedoria', speed:'Velocidade' };
+        const statIcons  = { courage:'⚔️', power:'💪', wisdom:'🧠', speed:'⚡' };
 
-        // Cabeçalho
+        // Helper para construir linha de breakdown
+        // type: 'base'|'bonus'|'penalty'|'info'|'sep'
+        const mkLine = (label, val, met, type='bonus') => ({ label, val, met, type });
+
+        // ── Cabeçalho ──
         document.getElementById('chud-tt-name').textContent = atk.name;
-        document.getElementById('chud-tt-meta').textContent = `⚡ ${atk.bp||0} BP`;
+        document.getElementById('chud-tt-meta').textContent =
+            `⚡ ${atk.bp||0} BP${atk.elementRequirement ? '  ·  '+eIcons[atk.elementRequirement]+' '+atk.elementRequirement : ''}`;
 
-        // Linhas de detalhes
-        let lines = [];
+        const lines = [];
         let dmg = atk.baseDamage || 0;
-        lines.push({ label: 'Dano base', val: dmg, met: null });
 
-        if (atk.elementRequirement) {
-            const hasElem = attacker?.elements?.includes(atk.elementRequirement);
-            const bonus   = atk.elementDamage || 0;
-            if (hasElem) dmg += bonus;
-            lines.push({ label: `Req. ${eIcons[atk.elementRequirement]||''} ${atk.elementRequirement}`, val: `+${bonus}`, met: hasElem });
-        }
-        if (atk.elementBonuses) atk.elementBonuses.forEach(eb => {
-            const hasElem = attacker?.elements?.includes(eb.element);
-            if (hasElem) dmg += eb.damage || 0;
-            lines.push({ label: `Bônus ${eIcons[eb.element]||''} ${eb.element}`, val: `+${eb.damage||0}`, met: hasElem });
-        });
+        // 1. Dano base
+        lines.push(mkLine('Dano base', dmg, null, 'base'));
+
+        // 2. Stat check principal
         if (atk.statRequirement) {
-            const sk   = atk.statRequirement.toLowerCase();
-            const av   = effAtk[sk]||0, dv = effDef[sk]||0;
-            const thr  = atk.statThreshold || 0;
-            const met  = atk.statMode === 'challenge' ? (av-dv) >= thr : av >= thr;
-            if (met) dmg += atk.statDamage || 0;
-            const lbl  = statLabels[sk] || atk.statRequirement;
-            // Label legível: "Você tem 95 Poder, precisa de ≥ 50" / "Diferença 30, precisa de ≥ 15"
-            const cond = atk.statMode === 'challenge'
-                ? `${lbl}: você ${av} − inimigo ${dv} = ${av-dv} (precisa ≥ ${thr})`
-                : `${lbl}: você tem ${av} (precisa ≥ ${thr})`;
-            lines.push({ label: cond, val: `+${atk.statDamage||0}`, met });
+            const sk  = atk.statRequirement.toLowerCase();
+            const av  = effAtk[sk]||0, dv = effDef[sk]||0;
+            const thr = atk.statThreshold || 0;
+            const met = atk.statMode === 'challenge' ? (av - dv) >= thr : av >= thr;
+            const bonus = atk.statDamage || 0;
+            if (met) dmg += bonus;
+            const icon = statIcons[sk]||'';
+            const condLabel = atk.statMode === 'challenge'
+                ? `${icon} ${statLabels[sk]||sk}: ${av}−${dv}=${av-dv} vs ≥${thr}`
+                : `${icon} ${statLabels[sk]||sk}: ${av} ≥ ${thr}`;
+            lines.push(mkLine(condLabel, met ? `+${bonus}` : `+${bonus} (falhou)`, met));
         }
 
+        // 3. Extra stat checks (ex.: Allmageddon)
+        if (atk.extraChecks) atk.extraChecks.forEach(ec => {
+            const sk  = ec.stat.toLowerCase();
+            const av  = effAtk[sk]||0, dv = effDef[sk]||0;
+            const thr = ec.threshold || 0;
+            const met = ec.mode === 'challenge' ? (av-dv) >= thr : av >= thr;
+            const bonus = ec.damage || 0;
+            if (met) dmg += bonus;
+            const icon = statIcons[sk]||'';
+            const condLabel = ec.mode === 'challenge'
+                ? `${icon} ${statLabels[sk]||sk}: ${av}−${dv}=${av-dv} vs ≥${thr}`
+                : `${icon} ${statLabels[sk]||sk}: ${av} ≥ ${thr}`;
+            lines.push(mkLine(condLabel, met ? `+${bonus}` : `+${bonus} (falhou)`, met));
+        });
+
+        // 4. Bônus elemental (legado)
+        if (atk.elementRequirement) {
+            const attElems = new Set([
+                ...(attacker?.elements||[]),
+                ...(attacker?.bgRevealed && attacker?.battlegear?.elementGranted ? [attacker.battlegear.elementGranted] : []),
+            ]);
+            const hasElem = attElems.has(atk.elementRequirement);
+            const bonus   = atk.elementDamage || 0;
+            if (bonus > 0) {
+                if (hasElem) dmg += bonus;
+                lines.push(mkLine(`${eIcons[atk.elementRequirement]||''} Bônus ${atk.elementRequirement}`, `+${bonus}`, hasElem));
+            }
+        }
+
+        // 5. elementBonuses (novo formato)
+        if (atk.elementBonuses) atk.elementBonuses.forEach(eb => {
+            const attElems = new Set([
+                ...(attacker?.elements||[]),
+                ...(attacker?.bgRevealed && attacker?.battlegear?.elementGranted ? [attacker.battlegear.elementGranted] : []),
+            ]);
+            const has = attElems.has(eb.element);
+            if (has) dmg += eb.damage || 0;
+            lines.push(mkLine(`${eIcons[eb.element]||''} Bônus ${eb.element}`, `+${eb.damage||0}`, has));
+        });
+
+        // 6. extraElements
+        if (atk.extraElements) atk.extraElements.forEach(ee => {
+            const has = (attacker?.elements||[]).includes(ee.element);
+            if (has) dmg += ee.damage || 0;
+            lines.push(mkLine(`${eIcons[ee.element]||''} Extra ${ee.element}`, `+${ee.damage||0}`, has));
+        });
+
+        // 7. Efeito do local ativo
+        const loc = this.activeLocation;
+        if (loc && loc.effect) {
+            const locEf = loc.effect;
+            const atkEl = atk.elementRequirement;
+            const attElems = new Set([
+                ...(attacker?.elements||[]),
+                ...(attacker?.bgRevealed && attacker?.battlegear?.elementGranted ? [attacker.battlegear.elementGranted] : []),
+            ]);
+            const hasEl = atkEl && attElems.has(atkEl);
+
+            if (locEf.type === 'elemental_modifiers' && atkEl && hasEl) {
+                if (locEf.bonuses && locEf.bonuses[atkEl]) {
+                    dmg += locEf.bonuses[atkEl];
+                    lines.push(mkLine(`📍 ${loc.name}: bônus ${eIcons[atkEl]||''} ${atkEl}`, `+${locEf.bonuses[atkEl]}`, true, 'bonus'));
+                }
+                if (locEf.penalties && locEf.penalties[atkEl]) {
+                    dmg = Math.max(0, dmg - locEf.penalties[atkEl]);
+                    lines.push(mkLine(`📍 ${loc.name}: penalidade ${eIcons[atkEl]||''} ${atkEl}`, `-${locEf.penalties[atkEl]}`, false, 'penalty'));
+                }
+            }
+            if (locEf.type === 'first_attack_tribe_bonus' && this.activeCombat?.isFirstAttack && attacker?.tribe === locEf.tribe) {
+                dmg += locEf.value;
+                lines.push(mkLine(`📍 ${loc.name}: ${attacker.tribe} 1º ataque`, `+${locEf.value}`, true, 'bonus'));
+            }
+            if (locEf.type === 'underworld_city_bonus' && attacker?.tribe === 'UnderWorld' && effAtk.power >= effDef.power + 15) {
+                dmg += 5;
+                lines.push(mkLine(`📍 ${loc.name}: UnderWorld desafio Poder`, `+5`, true, 'bonus'));
+            }
+        }
+
+        // 8. Redução de dano do defensor (Stone Mail / passivas de defesa)
+        if (defender?._damageReduction && defender._damageReduction > 0) {
+            const red = Math.min(dmg, defender._damageReduction);
+            dmg = Math.max(0, dmg - red);
+            lines.push(mkLine(`🛡️ Redução (${defender.name})`, `-${red}`, false, 'penalty'));
+        }
+
+        // 9. Penalidade de dano do defensor (Stone Mail +5 recebido)
+        if (defender?._damagePenalty && defender._damagePenalty > 0) {
+            dmg += defender._damagePenalty;
+            lines.push(mkLine(`⚠️ Penalidade (Stone Mail)`, `+${defender._damagePenalty}`, null, 'penalty'));
+        }
+
+        // ── Render das linhas ──
         const linesEl = document.getElementById('chud-tt-lines');
         linesEl.innerHTML = lines.map(l => {
+            const isBase = l.type === 'base';
             const metIcon = l.met === null ? '' : l.met
                 ? '<span class="chud-tt-line-met">✅</span>'
                 : '<span class="chud-tt-line-fail">❌</span>';
-            const valColor = l.met === false ? '#475569' : l.met === true ? '#4ade80' : '#f1f5f9';
-            return `<div class="chud-tt-line">
+            const valColor = l.met === false
+                ? '#475569'
+                : l.type === 'penalty' ? '#f87171'
+                : l.type === 'bonus'   ? '#4ade80'
+                : '#f1f5f9';
+            return `<div class="chud-tt-line${isBase?' chud-tt-line-base':''}">
                 <span class="chud-tt-line-label">${l.label}</span>
                 <span class="chud-tt-line-val" style="color:${valColor};">${l.val}</span>
                 ${metIcon}
             </div>`;
-        }).join('');
+        }).join('') + '<div class="chud-tt-sep"></div>';
 
-        // Total
-        const dc = dmg >= 20 ? '#4ade80' : dmg >= 10 ? '#fbbf24' : '#f87171';
-        const totalEl = tt.querySelector('.chud-tt-total') || (() => {
-            const d = document.createElement('div');
-            d.className = 'chud-tt-total';
-            tt.insertBefore(d, document.getElementById('chud-tt-desc'));
-            return d;
-        })();
-        totalEl.textContent = `💥 Dano total: ${dmg}`;
+        // ── Total ──
+        let totalEl = tt.querySelector('.chud-tt-total');
+        if (!totalEl) {
+            totalEl = document.createElement('div');
+            totalEl.className = 'chud-tt-total';
+            tt.insertBefore(totalEl, document.getElementById('chud-tt-desc'));
+        }
+        const dc = dmg >= 25 ? '#4ade80' : dmg >= 10 ? '#fbbf24' : '#f87171';
+        totalEl.innerHTML = `<span style="font-size:11px;color:#64748b;font-weight:400;">ESTIMADO</span><br>💥 ${dmg} dano`;
         totalEl.style.color = dc;
 
-        // Descrição
+        // ── Descrição ──
         const descEl = document.getElementById('chud-tt-desc');
         descEl.textContent = atk.description || '';
         descEl.style.display = atk.description ? 'block' : 'none';
@@ -1646,19 +1766,32 @@ Object.assign(GameEngine.prototype, {
         const container = document.getElementById('chud-burst-summary');
         if (!container) { this.showBurstMugicSelection(); return; }
 
-        const tribeColors = { OverWorld:'#0ea5e9', UnderWorld:'#dc2626', Mipedian:'#d97706', Danian:'#16a34a', Generic:'#64748b' };
+        const tribeColors  = { OverWorld:'#0ea5e9', UnderWorld:'#dc2626', Mipedian:'#d97706', Danian:'#16a34a', Generic:'#64748b' };
+        const tribeBorders = { OverWorld:'rgba(14,165,233,0.6)', UnderWorld:'rgba(220,38,38,0.6)', Mipedian:'rgba(217,119,6,0.6)', Danian:'rgba(22,163,74,0.6)', Generic:'rgba(100,116,139,0.4)' };
 
         container.innerHTML = `
-            <div style="font-size:10px;color:#64748b;margin-bottom:6px;">Cartas disponíveis:</div>
-            ${mugics.map((mg, i) => {
-                const tc = tribeColors[mg.tribe] || '#64748b';
-                const eff = mg.effect || mg.description || mg.text || '';
-                return `<div class="chud-mugic-row" onclick="game._hudPlayMugic(${i})">
-                    <div class="chud-mugic-name" style="color:${tc};">🎶 ${mg.name}</div>
-                    ${eff ? `<div class="chud-mugic-eff">${eff}</div>` : ''}
-                </div>`;
-            }).join('')}
-            <button class="chud-btn" style="background:rgba(100,116,139,0.4);margin-top:8px;" onclick="game._hudCancelMugicSelect()">✖ Cancelar</button>
+            <div class="chud-mugic-grid">
+                ${mugics.map((mg, i) => {
+                    const tc  = tribeColors[mg.tribe]  || '#64748b';
+                    const bdr = tribeBorders[mg.tribe] || 'rgba(100,116,139,0.4)';
+                    const eff = mg.description || mg.effect || mg.text || '';
+                    const imgInner = mg.image
+                        ? `<img class="chud-mugic-card-img" src="${mg.image}" alt="${mg.name}">`
+                        : `<div class="chud-mugic-card-img-fallback"></div>`;
+                    return `<div class="chud-mugic-card" style="border-color:${bdr};" onclick="game._hudPlayMugic(${i})">
+                        <div class="chud-mugic-card-img-wrap">
+                            ${imgInner}
+                            <div class="chud-mugic-card-cost">♪${mg.cost||1}</div>
+                            <div class="chud-mugic-card-fade"></div>
+                        </div>
+                        <div class="chud-mugic-card-body">
+                            <div class="chud-mugic-card-name" style="color:${tc};">${mg.name}</div>
+                            ${eff ? `<div class="chud-mugic-card-desc">${eff}</div>` : ''}
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>
+            <button class="chud-btn" style="background:rgba(100,116,139,0.3);margin-top:10px;" onclick="game._hudCancelMugicSelect()">✖ Cancelar</button>
         `;
     },
 
